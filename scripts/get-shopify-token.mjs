@@ -57,7 +57,9 @@ const server = http.createServer(async (req, res) => {
   const gotShop = url.searchParams.get("shop") || shop;
 
   if (!code) { res.writeHead(400); res.end("Falta ?code en el callback"); return; }
-  if (gotState !== state) { res.writeHead(400); res.end("state invalido, reintenta"); return; }
+  // Si la instalacion se inicio desde el boton "Instalar app" del Dev Dashboard
+  // (y no desde el link impreso por este script), el state no coincide: solo avisar.
+  if (gotState !== state) console.warn("Aviso: state distinto (instalacion iniciada fuera del script); continuo igual.");
 
   try {
     const r = await fetch(`https://${gotShop}/admin/oauth/access_token`, {
