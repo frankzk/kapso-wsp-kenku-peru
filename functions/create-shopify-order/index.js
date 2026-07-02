@@ -2,7 +2,9 @@ async function handler(request, env = globalThis) {
   return handleRequest(request, env);
 }
 
-const DEFAULT_SHOP_DOMAIN = "aurela-peru.myshopify.com";
+// TODO(Kenku): dominio admin .myshopify.com de la tienda KENKU (no el de Aurela).
+// Configurar tambien SHOPIFY_SHOP_DOMAIN en la config de la funcion.
+const DEFAULT_SHOP_DOMAIN = "KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com";
 const DEFAULT_API_VERSION = "2026-04";
 const DEFAULT_PHONE_NUMBER_ID = "KENKU_PHONE_NUMBER_ID_PENDIENTE";
 const MAX_QUANTITY = 50;

@@ -12,7 +12,7 @@ proyecto nuevo **Kenku Perú** (`cf65efcf-38ab-475c-85b3-c2b89f304652`).
 | Marca en prompts y mensajes | Aurela / Aurela Peru | Kenku / Kenku Peru |
 | Dominio público (links, catálogo) | `aurela.pe` | `kenku.pe` |
 | Catálogo completo | `aurela.pe/collections/todos-los-productos` | `kenku.pe/collections/todos-los-productos` (verificado: existe, 357 productos) |
-| Dominio admin de Shopify | `aurela-peru.myshopify.com` | **Sin cambio** — es la misma tienda Shopify (el dominio `.myshopify.com` no cambia con el rebrand) |
+| Dominio admin de Shopify | `aurela-peru.myshopify.com` | Placeholder `KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com` — Aurela y Kenku son **tiendas distintas** de la organización Grupo GF SAC; usar el dominio `.myshopify.com` propio de la tienda Kenku |
 | Código de descuento | `AURELA-WHATSAPP-PROMO` | `KENKU-WHATSAPP-PROMO` (⚠️ hay que crearlo en Shopify) |
 | Tags de pedidos/clientes | `kapso, whatsapp, aurela` | `kapso, whatsapp, kenku` |
 | Triggers / phoneNumberId | Números de Aurela (2) | Placeholder `KENKU_PHONE_NUMBER_ID_PENDIENTE` |
@@ -25,16 +25,23 @@ y menciones de la marca anterior.
 ## Conexión a Shopify: por API de app interna (no MCP)
 
 Las funciones se conectan a Shopify **directamente por la Admin API usando el
-token de una app interna** (custom app / "desarrollo de aplicaciones" en el
-admin de Shopify). No se usa ningún MCP en runtime.
+token de una app interna** (custom app de la organización). No se usa ningún
+MCP en runtime.
 
-1. En el admin de Shopify (kenku.pe) → **Configuración → Apps y canales de venta
-   → Desarrollo de aplicaciones** → crear (o reutilizar) la app interna.
-2. Scopes de Admin API necesarios: `read_products`, `read_inventory`,
-   `read_orders`, `write_orders`, `read_customers`, `write_customers`,
-   `read_discounts`.
-3. Copiar el **Admin API access token** y configurarlo como
-   `SHOPIFY_ADMIN_ACCESS_TOKEN` en cada función (ver siguiente sección).
+Aurela y Kenku son **dos tiendas de la misma organización (Grupo GF SAC)** y
+la app interna `kapso-wsp-aurela-peru` ya está instalada en ambas. Puntos
+clave:
+
+1. **Cada instalación tiene su propio token**: el `SHOPIFY_ADMIN_ACCESS_TOKEN`
+   de Aurela NO funciona en Kenku. Hay que copiar el Admin API access token de
+   la **instalación en la tienda Kenku** (admin de Kenku → Configuración →
+   Apps → kapso-wsp-aurela-peru → credenciales de API; si no está visible,
+   regenerarlo desde el panel de la organización/Dev Dashboard).
+2. **Cada tienda tiene su propio dominio admin**: usar el
+   `<handle>.myshopify.com` de Kenku (visible en la URL del admin:
+   `admin.shopify.com/store/<handle>`) como `SHOPIFY_SHOP_DOMAIN`.
+3. Los permisos ya instalados (Clientes, Pedidos, Productos: ver y editar)
+   cubren lo que usan las funciones.
 
 ## Configuración de funciones (function.yaml — NO está en git)
 
@@ -42,10 +49,10 @@ Los `functions/**/function.yaml` están en `.gitignore` porque contienen
 secretos. Hay que configurar las variables en el dashboard de Kapso del
 proyecto Kenku (o vía `kapso pull` + editar + `kapso push`):
 
-- `SHOPIFY_SHOP_DOMAIN` = `aurela-peru.myshopify.com` (misma tienda)
+- `SHOPIFY_SHOP_DOMAIN` = `<handle-kenku>.myshopify.com` (el de la tienda Kenku)
 - `SHOPIFY_PUBLIC_SHOP_DOMAIN` = `kenku.pe`
 - `SHOPIFY_API_VERSION` = `2026-04`
-- `SHOPIFY_ADMIN_ACCESS_TOKEN` = token de la app interna (paso anterior)
+- `SHOPIFY_ADMIN_ACCESS_TOKEN` = token de la instalación de la app en Kenku (paso anterior)
 - `KAPSO_API_KEY` (API key del proyecto **Kenku**) y `KAPSO_API_BASE` si aplica
 - `WHATSAPP_PHONE_NUMBER_IDS` (campaign-report) = phoneNumberId(s) de Kenku
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` (notify-team, campaign-report)
@@ -68,6 +75,11 @@ Referencia: los valores actuales están en el proyecto Aurela
    - `functions/campaign-report/index.js` (`DEFAULT_PHONE_NUMBER_IDS`)
    - `functions/check-coverage/index.js` (`WATCHDOG_PHONE_IDS`)
    - `functions/create-shopify-order/index.js` (`DEFAULT_PHONE_NUMBER_ID`)
+   Y reemplazar `KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com` por el dominio
+   admin real de Kenku en los `DEFAULT_SHOP_DOMAIN` / `DEFAULT_ADMIN_SHOP_DOMAIN`
+   de `shopify-product-lookup`, `product-media-lookup`, `create-shopify-order`
+   y `campaign-report` (o dejar los placeholders y confiar solo en las
+   variables de entorno, que siempre tienen prioridad).
 6. Cambiar el workflow a `status: active` (workflow.js y workflow.yaml) y `kapso push`.
 7. Crear en Shopify el código de descuento `KENKU-WHATSAPP-PROMO` (equivalente
    al `AURELA-WHATSAPP-PROMO` anterior).
@@ -84,8 +96,9 @@ Referencia: los valores actuales están en el proyecto Aurela
   que la razón social y el número de Yape apliquen también a Kenku.
 - **Promos 3x2 / 5x3** y envío gratis desde S/40: los prompts y `quote-order`
   las asumen. Confirmar que Kenku mantiene las mismas promociones.
-- **Prefijo de pedidos `#AUR`**: los ejemplos del prompt usan `#AUR...`. Al ser
-  la misma tienda Shopify, el prefijo sigue igual; si se cambia en Shopify,
-  actualizar el ejemplo del prompt.
+- **Prefijo de pedidos `#AUR`**: los ejemplos del prompt usan `#AUR...`. Kenku
+  es otra tienda, así que su prefijo puede ser distinto (Configuración →
+  General → ID de pedido). El bot siempre usa el `order.name` real que devuelve
+  Shopify, pero conviene actualizar el ejemplo del prompt al prefijo de Kenku.
 - **Persona del bot**: sigue siendo "Akemi, la asesora de ventas" — cambiar el
   nombre si Kenku quiere otra identidad.

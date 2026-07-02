@@ -1,4 +1,6 @@
-const DEFAULT_SHOP_DOMAIN = "aurela-peru.myshopify.com";
+// TODO(Kenku): dominio admin .myshopify.com de la tienda KENKU (no el de Aurela).
+// Configurar tambien SHOPIFY_SHOP_DOMAIN en la config de la funcion.
+const DEFAULT_SHOP_DOMAIN = "KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com";
 const DEFAULT_PUBLIC_SHOP_DOMAIN = "kenku.pe";
 const DEFAULT_API_VERSION = "2026-04";
 const CATALOG_CACHE_TTL_MS = 15 * 60 * 1000;
