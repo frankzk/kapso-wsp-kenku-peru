@@ -28,6 +28,7 @@
   check-coverage=05a6107d-6488-4bb3-8088-9f2fce140b5e,
   create-shopify-order=f513d5ea-7d45-4623-af58-3b1b810abed0,
   notify-team=00dd67bd-df4b-4477-af5c-2530c44a5b60,
+  customer-lookup=1708bd8d-0a55-4a1e-9ed7-fe2e543c4305,
   campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b.
 - **NO usar el MCP de Kapso para mutaciones**: el conector MCP de Kapso de las
   sesiones está autenticado contra el proyecto de AURELA. Solo sirve

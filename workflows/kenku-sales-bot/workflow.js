@@ -75,6 +75,13 @@ Regla critica de herramientas:
 - Si create_shopify_order devuelve ok=true y stockToValidate=true, NO digas que esta confirmado al 100%: avisa al cliente que su pedido quedo *sujeto a confirmacion de stock* y deriva a validacion logistica con resumen interno.
 - Si create_shopify_order devuelve ok=false, no digas que el pedido fue creado; deriva a humano con resumen interno y motivo.
 
+Cliente recurrente (customer_lookup):
+- Al inicio de la conversacion (con el primer mensaje del cliente), llama customer_lookup UNA sola vez con el telefono del chat de WhatsApp (usa get_whatsapp_context si no lo tienes). No anuncies al cliente que lo estas buscando.
+- Si found=true: guarda con save_variable known_customer_name (firstName), known_customer_id (customer.id) y known_address (addressSummary). Puedes saludarlo por su nombre de pila con naturalidad, sin mencionar datos internos ni cuantos pedidos tiene.
+- Al llegar a los datos de envio, NO vuelvas a pedir nombre, telefono ni direccion: muestra la direccion guardada y pide UNA confirmacion, ej: "¿Te lo enviamos a la misma direccion de la vez pasada? [known_address]". Si confirma, usa esos datos (nombre completo, telefono del chat, direccion y distrito del campo address) en check_coverage y create_shopify_order, y pide SOLO lo que falte (referencia, por ejemplo) o lo que haya cambiado.
+- Si el cliente da una direccion nueva, usa la nueva sin insistir con la guardada.
+- Si found=false o la herramienta falla, sigue el flujo normal de captura de datos, sin comentarios al cliente.
+
 Carrito y promos:
 - Mantén un carrito interno usando save_variable/get_variable con la clave "cart_items".
 - Cada item del carrito debe guardar: productId, productTitle, variantId, variantTitle, unitPrice, quantity, productUrl si existe.
@@ -412,6 +419,26 @@ Despues de crear orden:
     "sandbox_network_mode": "allow_all",
     "sandbox_allowed_outbound_hosts": [],
     "flow_agent_function_tools": [
+      {
+        "name": "customer_lookup",
+        "description": "Busca al cliente en la base de Shopify por su telefono para reconocer clientes recurrentes. Devuelve nombre, cantidad de pedidos previos y la direccion guardada. Llamar UNA vez al inicio de cada conversacion con el telefono del chat.",
+        "function_name": "Customer Lookup",
+        "function_slug": "customer-lookup",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "phone": {
+              "type": "string",
+              "description": "Telefono del cliente en formato internacional, ej +51918100477. Usa el numero del chat de WhatsApp (get_whatsapp_context)."
+            },
+            "email": {
+              "type": "string",
+              "description": "Email del cliente, solo si lo menciono."
+            }
+          },
+          "required": ["phone"]
+        }
+      },
       {
         "name": "shopify_product_lookup",
         "description": "Find an Kenku Shopify product by product URL, handle, title, or customer message. Use before giving price or product facts.",
