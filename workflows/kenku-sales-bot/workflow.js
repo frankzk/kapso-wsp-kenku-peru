@@ -2,7 +2,7 @@ import { START, Workflow } from '@kapso/workflows';
 
 const workflow = new Workflow("kenku-sales-bot", {
   name: "Kenku Sales Bot",
-  status: "draft", // TODO(Kenku): cambiar a "active" cuando el numero de WhatsApp este configurado
+  status: "active",
 });
 
 workflow.addNode(START, {
@@ -12,12 +12,12 @@ workflow.addNode(START, {
   }
 });
 
-// TODO(Kenku): reemplazar por el phoneNumberId real cuando se configure el
-// numero de WhatsApp del proyecto Kenku Peru en Kapso (Phone numbers → Set up).
+// Sandbox WhatsApp de Kapso (para pruebas). Al pasar al numero definitivo,
+// reemplazar 597907523413541 por el phoneNumberId real en todo el repo.
 workflow.addTrigger({
   "active": true,
   "type": "inbound_message",
-  "phoneNumberId": "KENKU_PHONE_NUMBER_ID_PENDIENTE"
+  "phoneNumberId": "597907523413541"
 });
 
 workflow.addNode("sales-agent", {
@@ -774,8 +774,7 @@ workflow.addEdge("init-hint", "sales-agent");
 // punto, vuelve al agente y la cadencia se reinicia.
 // ============================================================
 
-// TODO(Kenku): mismo phoneNumberId real del trigger (numero de WhatsApp de Kenku).
-const PHONE_NUMBER_ID = "KENKU_PHONE_NUMBER_ID_PENDIENTE";
+const PHONE_NUMBER_ID = "597907523413541";
 const HOLD_SECONDS = 1800; // re-chequeo cada 30 min durante horario de silencio
 
 // Escalera de valor (7 toques): cada recordatorio aporta un angulo NUEVO en vez

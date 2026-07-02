@@ -15,7 +15,7 @@ proyecto nuevo **Kenku Perú** (`cf65efcf-38ab-475c-85b3-c2b89f304652`).
 | Dominio admin de Shopify | `aurela-peru.myshopify.com` | `kenkuperu.myshopify.com` — Aurela y Kenku son **tiendas distintas** de la organización Grupo GF SAC, cada una con su dominio admin |
 | Código de descuento | `AURELA-WHATSAPP-PROMO` | `KENKU-WHATSAPP-PROMO` (⚠️ hay que crearlo en Shopify) |
 | Tags de pedidos/clientes | `kapso, whatsapp, aurela` | `kapso, whatsapp, kenku` |
-| Triggers / phoneNumberId | Números de Aurela (2) | Placeholder `KENKU_PHONE_NUMBER_ID_PENDIENTE` |
+| Triggers / phoneNumberId | Números de Aurela (2) | `597907523413541` (Sandbox WhatsApp de Kapso, para pruebas) |
 | `.kapso/remote-map.json` | IDs de recursos de Aurela | **No se copió** — se regenera con el primer `kapso push` |
 
 Las listas de stopwords de `shopify-product-lookup` y `product-media-lookup`
@@ -67,8 +67,8 @@ Referencia: los valores actuales están en el proyecto Aurela
 2. `kapso push` para crear las 7 funciones y el workflow (queda en draft).
 3. Configurar las variables/secretos de cada función (sección anterior).
 4. Configurar el número de WhatsApp de Kenku en Kapso (Phone numbers → Set up).
-5. Reemplazar el placeholder `KENKU_PHONE_NUMBER_ID_PENDIENTE` por el
-   phoneNumberId real en:
+5. El phoneNumberId actual es el del Sandbox (`597907523413541`). Al pasar al
+   numero definitivo, reemplazarlo en:
    - `workflows/kenku-sales-bot/workflow.js` (trigger + const `PHONE_NUMBER_ID`)
    - `workflows/kenku-sales-bot/workflow.yaml` y `definition.json`
    - `functions/campaign-report/index.js` (`DEFAULT_PHONE_NUMBER_IDS`)

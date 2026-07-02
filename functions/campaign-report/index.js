@@ -26,7 +26,7 @@ const MAX_CONV_PAGES = 50; // por numero: 50 x 100 = 5000 conversaciones por ran
 const MAX_CONV_DAYS = 16;  // la conversion se calcula para rangos <= 16 dias (evita timeouts del worker)
 // TODO(Kenku): reemplazar por el phoneNumberId real del numero de WhatsApp de
 // Kenku Peru. Override con WHATSAPP_PHONE_NUMBER_IDS si hace falta.
-const DEFAULT_PHONE_NUMBER_IDS = ["KENKU_PHONE_NUMBER_ID_PENDIENTE"];
+const DEFAULT_PHONE_NUMBER_IDS = ["597907523413541"];
 const DEFAULT_DAYS = 30;
 const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000; // America/Lima = UTC-5 (sin DST)
 

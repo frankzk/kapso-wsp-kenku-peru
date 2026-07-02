@@ -5,7 +5,7 @@ async function handler(request, env = globalThis) {
 // Dominio admin de la tienda Kenku (SHOPIFY_SHOP_DOMAIN en la config tiene prioridad).
 const DEFAULT_SHOP_DOMAIN = "kenkuperu.myshopify.com";
 const DEFAULT_API_VERSION = "2026-04";
-const DEFAULT_PHONE_NUMBER_ID = "KENKU_PHONE_NUMBER_ID_PENDIENTE";
+const DEFAULT_PHONE_NUMBER_ID = "597907523413541";
 const MAX_QUANTITY = 50;
 const FREE_SHIPPING_THRESHOLD = 40;
 const SHIPPING_FEE_UNDER_THRESHOLD = 10;

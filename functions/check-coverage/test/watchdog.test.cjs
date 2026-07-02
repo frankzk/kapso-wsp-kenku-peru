@@ -32,7 +32,7 @@ globalThis.fetch = async (url, opts) => {
   const u = String(url);
   if (u.includes("/whatsapp/conversations")) {
     // Solo el primer numero devuelve datos; el segundo, vacio.
-    const data = u.includes("KENKU_PHONE_NUMBER_ID_PENDIENTE") ? CONVOS : [];
+    const data = u.includes("597907523413541") ? CONVOS : [];
     return { ok: true, json: async () => ({ data, paging: { cursors: { after: null } } }) };
   }
   if (u.includes("api.telegram.org")) {
