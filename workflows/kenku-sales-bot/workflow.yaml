@@ -1,0 +1,10 @@
+definition: definition.json
+name: Kenku Sales Bot
+slug: kenku-sales-bot
+# TODO(Kenku): cambiar a "active" cuando el numero de WhatsApp del proyecto
+# Kenku Peru este configurado y el phoneNumberId real reemplace el placeholder.
+status: draft
+triggers:
+  - active: true
+    phoneNumberId: "KENKU_PHONE_NUMBER_ID_PENDIENTE"
+    triggerType: inbound_message
