@@ -1,7 +1,6 @@
 const DEFAULT_PUBLIC_SHOP_DOMAIN = "kenku.pe";
-// TODO(Kenku): dominio admin .myshopify.com de la tienda KENKU (no el de Aurela).
-// Configurar tambien SHOPIFY_SHOP_DOMAIN en la config de la funcion.
-const DEFAULT_ADMIN_SHOP_DOMAIN = "KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com";
+// Dominio admin de la tienda Kenku (SHOPIFY_SHOP_DOMAIN en la config tiene prioridad).
+const DEFAULT_ADMIN_SHOP_DOMAIN = "kenkuperu.myshopify.com";
 const DEFAULT_ADMIN_API_VERSION = "2026-04";
 const VIDEO_METAFIELD_NAMESPACE = "custom";
 const VIDEO_METAFIELD_KEY = "video";

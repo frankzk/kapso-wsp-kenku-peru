@@ -12,7 +12,7 @@ proyecto nuevo **Kenku Perú** (`cf65efcf-38ab-475c-85b3-c2b89f304652`).
 | Marca en prompts y mensajes | Aurela / Aurela Peru | Kenku / Kenku Peru |
 | Dominio público (links, catálogo) | `aurela.pe` | `kenku.pe` |
 | Catálogo completo | `aurela.pe/collections/todos-los-productos` | `kenku.pe/collections/todos-los-productos` (verificado: existe, 357 productos) |
-| Dominio admin de Shopify | `aurela-peru.myshopify.com` | Placeholder `KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com` — Aurela y Kenku son **tiendas distintas** de la organización Grupo GF SAC; usar el dominio `.myshopify.com` propio de la tienda Kenku |
+| Dominio admin de Shopify | `aurela-peru.myshopify.com` | `kenkuperu.myshopify.com` — Aurela y Kenku son **tiendas distintas** de la organización Grupo GF SAC, cada una con su dominio admin |
 | Código de descuento | `AURELA-WHATSAPP-PROMO` | `KENKU-WHATSAPP-PROMO` (⚠️ hay que crearlo en Shopify) |
 | Tags de pedidos/clientes | `kapso, whatsapp, aurela` | `kapso, whatsapp, kenku` |
 | Triggers / phoneNumberId | Números de Aurela (2) | Placeholder `KENKU_PHONE_NUMBER_ID_PENDIENTE` |
@@ -37,9 +37,8 @@ clave:
    la **instalación en la tienda Kenku** (admin de Kenku → Configuración →
    Apps → kapso-wsp-aurela-peru → credenciales de API; si no está visible,
    regenerarlo desde el panel de la organización/Dev Dashboard).
-2. **Cada tienda tiene su propio dominio admin**: usar el
-   `<handle>.myshopify.com` de Kenku (visible en la URL del admin:
-   `admin.shopify.com/store/<handle>`) como `SHOPIFY_SHOP_DOMAIN`.
+2. **Cada tienda tiene su propio dominio admin**: el de Kenku es
+   `kenkuperu.myshopify.com` (ya aplicado como default en las funciones).
 3. Los permisos ya instalados (Clientes, Pedidos, Productos: ver y editar)
    cubren lo que usan las funciones.
 
@@ -49,7 +48,7 @@ Los `functions/**/function.yaml` están en `.gitignore` porque contienen
 secretos. Hay que configurar las variables en el dashboard de Kapso del
 proyecto Kenku (o vía `kapso pull` + editar + `kapso push`):
 
-- `SHOPIFY_SHOP_DOMAIN` = `<handle-kenku>.myshopify.com` (el de la tienda Kenku)
+- `SHOPIFY_SHOP_DOMAIN` = `kenkuperu.myshopify.com`
 - `SHOPIFY_PUBLIC_SHOP_DOMAIN` = `kenku.pe`
 - `SHOPIFY_API_VERSION` = `2026-04`
 - `SHOPIFY_ADMIN_ACCESS_TOKEN` = token de la instalación de la app en Kenku (paso anterior)
@@ -75,11 +74,8 @@ Referencia: los valores actuales están en el proyecto Aurela
    - `functions/campaign-report/index.js` (`DEFAULT_PHONE_NUMBER_IDS`)
    - `functions/check-coverage/index.js` (`WATCHDOG_PHONE_IDS`)
    - `functions/create-shopify-order/index.js` (`DEFAULT_PHONE_NUMBER_ID`)
-   Y reemplazar `KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com` por el dominio
-   admin real de Kenku en los `DEFAULT_SHOP_DOMAIN` / `DEFAULT_ADMIN_SHOP_DOMAIN`
-   de `shopify-product-lookup`, `product-media-lookup`, `create-shopify-order`
-   y `campaign-report` (o dejar los placeholders y confiar solo en las
-   variables de entorno, que siempre tienen prioridad).
+   (El dominio admin `kenkuperu.myshopify.com` ya está aplicado como default
+   en las 4 funciones que llaman a la Admin API.)
 6. Cambiar el workflow a `status: active` (workflow.js y workflow.yaml) y `kapso push`.
 7. Crear en Shopify el código de descuento `KENKU-WHATSAPP-PROMO` (equivalente
    al `AURELA-WHATSAPP-PROMO` anterior).

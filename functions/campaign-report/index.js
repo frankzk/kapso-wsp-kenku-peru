@@ -16,9 +16,8 @@
 // Meta es opcional: si no hay token configurado, el reporte muestra las ventas
 // igual (sin gasto/CPA/ROAS) con un aviso para conectar la cuenta.
 
-// TODO(Kenku): dominio admin .myshopify.com de la tienda KENKU (no el de Aurela).
-// Configurar tambien SHOPIFY_SHOP_DOMAIN en la config de la funcion.
-const DEFAULT_SHOP_DOMAIN = "KENKU_MYSHOPIFY_DOMAIN_PENDIENTE.myshopify.com";
+// Dominio admin de la tienda Kenku (SHOPIFY_SHOP_DOMAIN en la config tiene prioridad).
+const DEFAULT_SHOP_DOMAIN = "kenkuperu.myshopify.com";
 const DEFAULT_API_VERSION = "2026-04";
 const DEFAULT_META_API_VERSION = "v21.0";
 const MAX_ORDER_PAGES = 12; // 12 x 250 = 3000 ordenes por rango
