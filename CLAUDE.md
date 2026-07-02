@@ -34,6 +34,20 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+## Secrets de funciones (LECCION IMPORTANTE)
+
+- Las variables de entorno de las funciones se configuran como **Secrets** vía
+  `POST /platform/v1/functions/{id}/secrets` con `{"secret":{"name":"X","value":"y"}}`
+  (nombres `MAYUSCULAS_CON_GUION_BAJO`). Aplican sin redeploy.
+- El `runtime_config` del `function.yaml` **NO se inyecta al runtime** y además
+  el round-trip del CLI deforma los nombres de las claves
+  (`SHOPIFY_...` → `sHOPIFY...` → `s_h_o_p_...`). No usarlo para configurar.
+- Secrets ya configurados (2026-07-02): Shopify (domain/version/token) en
+  shopify-product-lookup, product-media-lookup, create-shopify-order y
+  campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage y
+  campaign-report; Telegram en notify-team, check-coverage y campaign-report;
+  DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
+
 ## Datos del proyecto Kenku
 
 - phoneNumberId actual: `597907523413541` (Sandbox WhatsApp de Kapso, para
