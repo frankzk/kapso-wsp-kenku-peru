@@ -17,6 +17,18 @@
   con la API key del proyecto Kenku (header `X-API-Key`). El workflow
   `kenku-sales-bot` es id `5d45d805-b52f-4d82-8c77-b8dd680718fc`; usar siempre
   el `lock_version` vigente al hacer PATCH.
+- **CRITICO al hacer PATCH del definition por API**: la API NO resuelve
+  `function_slug` → `function_id` (eso lo hace el CLI en `kapso push`). Antes
+  de enviar, rellenar `function_id` en los decide de tipo function y en cada
+  item de `flow_agent_function_tools`, y verificar después con GET que ninguna
+  referencia quede en null. IDs de funciones del proyecto Kenku:
+  shopify-product-lookup=21cd24f1-ed57-4303-988c-043bf4bc8069,
+  product-media-lookup=d4e6365e-4736-4e92-872a-259adb6634f2,
+  quote-order=ae2db7b7-918c-4b73-b36e-979668920347,
+  check-coverage=05a6107d-6488-4bb3-8088-9f2fce140b5e,
+  create-shopify-order=f513d5ea-7d45-4623-af58-3b1b810abed0,
+  notify-team=00dd67bd-df4b-4477-af5c-2530c44a5b60,
+  campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b.
 - **NO usar el MCP de Kapso para mutaciones**: el conector MCP de Kapso de las
   sesiones está autenticado contra el proyecto de AURELA. Solo sirve
   `search_docs` (documentación, es neutral). Nada de escribir por MCP.
