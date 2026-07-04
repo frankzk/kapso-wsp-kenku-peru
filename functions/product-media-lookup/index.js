@@ -101,12 +101,17 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
+    const wantVideoDebug = /videodebug/i.test(queryText);
+    const presentationRequested = detectPresentationRequest(root) && !wantVideoDebug;
+    if (presentationRequested) {
+      return json(await buildPresentationResponse(config, product));
+    }
+
     const photos = buildMediaItems(product, { limit, requestedVariant });
 
     // El cliente pidio video: intentamos resolver el metacampo custom.video
     // (referencia a archivo). Si no hay token admin o el producto no tiene video,
     // seguimos con las fotos sin romper el flujo.
-    const wantVideoDebug = /videodebug/i.test(queryText);
     const videoRequested = detectVideoRequest(queryText, root) || wantVideoDebug;
     let videoItem = null;
     let videoDebug = null;
@@ -626,6 +631,158 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function detectPresentationRequest(root) {
+  if (!root) return false;
+  if (root.presentation === true || root.presentation === "true") return true;
+  return String(root.purpose || "").toLowerCase() === "presentation";
+}
+
+const BEFORE_AFTER_PATTERN = /(antes|despues|before|after)/;
+const TESTIMONIAL_PATTERN = /(testimoni|resena|review|opinion|comentario)/;
+
+// Lista las imagenes del producto con un "haystack" normalizado (alt + nombre
+// de archivo) para clasificar antes/despues y testimonios sin depender solo
+// del alt (muchas tiendas solo describen la foto en el nombre del archivo).
+function listProductImages(product) {
+  const items = [];
+  const seen = new Set();
+  const push = (rawUrl, alt) => {
+    const url = normalizeImageUrl(rawUrl);
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    items.push({
+      url,
+      haystack: normalizeSearchText([alt, fileNameFromUrl(url)].filter(Boolean).join(" ")),
+    });
+  };
+
+  for (const media of Array.isArray(product.media) ? product.media : []) {
+    if (!media || (media.media_type && media.media_type !== "image")) continue;
+    push(media.src || media.preview_image?.src, media.alt);
+  }
+  for (const image of product.images || []) {
+    push(image?.src || image, image?.alt);
+  }
+  return items;
+}
+
+function fileNameFromUrl(url) {
+  try {
+    const pathname = new URL(url).pathname;
+    const name = decodeURIComponent(pathname.split("/").pop() || "");
+    return name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ");
+  } catch {
+    return "";
+  }
+}
+
+// Separa las fotos del producto en: principal, segunda (antes/despues si
+// existe) y testimonio, para la secuencia de presentacion.
+function classifyPresentationImages(product) {
+  const images = listProductImages(product);
+  const testimonialImg = images.find((img) => TESTIMONIAL_PATTERN.test(img.haystack)) || null;
+  const regular = images.filter((img) => img !== testimonialImg);
+  const beforeAfterImg = regular.find((img) => BEFORE_AFTER_PATTERN.test(img.haystack)) || null;
+  const plain = regular.filter((img) => img !== beforeAfterImg);
+
+  const photos = [];
+  const principal = plain[0] || beforeAfterImg;
+  if (principal) {
+    photos.push({ ...mediaItem(product, "Principal", principal.url), role: "principal" });
+  }
+  if (beforeAfterImg && beforeAfterImg !== principal) {
+    photos.push({ ...mediaItem(product, "Antes y despues", beforeAfterImg.url), role: "antes_despues" });
+  } else if (plain[1]) {
+    photos.push({ ...mediaItem(product, "Foto 2", plain[1].url), role: "foto_2" });
+  }
+
+  return {
+    photos,
+    beforeAfterAvailable: Boolean(beforeAfterImg),
+    testimonial: testimonialImg
+      ? { ...mediaItem(product, "Testimonio", testimonialImg.url), role: "testimonio" }
+      : null,
+  };
+}
+
+// Fallback de video: media de tipo video subida al producto en Shopify
+// (product.media del endpoint publico .js), cuando no hay metacampo custom.video.
+function findInlineProductVideo(product) {
+  for (const media of Array.isArray(product.media) ? product.media : []) {
+    if (!media || media.media_type !== "video") continue;
+    const sources = (Array.isArray(media.sources) ? media.sources : []).map((source) => ({
+      url: source?.url,
+      mimeType: source?.mime_type || source?.mimeType || "",
+      format: source?.format || "",
+      height: source?.height,
+    }));
+    const src = pickVideoSource(sources);
+    if (src?.url) return videoItem(product, normalizeImageUrl(src.url), src.mimeType || "video/mp4");
+  }
+  return null;
+}
+
+// Respuesta del modo presentacion: media ordenada y con rol (principal,
+// antes_despues/foto_2, video, testimonio) para la secuencia de mensajes.
+async function buildPresentationResponse(config, product) {
+  const classified = classifyPresentationImages(product);
+  let photos = classified.photos;
+  if (photos.length === 0) {
+    photos = buildMediaItems(product, { limit: 2, requestedVariant: "" })
+      .map((item, index) => ({ ...item, role: index === 0 ? "principal" : "foto_2" }));
+  }
+
+  const vres = await fetchProductVideo(config, product);
+  let video = vres.item || findInlineProductVideo(product);
+  if (video) video = { ...video, role: "video" };
+
+  const media = [...photos];
+  if (video) media.push(video);
+  if (classified.testimonial) media.push(classified.testimonial);
+
+  if (media.length === 0) {
+    return {
+      ok: false,
+      found: true,
+      presentation: true,
+      videoAvailable: false,
+      beforeAfterAvailable: false,
+      testimonialAvailable: false,
+      reason: "media_not_found",
+      product: productSummary(product, config.publicShopDomain),
+      message: "El producto existe, pero no encontre fotos ni video publicos: omite los mensajes de media y sigue la secuencia solo con los textos.",
+    };
+  }
+
+  return {
+    ok: true,
+    found: true,
+    presentation: true,
+    videoAvailable: Boolean(video),
+    beforeAfterAvailable: classified.beforeAfterAvailable,
+    testimonialAvailable: Boolean(classified.testimonial),
+    product: productSummary(product, config.publicShopDomain),
+    media,
+    count: media.length,
+    sendMediaInstructions: [
+      "Usa la herramienta send_media para enviar cada item como media real de WhatsApp (los de type video como video, los de type image como imagen), un mensaje por item y en el orden del array.",
+      "No escribas ni pegues estas URLs en texto al cliente.",
+      "No uses Markdown de imagen ni de enlace.",
+    ].join(" "),
+    followUpText: [
+      "Secuencia de presentacion:",
+      "1) saludo corto de 1 linea;",
+      "2) send_media de la imagen rol principal;",
+      "3) send_media de la segunda imagen (rol antes_despues si existe);",
+      "4) si hay item rol video: primero UN mensaje corto de texto presentando el video y luego send_media del video;",
+      "5) mensaje de texto con precio y promociones;",
+      "6) si hay item rol testimonio: send_media de esa imagen;",
+      "7) cierra preguntando si el envio es para Lima o para provincia.",
+      "Omite sin avisar los pasos cuyo item no exista. Nunca pegues URLs en el texto.",
+    ].join(" "),
+  };
+}
+
 function detectVideoRequest(queryText, root) {
   if (root && (root.includeVideo === true || root.wantsVideo === true || root.video === true)) return true;
   const flag = String((root && (root.mediaType || root.media_type)) || "").toLowerCase();
@@ -748,8 +905,12 @@ function json(body, status = 200) {
 
 globalThis.__kenkuProductMediaLookup = {
   buildMediaItems,
+  buildPresentationResponse,
+  classifyPresentationImages,
+  detectPresentationRequest,
   detectVideoRequest,
   fetchProductVideo,
+  findInlineProductVideo,
   handleRequest,
   handler,
   pickVideoSource,
