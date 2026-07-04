@@ -732,13 +732,26 @@ async function buildPresentationResponse(config, product) {
       .map((item, index) => ({ ...item, role: index === 0 ? "principal" : "foto_2" }));
   }
 
+  // Los metacampos de imagen (custom.testimonio / custom.antes_y_despues)
+  // tienen prioridad sobre la clasificacion por alt/nombre de archivo.
+  const mfImages = await fetchPresentationMetafieldImages(config, product);
+  if (mfImages.beforeAfter && !photos.some((p) => p.url === mfImages.beforeAfter)) {
+    const item = { ...mediaItem(product, "Antes y despues", mfImages.beforeAfter), role: "antes_despues" };
+    const secondIndex = photos.findIndex((p) => p.role !== "principal");
+    if (secondIndex >= 0) photos.splice(secondIndex, 1, item);
+    else photos.push(item);
+  }
+  const testimonial = mfImages.testimonial
+    ? { ...mediaItem(product, "Testimonio", mfImages.testimonial), role: "testimonio" }
+    : classified.testimonial;
+
   const vres = await fetchProductVideo(config, product);
   let video = vres.item || findInlineProductVideo(product);
   if (video) video = { ...video, role: "video" };
 
   const media = [...photos];
   if (video) media.push(video);
-  if (classified.testimonial) media.push(classified.testimonial);
+  if (testimonial) media.push(testimonial);
 
   if (media.length === 0) {
     return {
@@ -759,8 +772,8 @@ async function buildPresentationResponse(config, product) {
     found: true,
     presentation: true,
     videoAvailable: Boolean(video),
-    beforeAfterAvailable: classified.beforeAfterAvailable,
-    testimonialAvailable: Boolean(classified.testimonial),
+    beforeAfterAvailable: Boolean(mfImages.beforeAfter) || classified.beforeAfterAvailable,
+    testimonialAvailable: Boolean(testimonial),
     product: productSummary(product, config.publicShopDomain),
     media,
     count: media.length,
@@ -857,6 +870,53 @@ async function fetchProductVideo(config, product) {
   }
 }
 
+// Lee los metacampos de imagen del namespace custom (testimonio y antes y
+// despues) via Admin API: son referencias a archivo y NO vienen en el
+// products.json publico. Las keys se detectan por patron (testimoni... /
+// antes|despues|before|after) para tolerar variantes como antes_y_despues.
+async function fetchPresentationMetafieldImages(config, product) {
+  const result = { testimonial: null, beforeAfter: null };
+  if (!config.adminToken || !product?.id) return result;
+
+  try {
+    const query = `#graphql
+      query ProductPresentationImages($id: ID!, $ns: String!) {
+        product(id: $id) {
+          metafields(first: 30, namespace: $ns) {
+            nodes {
+              key
+              reference {
+                __typename
+                ... on MediaImage { image { url } }
+                ... on GenericFile { url mimeType }
+              }
+            }
+          }
+        }
+      }`;
+    const data = await shopifyAdminGraphql(config, query, {
+      id: `gid://shopify/Product/${product.id}`,
+      ns: VIDEO_METAFIELD_NAMESPACE,
+    });
+    for (const node of data?.product?.metafields?.nodes || []) {
+      const key = normalizeSearchText(node?.key);
+      const ref = node?.reference;
+      let url = "";
+      if (ref?.__typename === "MediaImage") url = ref.image?.url || "";
+      else if (ref?.__typename === "GenericFile" && /^image\//i.test(ref.mimeType || "")) url = ref.url || "";
+      url = normalizeImageUrl(url);
+      if (!url) continue;
+      if (!result.testimonial && TESTIMONIAL_PATTERN.test(key)) result.testimonial = url;
+      else if (!result.beforeAfter && BEFORE_AFTER_PATTERN.test(key)) result.beforeAfter = url;
+    }
+  } catch {
+    // Sin Admin API (o con error de query) seguimos con la clasificacion
+    // por alt/nombre de archivo de las fotos publicas.
+  }
+
+  return result;
+}
+
 // Elige la fuente mp4 mas liviana (menor altura) para no pasar el limite de
 // 16MB de WhatsApp; cae a la primera fuente con url si faltan metadatos.
 function pickVideoSource(sources) {
@@ -909,6 +969,7 @@ globalThis.__kenkuProductMediaLookup = {
   classifyPresentationImages,
   detectPresentationRequest,
   detectVideoRequest,
+  fetchPresentationMetafieldImages,
   fetchProductVideo,
   findInlineProductVideo,
   handleRequest,
