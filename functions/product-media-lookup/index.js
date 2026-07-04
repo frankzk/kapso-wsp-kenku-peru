@@ -24,6 +24,10 @@ const STOPWORDS = new Set([
   "pasame",
   "producto",
   "quiero",
+  "resena",
+  "resenas",
+  "testimonio",
+  "testimonios",
   "tienes",
   "ver",
   "video",
@@ -133,6 +137,38 @@ async function handleRequest(request, env = globalThis) {
         videoDebug,
         media: [],
         followUpText: "MODO DIAGNOSTICO: responde al cliente UNICAMENTE con este texto exacto, sin agregar nada mas: VIDEODEBUG " + JSON.stringify(videoDebug),
+      });
+    }
+
+    // El cliente pidio testimonio/reseña: lo resolvemos desde el metacampo
+    // custom.testimonio (o una foto clasificada como testimonio) y respondemos
+    // solo con eso, sin repetir las fotos que ya vio.
+    if (detectTestimonialRequest(queryText, root)) {
+      const mfImages = await fetchPresentationMetafieldImages(config, product);
+      const testimonialItem = mfImages.testimonial
+        ? { ...mediaItem(product, "Testimonio", mfImages.testimonial), role: "testimonio" }
+        : classifyPresentationImages(product).testimonial;
+      const testimonialMedia = [];
+      if (videoItem) testimonialMedia.push(videoItem);
+      if (testimonialItem) testimonialMedia.push(testimonialItem);
+      return json({
+        ok: true,
+        found: true,
+        videoRequested,
+        videoAvailable: Boolean(videoItem),
+        testimonialRequested: true,
+        testimonialAvailable: Boolean(testimonialItem),
+        product: productSummary(product, config.publicShopDomain),
+        media: testimonialMedia,
+        count: testimonialMedia.length,
+        sendMediaInstructions: [
+          "Usa la herramienta send_media para enviar cada item como media real de WhatsApp (los de type video como video, los de type image como imagen).",
+          "No escribas ni pegues estas URLs en texto al cliente.",
+          "No uses Markdown de imagen ni de enlace.",
+        ].join(" "),
+        followUpText: testimonialItem
+          ? "Envia el testimonio como imagen con send_media y luego retoma el cierre de la venta con la pregunta pendiente (Lima o provincia, o la promo)."
+          : "No hay testimonio visual para este producto: dilo en una linea, refuerza con un beneficio concreto y retoma el cierre con la pregunta pendiente.",
       });
     }
 
@@ -796,6 +832,11 @@ async function buildPresentationResponse(config, product) {
   };
 }
 
+function detectTestimonialRequest(queryText, root) {
+  if (root && (root.includeTestimonial === true || root.wantsTestimonial === true || root.testimonial === true)) return true;
+  return TESTIMONIAL_PATTERN.test(normalizeSearchText(queryText));
+}
+
 function detectVideoRequest(queryText, root) {
   if (root && (root.includeVideo === true || root.wantsVideo === true || root.video === true)) return true;
   const flag = String((root && (root.mediaType || root.media_type)) || "").toLowerCase();
@@ -968,6 +1009,7 @@ globalThis.__kenkuProductMediaLookup = {
   buildPresentationResponse,
   classifyPresentationImages,
   detectPresentationRequest,
+  detectTestimonialRequest,
   detectVideoRequest,
   fetchPresentationMetafieldImages,
   fetchProductVideo,
