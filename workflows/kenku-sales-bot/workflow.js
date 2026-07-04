@@ -12,8 +12,14 @@ workflow.addNode(START, {
   }
 });
 
-// Sandbox WhatsApp de Kapso (para pruebas). Al pasar al numero definitivo,
-// reemplazar 597907523413541 por el phoneNumberId real en todo el repo.
+// Numero de produccion "Kenku Peru Arqui Nexo" (+51 901 410 264) mas el
+// sandbox de Kapso como segundo trigger para pruebas.
+workflow.addTrigger({
+  "active": true,
+  "type": "inbound_message",
+  "phoneNumberId": "1193972037132398"
+});
+
 workflow.addTrigger({
   "active": true,
   "type": "inbound_message",
@@ -818,7 +824,7 @@ workflow.addEdge("init-hint", "sales-agent");
 // punto, vuelve al agente y la cadencia se reinicia.
 // ============================================================
 
-const PHONE_NUMBER_ID = "597907523413541";
+const PHONE_NUMBER_ID = "1193972037132398";
 const HOLD_SECONDS = 1800; // re-chequeo cada 30 min durante horario de silencio
 
 // Escalera de valor (7 toques): cada recordatorio aporta un angulo NUEVO en vez

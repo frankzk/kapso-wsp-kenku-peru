@@ -844,7 +844,7 @@
       "data": {
         "config": {
           "message": "Hola 👋 {{vars.followup_hint}} ¿Te quedo alguna duda? Te respondo al toque 😊",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 1",
         "node_type": "send_text"
@@ -944,7 +944,7 @@
       "data": {
         "config": {
           "message": "Sigo por aca para ayudarte 🙌 {{vars.followup_hint}} ¿Avanzamos con tu pedido?",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 2",
         "node_type": "send_text"
@@ -1044,7 +1044,7 @@
       "data": {
         "config": {
           "message": "{{vars.followup_hint}} 🔥 Es de lo mas pedido de la semana y el stock va volando. ¿Te aparto el tuyo?",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 3",
         "node_type": "send_text"
@@ -1144,7 +1144,7 @@
       "data": {
         "config": {
           "message": "Te recuerdo que {{vars.followup_hint}} Con el *3x2* pagas 2 y llevas 3 🛍️ Si confirmas hoy, entra al despacho de mañana 🚚",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 4",
         "node_type": "send_text"
@@ -1244,7 +1244,7 @@
       "data": {
         "config": {
           "message": "Te lo dejo de nuevo por aqui para que lo veas 😍 {{vars.followup_hint}}",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 5",
         "node_type": "send_text"
@@ -1401,7 +1401,7 @@
       "data": {
         "config": {
           "message": "¿Y si lo pruebas sin riesgo? 😊 Te doy *10% de descuento* llevando 1 unidad hoy, para que pruebes la experiencia Kenku. O si prefieres mas ahorro, el *3x2* sigue en pie. Responde *10%* o *3x2* y te lo dejo listo ✨",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 6",
         "node_type": "send_text"
@@ -1501,7 +1501,7 @@
       "data": {
         "config": {
           "message": "Ultimo mensajito, prometido 🙏 {{vars.followup_hint}} Te lo dejo apartado al precio de hoy. Y para cuando quieras ver mas modelos con calma, aqui tienes nuestro catalogo: https://kenku.pe/collections/todos-los-productos 😊",
-          "phone_number_id": "597907523413541"
+          "phone_number_id": "1193972037132398"
         },
         "display_name": "Seguimiento 7",
         "node_type": "send_text"
