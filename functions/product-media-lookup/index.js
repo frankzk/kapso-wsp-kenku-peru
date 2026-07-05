@@ -37,6 +37,7 @@ const STOPWORDS = new Set([
 // Synonyms so customer terms match catalog wording (e.g. "medias" == "calcetines" in Peru).
 const SYNONYM_GROUPS = [
   ["medias", "media", "calcetines", "calcetin", "calceta", "calcetas", "soquetes", "soquete"],
+  ["nattokinase", "natokinase", "nattokinasa", "natokinasa", "nattoquinasa", "natoquinasa", "natto"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
@@ -60,7 +61,19 @@ function tokenVariants(token) {
 }
 
 function searchableHasToken(searchable, token) {
-  return tokenVariants(token).some((variant) => variant && searchable.includes(variant));
+  const variants = tokenVariants(token);
+  if (variants.some((variant) => variant && searchable.includes(variant))) return true;
+  // Tolerancia a letras dobles mal escritas (ej. "natokinase" vs "nattokinase"):
+  // colapsa letras repetidas en ambos lados para tokens largos.
+  if (token.length >= 5) {
+    const collapsed = collapseRepeats(searchable);
+    return variants.some((variant) => variant && variant.length >= 5 && collapsed.includes(collapseRepeats(variant)));
+  }
+  return false;
+}
+
+function collapseRepeats(text) {
+  return String(text || "").replace(/(.)\1+/g, "$1");
 }
 
 async function handler(request, env = globalThis) {
@@ -479,6 +492,8 @@ function scoreProduct(product, query) {
     if (variants.some((variant) => title === variant || title.startsWith(`${variant} `))) score += 22;
     else if (variants.some((variant) => title.includes(variant))) score += 14;
     else if (variants.some((variant) => searchable.includes(variant))) score += 3;
+    else if (token.length >= 5 && variants.some((variant) => variant.length >= 5 && collapseRepeats(title).includes(collapseRepeats(variant)))) score += 14;
+    else if (token.length >= 5 && variants.some((variant) => variant.length >= 5 && collapseRepeats(searchable).includes(collapseRepeats(variant)))) score += 3;
   }
 
   const matchedTokens = query.tokens.filter((token) => searchableHasToken(searchable, token)).length;
