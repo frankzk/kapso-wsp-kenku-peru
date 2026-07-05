@@ -826,7 +826,7 @@ async function buildPresentationResponse(config, product, knownAddress = null) {
       "1) saludo corto de 1 linea;",
       "2) send_media de la imagen rol principal;",
       "3) send_media de la segunda imagen (rol antes_despues si existe);",
-      "4) si hay item rol video: primero UN mensaje corto de texto presentando el video y luego send_media del video;",
+      "4) si hay item rol video: send_media del video con un caption corto de UNA linea que lo presente (ej \"Mira este video corto del [producto] 🎬\"), SIN mensaje de texto separado antes;",
       "5) mensaje de texto con precio y promociones;",
       "6) si hay item rol testimonio: send_media de esa imagen;",
       knownAddress
