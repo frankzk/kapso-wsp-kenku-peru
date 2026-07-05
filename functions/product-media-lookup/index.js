@@ -108,7 +108,8 @@ async function handleRequest(request, env = globalThis) {
     const wantVideoDebug = /videodebug/i.test(queryText);
     const presentationRequested = detectPresentationRequest(root) && !wantVideoDebug;
     if (presentationRequested) {
-      return json(await buildPresentationResponse(config, product));
+      const knownAddress = input.execution_context?.vars?.known_address || null;
+      return json(await buildPresentationResponse(config, product, knownAddress));
     }
 
     const photos = buildMediaItems(product, { limit, requestedVariant });
@@ -760,7 +761,9 @@ function findInlineProductVideo(product) {
 
 // Respuesta del modo presentacion: media ordenada y con rol (principal,
 // antes_despues/foto_2, video, testimonio) para la secuencia de mensajes.
-async function buildPresentationResponse(config, product) {
+// knownAddress (vars.known_address del flujo) decide el cierre: confirmar la
+// direccion guardada del cliente recurrente o preguntar Lima/provincia.
+async function buildPresentationResponse(config, product, knownAddress = null) {
   const classified = classifyPresentationImages(product);
   let photos = classified.photos;
   if (photos.length === 0) {
@@ -826,7 +829,9 @@ async function buildPresentationResponse(config, product) {
       "4) si hay item rol video: primero UN mensaje corto de texto presentando el video y luego send_media del video;",
       "5) mensaje de texto con precio y promociones;",
       "6) si hay item rol testimonio: send_media de esa imagen;",
-      "7) cierra preguntando si el envio es para Lima o para provincia.",
+      knownAddress
+        ? `7) cierra con send_buttons: bodyText "¿Te lo enviamos a ${knownAddress}, como la vez pasada? 😊" y botones "Si, la misma" y "Cambiar direccion".`
+        : '7) cierra con send_buttons: bodyText "¿El envio seria para *Lima* o para *provincia*? 😊" y botones "Lima" y "Provincia".',
       "Omite sin avisar los pasos cuyo item no exista. Nunca pegues URLs en el texto.",
     ].join(" "),
   };
