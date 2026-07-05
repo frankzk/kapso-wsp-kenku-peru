@@ -38,6 +38,8 @@ const STOPWORDS = new Set([
 const SYNONYM_GROUPS = [
   ["medias", "media", "calcetines", "calcetin", "calceta", "calcetas", "soquetes", "soquete"],
   ["nattokinase", "natokinase", "nattokinasa", "natokinasa", "nattoquinasa", "natoquinasa", "natto"],
+  ["shampoo", "shampu", "champu", "champoo", "sampoo", "shanpu"],
+  ["shilajit", "silajit", "chilajit", "shilayit", "shilagit"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
@@ -63,17 +65,38 @@ function tokenVariants(token) {
 function searchableHasToken(searchable, token) {
   const variants = tokenVariants(token);
   if (variants.some((variant) => variant && searchable.includes(variant))) return true;
-  // Tolerancia a letras dobles mal escritas (ej. "natokinase" vs "nattokinase"):
-  // colapsa letras repetidas en ambos lados para tokens largos.
-  if (token.length >= 5) {
-    const collapsed = collapseRepeats(searchable);
-    return variants.some((variant) => variant && variant.length >= 5 && collapsed.includes(collapseRepeats(variant)));
-  }
+  // Fallback fonetico para errores tipicos de escritura (solo tokens largos).
+  if (token.length >= 5) return fuzzyIncludes(searchable, variants);
   return false;
 }
 
-function collapseRepeats(text) {
-  return String(text || "").replace(/(.)\1+/g, "$1");
+// Empareja tolerando errores foneticos tipicos del espanol: b/v, s/z,
+// k/qu->c, sh/ch->s, ph->f, w->u, y->i, h muda, letras dobles y terminacion
+// castellanizada (-a por -e). Se aplica a AMBOS lados, solo como fallback
+// cuando no hubo match exacto, con tokens de 5+ letras.
+function fuzzyIncludes(text, variants) {
+  const folded = phoneticFold(text);
+  return variants.some((variant) => {
+    if (!variant || variant.length < 5) return false;
+    const foldedVariant = phoneticFold(variant);
+    if (folded.includes(foldedVariant)) return true;
+    const trimmed = foldedVariant.replace(/[aeiou]$/, "");
+    return trimmed.length >= 5 && trimmed !== foldedVariant && folded.includes(trimmed);
+  });
+}
+
+function phoneticFold(text) {
+  return String(text || "")
+    .replace(/sh/g, "s")
+    .replace(/ch/g, "c")
+    .replace(/ph/g, "f")
+    .replace(/qu|k/g, "c")
+    .replace(/w/g, "u")
+    .replace(/v/g, "b")
+    .replace(/z/g, "s")
+    .replace(/y/g, "i")
+    .replace(/h/g, "")
+    .replace(/(.)\1+/g, "$1");
 }
 
 async function handler(request, env = globalThis) {
@@ -492,8 +515,8 @@ function scoreProduct(product, query) {
     if (variants.some((variant) => title === variant || title.startsWith(`${variant} `))) score += 22;
     else if (variants.some((variant) => title.includes(variant))) score += 14;
     else if (variants.some((variant) => searchable.includes(variant))) score += 3;
-    else if (token.length >= 5 && variants.some((variant) => variant.length >= 5 && collapseRepeats(title).includes(collapseRepeats(variant)))) score += 14;
-    else if (token.length >= 5 && variants.some((variant) => variant.length >= 5 && collapseRepeats(searchable).includes(collapseRepeats(variant)))) score += 3;
+    else if (token.length >= 5 && fuzzyIncludes(title, variants)) score += 14;
+    else if (token.length >= 5 && fuzzyIncludes(searchable, variants)) score += 3;
   }
 
   const matchedTokens = query.tokens.filter((token) => searchableHasToken(searchable, token)).length;
