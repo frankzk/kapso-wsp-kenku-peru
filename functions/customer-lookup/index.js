@@ -59,14 +59,25 @@ async function handleRequest(request, env = globalThis) {
     }
 
     const config = getConfig(env);
-    const search = await searchCustomers(config, { phone, email, debugQuery: input.debugQuery });
+    const [search, adReferral] = await Promise.all([
+      searchCustomers(config, { phone, email, debugQuery: input.debugQuery }),
+      fetchAdReferral(env, payload),
+    ]);
     if (!search.candidates.length && search.allFailed) {
-      return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError });
+      return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
     }
     const match = pickBestMatch(search.candidates, { phone, email, debug: Boolean(input.debugQuery) });
 
     if (!match) {
-      return json({ ok: true, found: false, phone: phone || null, email: email || null, message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente." });
+      return json({
+        ok: true,
+        found: false,
+        phone: phone || null,
+        email: email || null,
+        adReferral,
+        message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente."
+          + (adReferral ? " OJO: llego desde un anuncio (adReferral); si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
+      });
     }
 
     const address = match.defaultAddress || null;
@@ -102,9 +113,11 @@ async function handleRequest(request, env = globalThis) {
           }
         : null,
       addressSummary,
-      hint: ordersCount > 0
+      adReferral,
+      hint: (ordersCount > 0
         ? "Cliente recurrente: saludalo con cercania y, al llegar al envio, CONFIRMA la direccion guardada en vez de pedir todos los datos de nuevo."
-        : "Cliente registrado sin pedidos previos: confirma sus datos guardados antes de usarlos.",
+        : "Cliente registrado sin pedidos previos: confirma sus datos guardados antes de usarlos.")
+        + (adReferral ? " Llego desde un anuncio (adReferral): si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
     });
   } catch (error) {
     return json({ ok: false, found: false, reason: "lookup_error", error: safeError(error) });
@@ -191,6 +204,45 @@ async function shopifyGraphql(config, query, variables) {
     throw new Error(JSON.stringify(payload.errors || payload));
   }
   return payload.data;
+}
+
+// Busca el referral CTWA (anuncio de origen) en los mensajes de la conversacion
+// via el proxy Meta de Kapso. Meta solo lo adjunta al primer mensaje enviado
+// directo desde el click en el anuncio; si no hay KAPSO_API_KEY o contexto de
+// conversacion, devuelve null sin romper el lookup.
+async function fetchAdReferral(env, payload) {
+  const apiKey = env.KAPSO_API_KEY || env.kAPSOAPIKEY || globalThis.KAPSO_API_KEY || "";
+  const p = payload || {};
+  const conv = p.whatsapp_context?.conversation || {};
+  const conversationId = conv.id || p.execution_context?.context?.conversation_id;
+  const phoneNumberId =
+    conv.phone_number_id ||
+    p.whatsapp_context?.phone_number_id ||
+    p.execution_context?.context?.phone_number_id;
+  if (!apiKey || !conversationId || !phoneNumberId) return null;
+
+  try {
+    const url = `https://api.kapso.ai/meta/whatsapp/v24.0/${phoneNumberId}/messages`
+      + `?conversation_id=${encodeURIComponent(conversationId)}&limit=100`;
+    const response = await fetch(url, { headers: { "X-API-Key": apiKey } });
+    if (!response.ok) return null;
+    const data = await response.json();
+    for (const message of data?.data || []) {
+      const ref = message?.referral;
+      if (!ref) continue;
+      return {
+        sourceType: ref.source_type || null,
+        sourceUrl: ref.source_url || null,
+        adId: ref.source_id || null,
+        headline: ref.headline || null,
+        body: ref.body ? String(ref.body).slice(0, 500) : null,
+        mediaType: ref.media_type || null,
+      };
+    }
+  } catch {
+    // El referral es informativo: si falla, el lookup sigue sin el.
+  }
+  return null;
 }
 
 function unwrapInput(payload) {

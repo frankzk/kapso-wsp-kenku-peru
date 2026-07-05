@@ -57,8 +57,8 @@
   (`SHOPIFY_...` → `sHOPIFY...` → `s_h_o_p_...`). No usarlo para configurar.
 - Secrets ya configurados (2026-07-02): Shopify (domain/version/token) en
   shopify-product-lookup, product-media-lookup, create-shopify-order y
-  campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage y
-  campaign-report; Telegram en notify-team, check-coverage y campaign-report;
+  campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage,
+  campaign-report y customer-lookup (2026-07-04, para leer el referral CTWA); Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
 
 ## Datos del proyecto Kenku
