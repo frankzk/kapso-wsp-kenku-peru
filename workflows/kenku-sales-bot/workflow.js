@@ -88,9 +88,9 @@ Regla critica de herramientas:
 - Si create_shopify_order devuelve ok=false, no digas que el pedido fue creado; deriva a humano con resumen interno y motivo.
 
 Cliente recurrente (customer_lookup):
-- Al inicio de la conversacion (con el primer mensaje del cliente), llama customer_lookup UNA sola vez con el telefono del chat de WhatsApp (usa get_whatsapp_context si no lo tienes). No anuncies al cliente que lo estas buscando.
-- REGLA DURA: NUNCA le digas al cliente que no tienes su direccion, ni le pidas los datos de envio, sin haber llamado customer_lookup ANTES en esta conversacion. Si el cliente pregunta "¿tienes mi direccion?" o llegas al paso de envio y aun no lo has llamado (o no tienes known_address), llama customer_lookup EN ESE MOMENTO con el telefono del chat y usa el resultado.
-- Si el cliente pregunta por su direccion y found=true, confirmasela con addressSummary (ej: "Si, tengo guardada: [direccion]. ¿Te lo enviamos ahi?") en vez de pedirla de nuevo.
+- El workflow YA ejecuta customer_lookup automaticamente al inicio de la conversacion y deja el resultado en variables del flujo: known_customer_found, known_customer_name, known_customer_id, known_address, ad_referral_headline y ad_referral_body. Leelas con get_variable cuando las necesites; no anuncies al cliente que lo buscas.
+- REGLA DURA: antes de decirle al cliente que no tienes su direccion, o de pedirle los datos de envio, lee known_address con get_variable. Si tiene valor, usala. Si esta vacia o no existe, llama customer_lookup con el telefono del chat (get_whatsapp_context) y usa el resultado. NUNCA respondas "no tengo tu direccion" sin haber hecho esto.
+- Si el cliente pregunta por su direccion y known_address (o addressSummary de customer_lookup) tiene valor, confirmasela (ej: "Si, tengo guardada: [direccion]. ¿Te lo enviamos ahi?") en vez de pedirla de nuevo.
 - Si found=true: guarda con save_variable known_customer_name (firstName), known_customer_id (customer.id) y known_address (addressSummary). Puedes saludarlo por su nombre de pila con naturalidad, sin mencionar datos internos ni cuantos pedidos tiene.
 - Al llegar a los datos de envio, NO vuelvas a pedir nombre, telefono ni direccion: muestra la direccion guardada y pide UNA confirmacion, ej: "¿Te lo enviamos a la misma direccion de la vez pasada? [known_address]". Si confirma, usa esos datos (nombre completo, telefono del chat, direccion y distrito del campo address) en check_coverage y create_shopify_order, y pide SOLO lo que falte (referencia, por ejemplo) o lo que haya cambiado.
 - Si el cliente da una direccion nueva, usa la nueva sin insistir con la guardada.
@@ -825,9 +825,19 @@ workflow.addNode("init-hint", {
   variableValue: "tu consulta quedo pendiente — te ayudo a retomarla cuando quieras",
 }, { position: { x: 400, y: 100 }, displayName: "Init followup_hint" });
 
+// Lookup deterministico del cliente ANTES del agente: carga known_customer_*,
+// known_address y ad_referral_* como variables del flujo (la respuesta de la
+// funcion trae "vars"). Asi el agente no depende de acordarse de llamar la
+// herramienta para saber si el cliente ya tiene direccion guardada.
+workflow.addNode("init-customer", {
+  type: "function",
+  functionSlug: "customer-lookup",
+}, { position: { x: 550, y: 100 }, displayName: "Lookup cliente" });
+
 workflow.addEdge(START, "init-stage");
 workflow.addEdge("init-stage", "init-hint");
-workflow.addEdge("init-hint", "sales-agent");
+workflow.addEdge("init-hint", "init-customer");
+workflow.addEdge("init-customer", "sales-agent");
 
 // ============================================================
 // Seguimientos automaticos (re-engagement ladder)

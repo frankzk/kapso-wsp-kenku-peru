@@ -75,6 +75,7 @@ async function handleRequest(request, env = globalThis) {
         phone: phone || null,
         email: email || null,
         adReferral,
+        vars: buildFlowVars(null, null, adReferral),
         message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente."
           + (adReferral ? " OJO: llego desde un anuncio (adReferral); si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
       });
@@ -114,6 +115,7 @@ async function handleRequest(request, env = globalThis) {
         : null,
       addressSummary,
       adReferral,
+      vars: buildFlowVars(match, addressSummary, adReferral),
       hint: (ordersCount > 0
         ? "Cliente recurrente: saludalo con cercania y, al llegar al envio, CONFIRMA la direccion guardada en vez de pedir todos los datos de nuevo."
         : "Cliente registrado sin pedidos previos: confirma sus datos guardados antes de usarlos.")
@@ -204,6 +206,21 @@ async function shopifyGraphql(config, query, variables) {
     throw new Error(JSON.stringify(payload.errors || payload));
   }
   return payload.data;
+}
+
+// Variables de flujo que Kapso aplica automaticamente desde la respuesta
+// (clave "vars"): asi el resultado queda disponible via get_variable tanto si
+// la funcion corre como nodo del workflow (init-customer) como si la llama el
+// agente como herramienta.
+function buildFlowVars(match, addressSummary, adReferral) {
+  return {
+    known_customer_found: Boolean(match),
+    known_customer_name: match?.firstName || match?.displayName || null,
+    known_customer_id: match?.id || null,
+    known_address: addressSummary || null,
+    ad_referral_headline: adReferral?.headline || null,
+    ad_referral_body: adReferral?.body || null,
+  };
 }
 
 // Busca el referral CTWA (anuncio de origen) en los mensajes de la conversacion
