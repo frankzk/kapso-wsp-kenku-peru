@@ -30,7 +30,8 @@
   notify-team=00dd67bd-df4b-4477-af5c-2530c44a5b60,
   customer-lookup=1708bd8d-0a55-4a1e-9ed7-fe2e543c4305,
   campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b,
-  send-buttons=2620cfb9-b8c9-48b0-bed8-b8f2f9ac16a1.
+  send-buttons=2620cfb9-b8c9-48b0-bed8-b8f2f9ac16a1,
+  loop-guard=b2aebd00-2661-46e4-8946-419e4b8df13b.
 - **NO usar el MCP de Kapso para mutaciones**: el conector MCP de Kapso de las
   sesiones está autenticado contra el proyecto de AURELA. Solo sirve
   `search_docs` (documentación, es neutral). Nada de escribir por MCP.
@@ -60,7 +61,8 @@
   shopify-product-lookup, product-media-lookup, create-shopify-order y
   campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage,
   campaign-report, customer-lookup (2026-07-04, para leer el referral CTWA) y
-  send-buttons (2026-07-05, para enviar botones por el proxy Meta); Telegram en notify-team, check-coverage y campaign-report;
+  send-buttons (2026-07-05, para enviar botones por el proxy Meta) y
+  loop-guard (2026-07-05, para leer el historial de la conversacion); Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
 
 ## Datos del proyecto Kenku

@@ -105,6 +105,11 @@ Botones interactivos (send_buttons):
 - La respuesta del cliente llega como texto con el titulo del boton: "Si, la misma" = usar known_address; "Cambiar direccion" = pedir calle, numero y referencia nuevas.
 - Si send_buttons devuelve ok=false, haz la misma pregunta como mensaje de texto normal.
 
+Anti-loop y despedidas:
+- NUNCA envies dos veces seguidas el mismo texto (ni casi identico) en una conversacion. Si ya dijiste algo y el cliente no avanzo, reformula con otras palabras o simplemente no respondas.
+- Si el mensaje entrante parece una respuesta automatica de otro sistema ("mensajes informativos", "Fue un gusto atenderte", "respuesta automatica", avisos de empresas), NO respondas nada: llama complete_task de inmediato.
+- Si el cliente se despide o cierra la conversacion ("gracias", "hasta pronto", "ya no deseo", "no me interesa"), despidete UNA sola vez en una linea amable y llama complete_task; NO relances el catalogo ni la venta en ese mismo turno.
+
 Anuncio de origen (adReferral de customer_lookup):
 - customer_lookup tambien devuelve adReferral cuando el cliente llego clickeando un anuncio de Meta (CTWA): trae headline, body y mediaType del anuncio.
 - Si el mensaje del cliente NO deja claro que producto le interesa (saludo generico, "quiero informacion", "quiero comprar", "precio?") y hay adReferral, deduce el producto desde el headline/body del anuncio (ahi casi siempre aparece el nombre, ej "Shampoo Biru") y usalo como producto de interes: haz shopify_product_lookup con ese nombre y arranca la presentacion normal, mencionandolo con naturalidad ("Sobre el Shampoo Biru que viste en el anuncio...").
@@ -892,9 +897,31 @@ workflow.addNode("init-customer", {
   functionSlug: "customer-lookup",
 }, { position: { x: 550, y: 100 }, displayName: "Lookup cliente" });
 
+// Freno anti-loop: decide determinista que corta ciclos bot-a-bot (auto-
+// respondedores tipo Claro) y conversaciones repetitivas ANTES de gastar una
+// llamada al agente. Se evalua al inicio y en cada re-entrada tras un wait.
+workflow.addNode("loop-guard", {
+  type: "decide",
+  decisionType: "function",
+  functionSlug: "loop-guard",
+  conditions: [
+    { label: "atender", description: "Conversacion normal: continuar con el flujo de ventas." },
+    { label: "silencio", description: "Loop o auto-respondedor detectado: terminar sin responder." },
+  ],
+}, { position: { x: 700, y: 100 }, displayName: "Anti-loop" });
+
+workflow.addNode("loop-end", {
+  type: "set_variable",
+  variableName: "stage",
+  valueType: "string",
+  variableValue: "loop_detectado",
+}, { position: { x: 700, y: 320 }, displayName: "Fin silencioso (loop)" });
+
 workflow.addEdge(START, "init-stage");
 workflow.addEdge("init-stage", "init-hint");
-workflow.addEdge("init-hint", "init-customer");
+workflow.addEdge("init-hint", "loop-guard");
+workflow.addEdge("loop-guard", "init-customer", { label: "atender" });
+workflow.addEdge("loop-guard", "loop-end", { label: "silencio" });
 workflow.addEdge("init-customer", "sales-agent");
 
 // ============================================================
@@ -1080,7 +1107,7 @@ for (const { step, wait } of FOLLOWUPS) {
       { label: "timeout", description: "Vencio la espera sin respuesta del cliente: evaluar el envio del seguimiento." },
     ],
   }, { position: { x: baseX, y: 240 }, displayName: `Reanudacion ${step}` });
-  workflow.addEdge(wr, "sales-agent", { label: "respondio" });
+  workflow.addEdge(wr, "loop-guard", { label: "respondio" }); // re-entrada pasa por el anti-loop
   workflow.addEdge(wr, g, { label: "timeout" });
 
   // Horario Peru: enviar ahora o esperar (silencio 00:00-07:00).
