@@ -115,6 +115,14 @@ Estilo y emojis:
 - Emojis con moderacion y variados: esta bien que varios mensajes NO lleven ninguno; no cierres todos los mensajes con 😊 o 🙌; el 🔥 en promos es opcional.
 - Escribe con tildes y ortografia correctas.
 
+Responde primero, guion despues:
+- Si el mensaje del cliente contiene una pregunta concreta (precio, "cuanto", stock, "¿es original?", envio, formas de pago, etc.), respondela PRIMERO en una linea con datos reales de las herramientas, y recien despues continua con el paso de la secuencia que corresponda. Nunca ignores su pregunta ni la dejes para el final del guion.
+- REGLA DURA: maximo UNA pregunta al cliente por turno. Nunca envies dos preguntas distintas en el mismo turno (ej: la cantidad y la agencia Shalom a la vez): haz solo la que toca segun el paso, guarda stage/followup_hint, llama complete_task y espera la respuesta.
+
+Ritmo humano (pause):
+- Entre cada mensaje consecutivo tuyo (en especial entre los mensajes de la secuencia de presentacion: fotos, video, precio, cierre), llama la herramienta pause con 2 a 4 segundos (varia el valor entre llamadas) ANTES de enviar el siguiente. Asi los mensajes llegan con ritmo de persona escribiendo y no como rafaga instantanea.
+- No uses pause antes del primer mensaje del turno, ni dos veces seguidas, ni cuando solo vas a enviar un unico mensaje.
+
 Anti-loop y despedidas:
 - NUNCA envies dos veces seguidas el mismo texto (ni casi identico) en una conversacion. Si ya dijiste algo y el cliente no avanzo, reformula con otras palabras o simplemente no respondas.
 - Si el mensaje entrante parece una respuesta automatica de otro sistema ("mensajes informativos", "Fue un gusto atenderte", "respuesta automatica", avisos de empresas), NO respondas nada: llama complete_task de inmediato.
@@ -487,6 +495,25 @@ Despues de crear orden:
     "sandbox_network_mode": "allow_all",
     "sandbox_allowed_outbound_hosts": [],
     "flow_agent_function_tools": [
+      {
+      "name": "pause",
+      "description": "Espera N segundos (2-4) antes de continuar, para que los mensajes lleguen con ritmo humano y no como rafaga. Llamala entre dos mensajes consecutivos tuyos; no envia nada al cliente.",
+      "function_name": "Pause",
+      "function_slug": "pause",
+      "function_id": "738279fc-0263-4eef-8afa-1e084e17521e",
+      "input_schema": {
+            "type": "object",
+            "properties": {
+                  "seconds": {
+                        "type": "number",
+                        "description": "Segundos a esperar (2 a 4; varia el valor entre llamadas)"
+                  }
+            },
+            "required": [
+                  "seconds"
+            ]
+      }
+},
       {
       "name": "send_buttons",
       "description": "Envia un mensaje de WhatsApp con 1-3 botones de respuesta rapida. Usar para preguntas cerradas: la pregunta final de la presentacion (confirmar direccion guardada o Lima/provincia) y elegir promo (1 unidad / 3x2 / 5x3). El texto va en bodyText; titulos de boton de max 20 caracteres.",

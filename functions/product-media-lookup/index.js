@@ -817,7 +817,7 @@ async function buildPresentationResponse(config, product, knownAddress = null) {
     media,
     count: media.length,
     sendMediaInstructions: [
-      "Usa la herramienta send_media para enviar cada item como media real de WhatsApp (los de type video como video, los de type image como imagen), un mensaje por item y en el orden del array.",
+      "Usa la herramienta send_media para enviar cada item como media real de WhatsApp (los de type video como video, los de type image como imagen), un mensaje por item y en el orden del array, llamando la herramienta pause (2-4 segundos, variando) entre item e item.",
       "No escribas ni pegues estas URLs en texto al cliente.",
       "No uses Markdown de imagen ni de enlace.",
     ].join(" "),

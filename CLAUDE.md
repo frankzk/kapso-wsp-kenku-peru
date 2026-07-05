@@ -31,7 +31,8 @@
   customer-lookup=1708bd8d-0a55-4a1e-9ed7-fe2e543c4305,
   campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b,
   send-buttons=2620cfb9-b8c9-48b0-bed8-b8f2f9ac16a1,
-  loop-guard=b2aebd00-2661-46e4-8946-419e4b8df13b.
+  loop-guard=b2aebd00-2661-46e4-8946-419e4b8df13b,
+  pause=738279fc-0263-4eef-8afa-1e084e17521e.
 - **NO usar el MCP de Kapso para mutaciones**: el conector MCP de Kapso de las
   sesiones está autenticado contra el proyecto de AURELA. Solo sirve
   `search_docs` (documentación, es neutral). Nada de escribir por MCP.
