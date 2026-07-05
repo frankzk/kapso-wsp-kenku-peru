@@ -24,10 +24,13 @@ async function handleRequest(request, env = globalThis) {
 
     const apiKey = env.KAPSO_API_KEY || env.kAPSOAPIKEY || globalThis.KAPSO_API_KEY || "";
     const conv = payload.whatsapp_context?.conversation || {};
+    // En los payloads reales de agente/nodo el phone_number_id NO viene en
+    // whatsapp_context: viene en execution_context.system.whatsapp_config.
     const phoneNumberId =
       input.phoneNumberId ||
       conv.phone_number_id ||
       payload.whatsapp_context?.phone_number_id ||
+      payload.execution_context?.system?.whatsapp_config?.phone_number_id ||
       payload.execution_context?.context?.phone_number_id;
     const to =
       input.to ||

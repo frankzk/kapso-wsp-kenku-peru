@@ -232,9 +232,12 @@ async function fetchAdReferral(env, payload) {
   const p = payload || {};
   const conv = p.whatsapp_context?.conversation || {};
   const conversationId = conv.id || p.execution_context?.context?.conversation_id;
+  // En los payloads reales el phone_number_id viene en
+  // execution_context.system.whatsapp_config, no en whatsapp_context.
   const phoneNumberId =
     conv.phone_number_id ||
     p.whatsapp_context?.phone_number_id ||
+    p.execution_context?.system?.whatsapp_config?.phone_number_id ||
     p.execution_context?.context?.phone_number_id;
   if (!apiKey || !conversationId || !phoneNumberId) return null;
 
