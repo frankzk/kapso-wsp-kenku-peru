@@ -63,10 +63,13 @@
 
 ## Datos del proyecto Kenku
 
-- phoneNumberId de producción: `1193972037132398` ("Kenku Peru Arqui Nexo",
-  +51 901 410 264, conectado el 2026-07-03). El sandbox `597907523413541`
-  queda solo para pruebas, como segundo trigger del workflow. El secret
-  `WHATSAPP_PHONE_NUMBER_IDS` de campaign-report incluye ambos números.
+- phoneNumberIds de producción: `1145171692021464` ("Kenku Peru 348") y
+  `1239315459260256` ("Kenku Peru 981"), conectados el 2026-07-04 en
+  reemplazo de "Kenku Peru Arqui Nexo" (que fue eliminado del proyecto; su
+  borrado arrastró los nodos send_text que lo referenciaban — por eso los
+  follow-ups ya NO llevan phone_number_id y envían por el número de la
+  conversación). El sandbox `597907523413541` queda solo para pruebas. El
+  secret `WHATSAPP_PHONE_NUMBER_IDS` de campaign-report incluye los tres.
 - Los `functions/**/function.yaml` están gitignorados (contienen secretos);
   la config vive en Kapso y en la copia local del usuario.
 - Productos estrella para enganche: *Black Seed Oil* y *NAD+ Resveratrol*.

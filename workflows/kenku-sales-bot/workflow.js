@@ -12,12 +12,18 @@ workflow.addNode(START, {
   }
 });
 
-// Numero de produccion "Kenku Peru Arqui Nexo" (+51 901 410 264) mas el
-// sandbox de Kapso como segundo trigger para pruebas.
+// Numeros de produccion "Kenku Peru 348" y "Kenku Peru 981" (conectados el
+// 2026-07-04 en reemplazo de Arqui Nexo) mas el sandbox de Kapso para pruebas.
 workflow.addTrigger({
   "active": true,
   "type": "inbound_message",
-  "phoneNumberId": "1193972037132398"
+  "phoneNumberId": "1145171692021464"
+});
+
+workflow.addTrigger({
+  "active": true,
+  "type": "inbound_message",
+  "phoneNumberId": "1239315459260256"
 });
 
 workflow.addTrigger({
@@ -830,7 +836,6 @@ workflow.addEdge("init-hint", "sales-agent");
 // punto, vuelve al agente y la cadencia se reinicia.
 // ============================================================
 
-const PHONE_NUMBER_ID = "1193972037132398";
 const HOLD_SECONDS = 1800; // re-chequeo cada 30 min durante horario de silencio
 
 // Escalera de valor (7 toques): cada recordatorio aporta un angulo NUEVO en vez
@@ -1038,7 +1043,6 @@ for (const { step, wait } of FOLLOWUPS) {
   workflow.addNode(s, {
     type: "send_text",
     message: useAudio ? FOLLOWUP_AUDIO_TEXT[step] : FOLLOWUP_MESSAGES[step],
-    phoneNumberId: PHONE_NUMBER_ID,
   }, { position: { x: baseX, y: 520 }, displayName: `Seguimiento ${step}` });
 
   if (useAudio) {

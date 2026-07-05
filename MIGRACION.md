@@ -67,11 +67,14 @@ Referencia: los valores actuales están en el proyecto Aurela
 2. `kapso push` para crear las 7 funciones y el workflow (queda en draft).
 3. Configurar las variables/secretos de cada función (sección anterior).
 4. Configurar el número de WhatsApp de Kenku en Kapso (Phone numbers → Set up).
-5. HECHO (2026-07-04): el numero definitivo es `1193972037132398`
-   ("Kenku Peru Arqui Nexo", +51 901 410 264). Se reemplazo en workflow.js
-   (trigger + const `PHONE_NUMBER_ID`), workflow.yaml, definition.json y
-   campaign-report (`DEFAULT_PHONE_NUMBER_IDS`). El sandbox
-   (`597907523413541`) queda como segundo trigger solo para pruebas.
+5. HECHO (2026-07-04): los numeros definitivos son `1145171692021464`
+   ("Kenku Peru 348") y `1239315459260256` ("Kenku Peru 981"), que
+   reemplazaron a "Kenku Peru Arqui Nexo" el mismo dia. Triggers en
+   workflow.yaml/js para ambos + sandbox (`597907523413541`, solo pruebas).
+   Los send_text de follow-up van SIN phone_number_id (envian por el numero
+   de la conversacion; el borrado de un numero en Kapso elimina en cascada
+   los nodos que lo referencian). campaign-report usa los tres ids en
+   `DEFAULT_PHONE_NUMBER_IDS` y en el secret `WHATSAPP_PHONE_NUMBER_IDS`.
    - `functions/check-coverage/index.js` (`WATCHDOG_PHONE_IDS`)
    - `functions/create-shopify-order/index.js` (`DEFAULT_PHONE_NUMBER_ID`)
    (El dominio admin `kenkuperu.myshopify.com` ya está aplicado como default

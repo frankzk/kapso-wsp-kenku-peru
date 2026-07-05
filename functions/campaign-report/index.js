@@ -24,9 +24,9 @@ const MAX_ORDER_PAGES = 12; // 12 x 250 = 3000 ordenes por rango
 const MAX_META_PAGES = 20;
 const MAX_CONV_PAGES = 50; // por numero: 50 x 100 = 5000 conversaciones por rango
 const MAX_CONV_DAYS = 16;  // la conversion se calcula para rangos <= 16 dias (evita timeouts del worker)
-// Numero de produccion de Kenku Peru ("Kenku Peru Arqui Nexo") y sandbox de
-// pruebas. Override con WHATSAPP_PHONE_NUMBER_IDS si hace falta.
-const DEFAULT_PHONE_NUMBER_IDS = ["1193972037132398", "597907523413541"];
+// Numeros de produccion de Kenku Peru ("Kenku Peru 348" y "Kenku Peru 981",
+// 2026-07-04) y sandbox de pruebas. Override con WHATSAPP_PHONE_NUMBER_IDS.
+const DEFAULT_PHONE_NUMBER_IDS = ["1145171692021464", "1239315459260256", "597907523413541"];
 const DEFAULT_DAYS = 30;
 const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000; // America/Lima = UTC-5 (sin DST)
 
