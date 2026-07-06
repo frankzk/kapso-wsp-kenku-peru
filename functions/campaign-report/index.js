@@ -65,6 +65,7 @@ async function handleRequest(request, env = globalThis) {
     const meta = await fetchMetaInsights(config, range);
     const conv = await fetchConversationStats(config, range);
     const report = buildReport({ sales, meta, conv, range, config });
+    report.searchMisses = await fetchSearchMisses(env, range);
 
     // Modo notificacion: empuja un resumen al Telegram del equipo (para el job diario).
     if (params.notify === "telegram") {
@@ -434,6 +435,48 @@ async function fetchConversationStats(config, range) {
 // Construccion del reporte (puro, testeable)
 // ---------------------------------------------------------------------------
 
+
+// Busquedas de producto que NO encontraron nada en el periodo (las registran
+// shopify-product-lookup y product-media-lookup en KV como search_miss:*).
+// Sirve para detectar errores ortograficos reales y alimentar sinonimos.
+async function fetchSearchMisses(env, range) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    if (!kv) return { available: false, items: [] };
+    const sinceMs = new Date(`${range.since}T00:00:00-05:00`).getTime();
+    const untilMs = new Date(`${range.until}T23:59:59-05:00`).getTime();
+    const counts = new Map();
+    let cursor;
+    for (let page = 0; page < 10; page += 1) {
+      const list = await kv.list({ prefix: "search_miss:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const ts = Number((entry.name.split(":")[1]) || 0);
+        if (ts < sinceMs || ts > untilMs) continue;
+        const raw = await kv.get(entry.name);
+        if (!raw) continue;
+        let record;
+        try { record = JSON.parse(raw); } catch { continue; }
+        const query = String(record.q || "").toLowerCase().trim();
+        if (!query) continue;
+        const item = counts.get(query) || { query, count: 0, reasons: new Set(), lastAt: "" };
+        item.count += 1;
+        if (record.reason) item.reasons.add(record.reason);
+        if (record.at && record.at > item.lastAt) item.lastAt = record.at;
+        counts.set(query, item);
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+    const items = [...counts.values()]
+      .map((item) => ({ query: item.query, count: item.count, reasons: [...item.reasons], lastAt: item.lastAt }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 25);
+    return { available: true, items };
+  } catch (error) {
+    return { available: false, items: [], error: safeError(error) };
+  }
+}
+
 function buildReport({ sales, meta, conv, range, config }) {
   const adIds = new Set([...sales.byAd.keys(), ...meta.byAd.keys()]);
   const sameCurrency = !meta.accountCurrency || meta.accountCurrency === sales.currency;
@@ -561,6 +604,23 @@ function round2(n) {
 // Render HTML
 // ---------------------------------------------------------------------------
 
+
+function renderSearchMisses(report) {
+  const data = report.searchMisses || { available: false, items: [] };
+  if (!data.available) return "";
+  const rows = data.items.length
+    ? data.items.map((m) => `
+      <tr><td>${escapeHtml(m.query)}</td><td class="num">${m.count}</td><td>${escapeHtml((m.reasons || []).join(", "))}</td></tr>`).join("")
+    : `<tr><td colspan="3">Sin búsquedas fallidas en el periodo 🎉</td></tr>`;
+  return `
+  <h2>Búsquedas no encontradas</h2>
+  <p class="sub">Lo que los clientes escribieron y el bot no pudo resolver a un producto — candidatos a sinónimos o alias (tags en Shopify).</p>
+  <table>
+    <thead><tr><th>Consulta del cliente</th><th class="num">Veces</th><th>Motivo</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function renderDashboard(report) {
   const cur = report.currency;
   const t = report.totals;
@@ -656,6 +716,7 @@ function renderDashboard(report) {
         <tbody>${adRows}</tbody>
       </table></div>
     </section>
+    ${renderSearchMisses(report)}
     <footer>Datos: Shopify (ventas atribuidas vía ctwa_ad_id) + Meta Marketing API (gasto). <a href="?key=__KEY__&days=${report.range.days || 30}&format=json">Ver JSON</a></footer>`;
 
   return pageShell(body);
@@ -786,6 +847,12 @@ function buildTelegramSummary(report) {
   if (!report.metaConfigured) {
     L.push("");
     L.push("<i>Conecta Meta Ads para ver gasto, CPA y ROAS.</i>");
+  }
+  const misses = report.searchMisses;
+  if (misses && misses.available && misses.items.length) {
+    L.push("");
+    L.push("🔎 <b>Busquedas no encontradas</b> (candidatas a sinonimos):");
+    misses.items.slice(0, 5).forEach((m) => L.push(`• "${escapeHtml(m.query)}" (${m.count}x)`));
   }
   return L.join("\n");
 }

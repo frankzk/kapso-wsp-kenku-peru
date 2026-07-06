@@ -204,19 +204,51 @@ function searchableHasToken(searchable, token) {
   return false;
 }
 
-// Empareja tolerando errores foneticos tipicos del espanol: b/v, s/z,
-// k/qu->c, sh/ch->s, ph->f, w->u, y->i, h muda, letras dobles y terminacion
-// castellanizada (-a por -e). Se aplica a AMBOS lados, solo como fallback
-// cuando no hubo match exacto, con tokens de 5+ letras.
+// Empareja tolerando errores tipicos de escritura, en tres niveles de
+// fallback (solo tokens de 5+ letras, cuando no hubo match exacto):
+// 1) fold fonetico en ambos lados (b/v, s/z, k/qu->c, sh->s, ch->c, ph->f,
+//    w->u, y->i, h muda, letras dobles, -a por -e final);
+// 2) fold sin espacios (ej. "vitalmoo" vs "vital moo");
+// 3) distancia de edicion sobre palabras (typos de teclado: 1 letra en
+//    palabras de 6+, 2 letras en palabras de 9+).
 function fuzzyIncludes(text, variants) {
   const folded = phoneticFold(text);
+  const foldedNoSpace = folded.replace(/ /g, "");
+  let words = null;
   return variants.some((variant) => {
     if (!variant || variant.length < 5) return false;
     const foldedVariant = phoneticFold(variant);
     if (folded.includes(foldedVariant)) return true;
     const trimmed = foldedVariant.replace(/[aeiou]$/, "");
-    return trimmed.length >= 5 && trimmed !== foldedVariant && folded.includes(trimmed);
+    if (trimmed.length >= 5 && trimmed !== foldedVariant && folded.includes(trimmed)) return true;
+    if (foldedVariant.length >= 5 && foldedNoSpace.includes(foldedVariant.replace(/ /g, ""))) return true;
+    if (variant.length >= 6) {
+      const maxDistance = variant.length >= 9 ? 2 : 1;
+      if (words === null) words = String(text || "").split(" ").filter((w) => w.length >= 4);
+      return words.some((word) =>
+        Math.abs(word.length - variant.length) <= maxDistance && editDistance(variant, word, maxDistance) <= maxDistance);
+    }
+    return false;
   });
+}
+
+// Levenshtein acotado con salida temprana: devuelve maxDistance+1 apenas la
+// distancia minima posible supera el limite.
+function editDistance(a, b, maxDistance) {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(prev[j] + 1, current[j - 1] + 1, prev[j - 1] + cost);
+      if (current[j] < rowMin) rowMin = current[j];
+    }
+    if (rowMin > maxDistance) return maxDistance + 1;
+    prev = current;
+  }
+  return prev[b.length];
 }
 
 function phoneticFold(text) {
@@ -231,6 +263,22 @@ function phoneticFold(text) {
     .replace(/y/g, "i")
     .replace(/h/g, "")
     .replace(/(.)\1+/g, "$1");
+}
+
+
+// Registra en KV las busquedas que no encontraron producto, para revisarlas
+// en campaign-report ("busquedas no encontradas") y alimentar sinonimos con
+// datos reales. Best effort: si no hay KV o falla, no afecta la respuesta.
+async function logSearchMiss(env, queryText, reason) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    const query = String(queryText || "").trim();
+    if (!kv || !query) return;
+    const key = `search_miss:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    await kv.put(key, JSON.stringify({ q: query.slice(0, 120), reason, at: new Date().toISOString() }), { expirationTtl: 45 * 24 * 3600 });
+  } catch {
+    // best effort
+  }
 }
 
 async function handler(request, env = globalThis) {
@@ -294,6 +342,7 @@ async function handleRequest(request, env = globalThis) {
 
     if (!product) {
       if (catalogSearch?.ambiguous) {
+        await logSearchMiss(env, queryText, "ambiguous");
         return json({
           found: false,
           reason: "ambiguous",
@@ -332,6 +381,7 @@ async function handleRequest(request, env = globalThis) {
         });
       }
 
+      await logSearchMiss(env, queryText, "not_found");
       return json({
         found: false,
         reason: "not_found",
