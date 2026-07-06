@@ -719,7 +719,16 @@ function scoreCatalogProduct(product, query) {
 
   const matchedTokens = query.tokens.filter((token) => searchableHasToken(searchable, token)).length;
   if (matchedTokens === query.tokens.length && query.tokens.length >= 2) score += 12;
-  if (matchedTokens < Math.min(2, query.tokens.length)) score = 0;
+  // Una palabra distintiva (6+ letras) con match fuerte en titulo/handle basta
+  // aunque el resto de la consulta sean calificadores que no estan en el
+  // catalogo (ej. "Nattokinase Liposomal": "liposomal" es marketing del anuncio).
+  const strongTokenMatch = query.tokens.some((token) => {
+    if (token.length < 6) return false;
+    const variants = tokenVariants(token);
+    return variants.some((variant) => title.includes(variant) || handle.includes(variant))
+      || fuzzyIncludes(title, variants) || fuzzyIncludes(handle, variants);
+  });
+  if (matchedTokens < Math.min(2, query.tokens.length) && !(matchedTokens >= 1 && strongTokenMatch)) score = 0;
 
   return score;
 }
