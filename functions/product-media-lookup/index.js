@@ -40,6 +40,10 @@ const SYNONYM_GROUPS = [
   ["nattokinase", "natokinase", "nattokinasa", "natokinasa", "nattoquinasa", "natoquinasa", "natto"],
   ["shampoo", "shampu", "champu", "champoo", "sampoo", "shanpu"],
   ["shilajit", "silajit", "chilajit", "shilayit", "shilagit"],
+  // El anuncio "Elimina Hongos en Pies" vende la marca Terbifin; en la tienda
+  // el producto equivalente es el serum Nails Repairing. Mapear hasta que el
+  // producto tenga el tag "terbifin" en Shopify (los tags son buscables).
+  ["terbifin", "terbinafina", "nails repairing"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
