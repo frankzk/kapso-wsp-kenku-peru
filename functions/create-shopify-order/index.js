@@ -959,10 +959,21 @@ function extractHandleCandidates(value) {
 }
 
 function splitCustomerName(value) {
-  const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
+  const parts = sanitizeName(value).split(/\s+/).filter((p) => /\p{L}/u.test(p));
   if (parts.length === 0) return { firstName: "Cliente", lastName: "Kenku" };
   if (parts.length === 1) return { firstName: parts[0], lastName: "Kenku" };
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+// Shopify rechaza emojis y simbolos en los nombres de la direccion del cliente
+// ("Customer addresses first name cannot contain emojis"). Muchos perfiles de
+// WhatsApp traen emoji en el nombre — los quitamos dejando solo letras (con
+// tildes/ñ), espacios, guion, apostrofe y punto. Colapsa espacios sobrantes.
+function sanitizeName(value) {
+  return String(value || "")
+    .replace(/[^\p{L}\p{M}\s.'-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function slugifyHandle(value) {
