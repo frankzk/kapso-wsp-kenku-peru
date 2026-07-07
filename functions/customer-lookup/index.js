@@ -59,9 +59,12 @@ async function handleRequest(request, env = globalThis) {
     }
 
     const config = getConfig(env);
+    const conversationId = payload.whatsapp_context?.conversation?.id
+      || payload.execution_context?.context?.conversation_id;
     const [search, adReferral] = await Promise.all([
       searchCustomers(config, { phone, email, debugQuery: input.debugQuery }),
       fetchAdReferral(env, payload),
+      logAbLead(env, conversationId, abVariant(phone)),
     ]);
     if (!search.candidates.length && search.allFailed) {
       return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
@@ -75,7 +78,7 @@ async function handleRequest(request, env = globalThis) {
         phone: phone || null,
         email: email || null,
         adReferral,
-        vars: buildFlowVars(null, null, adReferral),
+        vars: buildFlowVars(null, null, adReferral, phone),
         message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente."
           + (adReferral ? " OJO: llego desde un anuncio (adReferral); si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
       });
@@ -115,7 +118,7 @@ async function handleRequest(request, env = globalThis) {
         : null,
       addressSummary,
       adReferral,
-      vars: buildFlowVars(match, addressSummary, adReferral),
+      vars: buildFlowVars(match, addressSummary, adReferral, phone),
       hint: (ordersCount > 0
         ? "Cliente recurrente: saludalo con cercania y, al llegar al envio, CONFIRMA la direccion guardada en vez de pedir todos los datos de nuevo."
         : "Cliente registrado sin pedidos previos: confirma sus datos guardados antes de usarlos.")
@@ -212,7 +215,7 @@ async function shopifyGraphql(config, query, variables) {
 // (clave "vars"): asi el resultado queda disponible via get_variable tanto si
 // la funcion corre como nodo del workflow (init-customer) como si la llama el
 // agente como herramienta.
-function buildFlowVars(match, addressSummary, adReferral) {
+function buildFlowVars(match, addressSummary, adReferral, phone) {
   return {
     known_customer_found: Boolean(match),
     known_customer_name: match?.firstName || match?.displayName || null,
@@ -220,7 +223,38 @@ function buildFlowVars(match, addressSummary, adReferral) {
     known_address: addressSummary || null,
     ad_referral_headline: adReferral?.headline || null,
     ad_referral_body: adReferral?.body || null,
+    ab_variant: abVariant(phone),
   };
+}
+
+// Asignacion A/B deterministica por telefono (hash FNV-1a mod 2): reparto
+// ~50/50 uniforme y estable — el mismo cliente cae SIEMPRE en la misma
+// variante, y create-shopify-order puede recalcularla solo con el telefono.
+// A = presentacion completa de una (control). B = gancho + pregunta primero.
+function abVariant(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "A";
+  let h = 2166136261;
+  for (let i = 0; i < digits.length; i += 1) {
+    h ^= digits.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 2 === 0 ? "A" : "B";
+}
+
+// Registra el lead A/B una sola vez por conversacion (clave idempotente por
+// conversationId; si ya existe, no reescribe para conservar la fecha original).
+// campaign-report agrega estos eventos para comparar conversion por variante.
+async function logAbLead(env, conversationId, variant) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    if (!kv || !conversationId || !variant) return;
+    const key = `ab_lead:${conversationId}`;
+    if (await kv.get(key)) return;
+    await kv.put(key, JSON.stringify({ variant, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+  } catch {
+    // best effort
+  }
 }
 
 // Busca el referral CTWA (anuncio de origen) en los mensajes de la conversacion

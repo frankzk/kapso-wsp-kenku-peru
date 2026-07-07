@@ -92,6 +92,9 @@ async function handleRequest(request, env = globalThis) {
       return json({ ok: false, reason: "shopify_user_errors", errors: result.userErrors, customerLookup });
     }
 
+    // Registra la conversion A/B (una por pedido) para el reporte por variante.
+    await logAbOrder(env, result.order?.name, abVariant(orderInput.phone || input.phone), input.conversationId || input.conversation_id);
+
     return json({
       ok: true,
       stage: "orden creada",
@@ -786,6 +789,32 @@ function buildCustomAttributes(input, customerLookup) {
   return attrs;
 }
 
+// Asignacion A/B deterministica por telefono (misma logica que customer-lookup:
+// FNV-1a mod 2). Al ser pura funcion del telefono, aqui se recalcula sin
+// arrastrar el dato desde el agente.
+function abVariant(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  let h = 2166136261;
+  for (let i = 0; i < digits.length; i += 1) {
+    h ^= digits.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 2 === 0 ? "A" : "B";
+}
+
+// Registra la conversion A/B en KV (una por pedido). campaign-report cruza
+// ab_lead:* (leads) con ab_order:* (pedidos) para la tasa por variante.
+async function logAbOrder(env, orderName, variant, conversationId) {
+  try {
+    const kv = env?.KV || globalThis.KV;
+    if (!kv || !orderName || !variant) return;
+    await kv.put(`ab_order:${orderName}`, JSON.stringify({ variant, conversationId: conversationId || null, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+  } catch {
+    // best effort
+  }
+}
+
 function buildTags(input) {
   const tags = new Set(["kapso", "whatsapp", "kenku"]);
   if (input.coverage?.shippingMode === "contraentrega" || input.coverage?.shipping_mode === "contraentrega" || input.coverage?.cashOnDelivery === true || input.coverage?.cash_on_delivery === true) {
@@ -795,6 +824,8 @@ function buildTags(input) {
   }
   if (input.quote?.promoApplied || input.quote?.promo_applied) tags.add("promo-whatsapp");
   if (input.ctwaReferral?.source_type === "ad") tags.add("ctwa-ad");
+  const variant = abVariant(input.phone || input.customer?.phone);
+  if (variant) tags.add(`ab-${variant.toLowerCase()}`); // prueba A/B del arranque
   if (input.stockPorValidar || input.stock_por_validar || input.stockValidationRequired || input.stock_validation_required) tags.add("stock-por-validar");
   if (input.specialDeliveryNote || input.special_delivery_note) tags.add("fecha-hora-especial");
   return [...tags];

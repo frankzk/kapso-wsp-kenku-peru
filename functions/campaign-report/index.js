@@ -66,6 +66,7 @@ async function handleRequest(request, env = globalThis) {
     const conv = await fetchConversationStats(config, range);
     const report = buildReport({ sales, meta, conv, range, config });
     report.searchMisses = await fetchSearchMisses(env, range);
+    report.abTest = await fetchAbTest(env, range);
 
     // Modo notificacion: empuja un resumen al Telegram del equipo (para el job diario).
     if (params.notify === "telegram") {
@@ -477,6 +478,40 @@ async function fetchSearchMisses(env, range) {
   }
 }
 
+// Prueba A/B del arranque: cruza ab_lead:* (leads asignados por customer-lookup)
+// con ab_order:* (pedidos creados) para medir conversion por variante.
+// A = presentacion completa de una (control); B = gancho + pregunta primero.
+async function fetchAbTest(env, range) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    if (!kv) return { available: false };
+    const sinceMs = new Date(`${range.since}T00:00:00-05:00`).getTime();
+    const untilMs = new Date(`${range.until}T23:59:59-05:00`).getTime();
+    const inRange = (at) => { const t = Date.parse(at || ""); return Number.isFinite(t) && t >= sinceMs && t <= untilMs; };
+
+    const tally = { A: { leads: 0, orders: 0 }, B: { leads: 0, orders: 0 } };
+    for (const [prefix, field] of [["ab_lead:", "leads"], ["ab_order:", "orders"]]) {
+      let cursor;
+      for (let page = 0; page < 10; page += 1) {
+        const list = await kv.list({ prefix, cursor, limit: 1000 });
+        for (const entry of list.keys || []) {
+          const raw = await kv.get(entry.name);
+          if (!raw) continue;
+          let rec; try { rec = JSON.parse(raw); } catch { continue; }
+          if (!inRange(rec.at)) continue;
+          if (tally[rec.variant]) tally[rec.variant][field] += 1;
+        }
+        if (list.list_complete || !list.cursor) break;
+        cursor = list.cursor;
+      }
+    }
+    const rate = (v) => (v.leads > 0 ? v.orders / v.leads : null);
+    return { available: true, A: { ...tally.A, rate: rate(tally.A) }, B: { ...tally.B, rate: rate(tally.B) } };
+  } catch (error) {
+    return { available: false, error: safeError(error) };
+  }
+}
+
 function buildReport({ sales, meta, conv, range, config }) {
   const adIds = new Set([...sales.byAd.keys(), ...meta.byAd.keys()]);
   const sameCurrency = !meta.accountCurrency || meta.accountCurrency === sales.currency;
@@ -605,6 +640,29 @@ function round2(n) {
 // ---------------------------------------------------------------------------
 
 
+function renderAbTest(report) {
+  const ab = report.abTest;
+  if (!ab || !ab.available) return "";
+  const pct = (r) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
+  const row = (name, desc, v) => `
+    <tr><td><b>${name}</b><div class="sub">${desc}</div></td><td class="num">${v.leads}</td><td class="num">${v.orders}</td><td class="num">${pct(v.rate)}</td></tr>`;
+  let winner = "";
+  if (ab.A.rate != null && ab.B.rate != null && (ab.A.leads + ab.B.leads) >= 40) {
+    if (ab.B.rate > ab.A.rate) winner = "🅱️ La variante B (gancho) va ganando.";
+    else if (ab.A.rate > ab.B.rate) winner = "🅰️ La variante A (control) va ganando.";
+    else winner = "Empate por ahora.";
+  } else {
+    winner = "Aún pocos datos — deja correr el experimento unos días antes de decidir.";
+  }
+  return `
+  <h2>Prueba A/B del arranque</h2>
+  <p class="sub">A = presentación completa de una · B = gancho + "¿es para ti o para alguien más?" antes de presentar. ${escapeHtml(winner)}</p>
+  <table>
+    <thead><tr><th>Variante</th><th class="num">Leads</th><th class="num">Pedidos</th><th class="num">Conversión</th></tr></thead>
+    <tbody>${row("A — control", "presenta todo de una", ab.A)}${row("B — gancho", "pregunta primero", ab.B)}</tbody>
+  </table>`;
+}
+
 function renderSearchMisses(report) {
   const data = report.searchMisses || { available: false, items: [] };
   if (!data.available) return "";
@@ -716,6 +774,7 @@ function renderDashboard(report) {
         <tbody>${adRows}</tbody>
       </table></div>
     </section>
+    ${renderAbTest(report)}
     ${renderSearchMisses(report)}
     <footer>Datos: Shopify (ventas atribuidas vía ctwa_ad_id) + Meta Marketing API (gasto). <a href="?key=__KEY__&days=${report.range.days || 30}&format=json">Ver JSON</a></footer>`;
 
@@ -847,6 +906,14 @@ function buildTelegramSummary(report) {
   if (!report.metaConfigured) {
     L.push("");
     L.push("<i>Conecta Meta Ads para ver gasto, CPA y ROAS.</i>");
+  }
+  const ab = report.abTest;
+  if (ab && ab.available && (ab.A.leads + ab.B.leads) > 0) {
+    const pct = (r) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
+    L.push("");
+    L.push("🧪 <b>A/B arranque</b> (conversión leads→pedidos):");
+    L.push(`• A control: ${ab.A.orders}/${ab.A.leads} (${pct(ab.A.rate)})`);
+    L.push(`• B gancho: ${ab.B.orders}/${ab.B.leads} (${pct(ab.B.rate)})`);
   }
   const misses = report.searchMisses;
   if (misses && misses.available && misses.items.length) {
