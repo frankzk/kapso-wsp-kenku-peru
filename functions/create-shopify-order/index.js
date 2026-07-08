@@ -49,6 +49,20 @@ async function handleRequest(request, env = globalThis) {
     const orderInput = build.orderInput;
     const customerLookup = build.customerLookup;
 
+    // Defensa anti-contraentrega en zona equivocada: re-verifica la cobertura con
+    // check-coverage (fuente de verdad). Si la zona NO es contraentrega, no crea
+    // la orden de pago-al-recibir; deriva a validacion logistica (Shalom/adelanto).
+    const verifiedMode = await verifyDeliveryMode(env, input, orderInput.shippingAddress);
+    if (verifiedMode === "agencia" || verifiedMode === "needs_location_confirmation") {
+      return json({
+        ok: false,
+        reason: "coverage_mismatch",
+        verifiedShippingMode: verifiedMode,
+        claimedShippingMode: input.coverage?.shippingMode || null,
+        message: "Esta zona no tiene pago contraentrega: requiere envio por agencia (Shalom) con adelanto. No se creo la orden. Corre check_coverage con el distrito y provincia reales y sigue la ruta de agencia.",
+      });
+    }
+
     const outOfStockVariants = await checkVariantsStock(config, orderInput.lineItems.map((li) => li.variantId));
     const stockToValidate = outOfStockVariants.length > 0;
     if (stockToValidate) {
@@ -203,6 +217,35 @@ function getKapsoConfig(env = globalThis) {
 }
 
 const CTWA_MAX_PAGES = 5;
+const CHECK_COVERAGE_FUNCTION_ID = "05a6107d-6488-4bb3-8088-9f2fce140b5e";
+
+// Defensa: re-verifica la cobertura llamando a check-coverage con la ubicacion
+// del pedido, sin confiar en el shippingMode que afirma el agente. check-coverage
+// es la fuente de verdad (maneja texto libre de Lima y cae a agencia para zonas
+// no reconocidas). Devuelve "contraentrega" | "agencia" | null (no verificable).
+async function verifyDeliveryMode(env, input, shippingAddress) {
+  try {
+    const { apiKey, apiBase } = getKapsoConfig(env);
+    if (!apiKey) return null;
+    const cov = input.coverage || {};
+    const norm = cov.normalized || {};
+    const district = cov.district || cov.distrito || norm.district || shippingAddress.city || "";
+    const province = cov.province || cov.provincia || norm.province || shippingAddress.province || "";
+    const region = cov.region || cov.departamento || norm.region || "";
+    const zone = cov.zone || shippingAddress.address1 || "";
+    if (!district && !province && !zone) return null; // sin senal de ubicacion, no verificable
+    const res = await fetch(`${apiBase}/platform/v1/functions/${CHECK_COVERAGE_FUNCTION_ID}/invoke`, {
+      method: "POST",
+      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ input: { district, province, region, zone } }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.shippingMode || null;
+  } catch {
+    return null; // ante error de red, no bloquear (falla abierto)
+  }
+}
 
 async function fetchCtwaReferral(env, input) {
   try {
