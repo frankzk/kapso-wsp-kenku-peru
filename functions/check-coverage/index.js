@@ -28,6 +28,7 @@ const CASH_ON_DELIVERY = {
   // Solo Cusco ciudad (distrito cusco / provincia cusco). Otros distritos de la
   // region (Wanchaq, San Sebastian, etc.) requieren validacion antes de agregarse.
   cusco: ["cusco"],
+  apurimac: ["abancay"],
 };
 
 // Distritos no ambiguos donde podemos inferir provincia/region si el agente
@@ -50,6 +51,7 @@ const SAFE_DISTRICT_LOCATION_INFERENCE = {
   lambayeque: { province: "lambayeque", region: "lambayeque" },
   pimentel: { province: "chiclayo", region: "lambayeque" },
   juliaca: { province: "san roman", region: "puno" },
+  abancay: { province: "abancay", region: "apurimac" },
   piura: { province: "piura", region: "piura" },
   castilla: { province: "piura", region: "piura" },
   catacaos: { province: "piura", region: "piura" },
@@ -182,6 +184,7 @@ const DISTRICT_LOCATION_HINTS = {
   lambayeque: { province: "lambayeque", region: "lambayeque" },
   pimentel: { province: "chiclayo", region: "lambayeque" },
   juliaca: { province: "san roman", region: "puno" },
+  abancay: { province: "abancay", region: "apurimac" },
   piura: { province: "piura", region: "piura" },
   castilla: { province: "piura", region: "piura" },
   catacaos: { province: "piura", region: "piura" },
