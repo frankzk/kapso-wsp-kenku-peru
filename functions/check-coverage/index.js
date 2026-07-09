@@ -263,7 +263,8 @@ async function handleRequest(request, env = globalThis) {
       couriers: [],
       normalized: { district, province, region },
       sameDayUrgent: isLimaMetro ? sameDayUrgentInfo() : null,
-      message: "Zona con pago contraentrega. Puede pagar al recibir en efectivo o Yape.",
+      paymentMethods: ["efectivo", "tarjeta de credito/debito", "Yape", "Plin", "transferencia bancaria"],
+      message: "Zona con pago contraentrega. Puede pagar al recibir en efectivo, tarjeta (credito/debito), Yape, Plin o transferencia bancaria (lo mas comun: efectivo y Yape).",
     });
   }
 
