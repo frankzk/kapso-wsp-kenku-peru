@@ -93,6 +93,28 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
+    // Idempotencia anti-duplicado: si ya se creo un pedido IDENTICO (mismos
+    // variantes + cantidades) para este numero en las ultimas horas, NO crear
+    // otro. Cubre el caso de dos threads/ejecuciones para el mismo numero (el
+    // cliente "avanza su pedido" dos veces en conversaciones separadas y cada
+    // una llega hasta aca). Solo bloquea duplicados exactos: una compra con
+    // producto/cantidad distinta pasa igual.
+    const phoneKey = phoneDigits(orderInput.phone || input.phone).slice(-9);
+    const orderSig = orderSignature(orderInput.lineItems);
+    const existingLock = await findRecentOrderLock(env, phoneKey, orderSig);
+    if (existingLock) {
+      return json({
+        ok: true,
+        duplicate: true,
+        reason: "duplicate_prevented",
+        stage: "orden creada",
+        conversionStatus: "already_registered",
+        message: `Ya existe un pedido reciente identico (${existingLock.orderName}) para este numero; NO se creo uno nuevo. Confirma al cliente que su pedido ${existingLock.orderName} ya quedo registrado (no se duplico) y pregunta si necesita algo mas.`,
+        order: { name: existingLock.orderName },
+        customerLookup,
+      });
+    }
+
     const data = await shopifyGraphql(config, ORDER_CREATE_MUTATION, {
       order: orderInput,
       options: {
@@ -105,6 +127,10 @@ async function handleRequest(request, env = globalThis) {
     if (result.userErrors?.length) {
       return json({ ok: false, reason: "shopify_user_errors", errors: result.userErrors, customerLookup });
     }
+
+    // Guarda el candado anti-duplicado (por numero + firma del pedido) para que
+    // una segunda ejecucion/thread del mismo cliente no cree una orden identica.
+    await recordOrderLock(env, phoneKey, orderSig, result.order?.name);
 
     // Registra la conversion A/B (una por pedido) para el reporte por variante.
     await logAbOrder(env, result.order?.name, abVariant(orderInput.phone || input.phone), input.conversationId || input.conversation_id);
@@ -844,6 +870,49 @@ function abVariant(phone) {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0) % 2 === 0 ? "A" : "B";
+}
+
+// Ventana del candado anti-duplicado por numero (segundos). Un pedido IDENTICO
+// (mismos variantes+cantidades) al mismo numero dentro de esta ventana se
+// considera duplicado y no se vuelve a crear. 6h cubre el caso de threads
+// separados sin bloquear una re-compra genuina al dia siguiente.
+const DUPLICATE_WINDOW_SECONDS = 6 * 3600;
+
+// Firma determinista del pedido: variantes + cantidades ordenadas. Dos pedidos
+// con la misma firma son el mismo pedido.
+function orderSignature(lineItems) {
+  return (lineItems || [])
+    .map((li) => `${normalizeVariantId(li.variantId)}x${li.quantity}`)
+    .sort()
+    .join(",");
+}
+
+async function findRecentOrderLock(env, phoneKey, signature) {
+  try {
+    const kv = env?.KV || globalThis.KV;
+    if (!kv || !phoneKey || !signature) return null;
+    const raw = await kv.get(`order_lock:${phoneKey}`);
+    if (!raw) return null;
+    const rec = JSON.parse(raw);
+    if (rec && rec.orderName && rec.signature === signature) return rec;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function recordOrderLock(env, phoneKey, signature, orderName) {
+  try {
+    const kv = env?.KV || globalThis.KV;
+    if (!kv || !phoneKey || !orderName) return;
+    await kv.put(
+      `order_lock:${phoneKey}`,
+      JSON.stringify({ orderName, signature, at: new Date().toISOString() }),
+      { expirationTtl: DUPLICATE_WINDOW_SECONDS },
+    );
+  } catch {
+    // best effort
+  }
 }
 
 // Registra la conversion A/B en KV (una por pedido). campaign-report cruza
