@@ -120,8 +120,9 @@ Responde primero, guion despues:
 - REGLA DURA: maximo UNA pregunta al cliente por turno. Nunca envies dos preguntas distintas en el mismo turno (ej: la cantidad y la agencia Shalom a la vez): haz solo la que toca segun el paso, guarda stage/followup_hint, llama complete_task y espera la respuesta.
 
 Ritmo humano (pause):
-- Entre cada mensaje consecutivo tuyo (en especial entre los mensajes de la secuencia de presentacion: fotos, video, precio, cierre), llama la herramienta pause con 2 a 4 segundos (varia el valor entre llamadas) ANTES de enviar el siguiente. Asi los mensajes llegan con ritmo de persona escribiendo y no como rafaga instantanea.
-- No uses pause antes del primer mensaje del turno, ni dos veces seguidas, ni cuando solo vas a enviar un unico mensaje.
+- Usa la herramienta pause SOLO dentro de la secuencia de presentacion de apertura (Msg 1 a 8: fotos, video, precio, cierre): entre esos mensajes consecutivos llama pause con 2 a 4 segundos (varia el valor entre llamadas) ANTES de enviar el siguiente, para que la apertura llegue con ritmo de persona y no como rafaga.
+- En CUALQUIER OTRO turno (respuestas a preguntas, follow-ups, negociacion, cierre posterior) NO uses pause: envia tus mensajes directo. El ritmo solo importa en la apertura.
+- Nunca uses pause antes del primer mensaje del turno, ni dos veces seguidas, ni cuando solo vas a enviar un unico mensaje.
 
 Anti-loop y despedidas:
 - NUNCA envies dos veces seguidas el mismo texto (ni casi identico) en una conversacion. Si ya dijiste algo y el cliente no avanzo, reformula con otras palabras o simplemente no respondas.
@@ -483,7 +484,7 @@ Despues de crear orden:
     "provider_model_id": "de8992a1-6f21-4a30-9d37-f8645f66e14e",
     "provider_model_name": "gpt-4.1",
     "temperature": 0.2,
-    "max_iterations": 80,
+    "max_iterations": 40,
     "max_tokens": 8192,
     "reasoning_effort": null,
     "observer_prompt_mode": "analysis_only",
@@ -965,10 +966,14 @@ workflow.addNode("loop-end", {
 
 workflow.addEdge(START, "init-stage");
 workflow.addEdge("init-stage", "init-hint");
-workflow.addEdge("init-hint", "loop-guard");
-workflow.addEdge("loop-guard", "init-customer", { label: "atender" });
+// customer-lookup corre UNA sola vez al inicio (sus vars persisten en la
+// ejecucion). En las re-entradas tras un wait el flujo pasa por loop-guard ->
+// sales-agent SIN volver a llamar customer-lookup, para no gastar un paso ni
+// pegar a Shopify en cada mensaje (evita reventar el tope de pasos de Kapso).
+workflow.addEdge("init-hint", "init-customer");
+workflow.addEdge("init-customer", "loop-guard");
+workflow.addEdge("loop-guard", "sales-agent", { label: "atender" });
 workflow.addEdge("loop-guard", "loop-end", { label: "silencio" });
-workflow.addEdge("init-customer", "sales-agent");
 
 // ============================================================
 // Seguimientos automaticos (re-engagement ladder)
@@ -1112,11 +1117,15 @@ workflow.addNode("fu-terminal", {
   decisionType: "function",
   functionSlug: "check-coverage",
   conditions: [
+    { label: "respondio", description: "El cliente escribio mientras el agente cerraba su turno: devolver control al agente antes de iniciar seguimientos." },
     { label: "seguir", description: "La conversacion sigue abierta: continuar con la cadencia de seguimientos." },
     { label: "terminar", description: "Estado terminal (orden creada, no interesado, reclamo o handoff): no enviar mas seguimientos." },
   ],
 }, { position: { x: 1000, y: 100 }, displayName: "Seguir o terminar" });
 workflow.addEdge("sales-agent", "fu-terminal");
+// Carrera: el cliente escribio mientras el agente cerraba -> volver al agente
+// (salta init-customer, igual que las re-entradas del ladder).
+workflow.addEdge("fu-terminal", "sales-agent", { label: "respondio" });
 
 workflow.addNode("fu-end", {
   type: "set_variable",
