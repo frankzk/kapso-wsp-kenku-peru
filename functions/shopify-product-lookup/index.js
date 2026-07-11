@@ -631,9 +631,25 @@ function searchCatalogProducts(catalog, text, handles = []) {
   }
   const category = detectCategoryQuery(text, query);
 
-  const scored = catalog
+  // Peso por rareza (DF): el token distintivo de la consulta (el que aparece en
+  // POCOS productos, p.ej. "lengua") manda sobre palabras comunes (p.ej.
+  // "limpiador", que matchea decenas). Si la consulta tiene un token realmente
+  // distintivo presente en el catalogo, un producto que NO lo contiene queda
+  // descartado aunque matchee las palabras comunes. Los tokens que NO existen en
+  // el catalogo (marketing del anuncio, p.ej. "liposomal") no exigen nada.
+  const df = computeTokenDf(catalog, query.tokens);
+  const requiredToken = query.tokens.length >= 2
+    ? pickDistinctiveRequiredToken(query.tokens, df, catalog.length)
+    : null;
+
+  let ranked = catalog
     .map((product) => ({ product, score: scoreCatalogProduct(product, query) }))
-    .filter((item) => item.score >= 12)
+    .filter((item) => item.score >= 12);
+  if (requiredToken) {
+    const withRequired = ranked.filter((item) => productMatchesToken(item.product, requiredToken));
+    if (withRequired.length > 0) ranked = withRequired; // solo exigir si no vacia el resultado
+  }
+  const scored = ranked
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
@@ -731,6 +747,60 @@ function scoreCatalogProduct(product, query) {
   if (matchedTokens < Math.min(2, query.tokens.length) && !(matchedTokens >= 1 && strongTokenMatch)) score = 0;
 
   return score;
+}
+
+// Texto buscable de un producto (mismo criterio que scoreCatalogProduct).
+function productSearchable(product) {
+  return product.searchText || normalizeSearchText([
+    product.title,
+    product.handle?.replace(/-/g, " "),
+    product.productType,
+    product.vendor,
+    (Array.isArray(product.tags) ? product.tags : []).join(" "),
+  ].filter(Boolean).join(" "));
+}
+
+// Document frequency: en cuantos productos del catalogo aparece cada token.
+function computeTokenDf(catalog, tokens) {
+  const searchables = catalog.map(productSearchable);
+  const df = new Map();
+  for (const token of tokens) {
+    const variants = tokenVariants(token);
+    let count = 0;
+    for (const s of searchables) {
+      if (variants.some((variant) => s.includes(variant))) count += 1;
+    }
+    df.set(token, count);
+  }
+  return df;
+}
+
+// Elige el token "obligatorio": el mas raro de la consulta que SI existe en el
+// catalogo (df >= 1) y es distintivo (aparece en pocos productos). Devuelve null
+// si ni el mas raro es distintivo, o si ningun token existe en el catalogo (en
+// ese caso son puros calificadores de marketing y no se exige nada).
+function pickDistinctiveRequiredToken(tokens, df, catalogSize) {
+  const candidates = tokens.filter((token) => token.length >= 4 && (df.get(token) || 0) >= 1);
+  if (candidates.length === 0) return null;
+  let rare = candidates[0];
+  for (const token of candidates) {
+    if ((df.get(token) || 0) < (df.get(rare) || 0)) rare = token;
+  }
+  const distinctiveMax = Math.max(4, Math.round((catalogSize || 0) * 0.03));
+  if ((df.get(rare) || 0) > distinctiveMax) return null;
+  return rare;
+}
+
+// ¿El producto contiene el token (exacto o difuso)? Mismo criterio de match que
+// el scoring, para decidir el descarte por token obligatorio.
+function productMatchesToken(product, token) {
+  if (!token) return true;
+  const title = normalizeSearchText(product.title || "");
+  const searchable = productSearchable(product);
+  const variants = tokenVariants(token);
+  if (variants.some((variant) => searchable.includes(variant))) return true;
+  if (token.length >= 5 && (fuzzyIncludes(title, variants) || fuzzyIncludes(searchable, variants))) return true;
+  return false;
 }
 
 function hasDistinctiveProductToken(product, query) {
