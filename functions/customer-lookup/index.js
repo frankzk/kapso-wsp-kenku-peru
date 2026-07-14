@@ -223,6 +223,9 @@ function buildFlowVars(match, addressSummary, adReferral, phone) {
     known_address: addressSummary || null,
     ad_referral_headline: adReferral?.headline || null,
     ad_referral_body: adReferral?.body || null,
+    ad_referral_source_type: adReferral?.sourceType || null,
+    ad_referral_ad_id: adReferral?.adId || null,
+    ad_referral_source_url: adReferral?.sourceUrl || null,
     ab_variant: abVariant(phone),
   };
 }

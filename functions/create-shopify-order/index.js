@@ -43,7 +43,14 @@ async function handleRequest(request, env = globalThis) {
 
     const config = await getConfig(env);
     const dryRun = Boolean(input.dryRun || input.dry_run);
-    input.ctwaReferral = await fetchCtwaReferral(env, input);
+    // Referral del anuncio para atribucion CTWA. Orden de preferencia: (1) el que
+    // ya paso el agente, (2) fetch en vivo por conversation_id, (3) respaldo desde
+    // las vars del flujo (ad_referral_*) que dejo customer-lookup al inicio. El (3)
+    // es clave: como tool de agente, el payload a veces NO trae conversation_id/
+    // phone y el fetch en vivo devuelve null, dejando el pedido sin etiquetar.
+    input.ctwaReferral = input.ctwaReferral
+      || (await fetchCtwaReferral(env, input))
+      || ctwaFromVars(payload);
 
     const build = await buildOrderInput(config, input, { createMissingCustomer: !dryRun });
     const orderInput = build.orderInput;
@@ -305,6 +312,28 @@ function extractReferral(message) {
   const referral = message?.referral || message?.message?.referral || message?.kapso?.referral;
   if (referral && (referral.source_id || referral.source_type || referral.ctwa_clid)) return referral;
   return null;
+}
+
+// Respaldo de atribucion CTWA: reconstruye el referral desde las vars del flujo
+// (ad_referral_*) que customer-lookup resolvio al inicio de la conversacion. En
+// esta tienda todo referral proviene de un anuncio Click-to-WhatsApp, asi que si
+// hay headline/body/ad_id se marca source_type "ad" (para que buildTags etiquete
+// ctwa-ad). Devuelve null si el lead no vino de un anuncio.
+function ctwaFromVars(payload) {
+  const v = payload?.execution_context?.vars || payload?.vars || {};
+  const adId = v.ad_referral_ad_id || v.ad_referral_source_id || null;
+  const headline = v.ad_referral_headline || null;
+  const body = v.ad_referral_body || null;
+  const sourceType = v.ad_referral_source_type || null;
+  if (!adId && !headline && !body && !sourceType) return null;
+  return {
+    source_type: sourceType || "ad",
+    source_id: adId,
+    headline,
+    body,
+    source_url: v.ad_referral_source_url || null,
+    ctwa_clid: v.ad_referral_ctwa_clid || null,
+  };
 }
 
 async function buildOrderInput(config, input, options = {}) {
