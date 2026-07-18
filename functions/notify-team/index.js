@@ -16,7 +16,7 @@ if (typeof addEventListener === "function") {
 }
 
 async function handleRequest(request, env = globalThis) {
-  const payload = await readJson(request);
+  const payload = enrichPayload(await readJson(request));
   const config = getConfig(env);
 
   if (!config.token || !config.chatId) {
@@ -53,6 +53,31 @@ async function handleRequest(request, env = globalThis) {
   } catch (err) {
     return json({ ok: false, reason: "request_failed", error: String(err && err.message ? err.message : err) });
   }
+}
+
+// Rellena telefono/cliente/producto desde el contexto de la ejecucion cuando el
+// agente no los pasa explicitamente. Sin esto la alerta salia como una sola
+// linea ("Voucher recibido") y el equipo no sabia a QUIEN validar/enviar.
+function enrichPayload(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  // el agente puede mandar sus args bajo `input`; los fusionamos con el resto.
+  const p = (r.input && typeof r.input === "object" && !Array.isArray(r.input)) ? { ...r, ...r.input } : { ...r };
+  const ctx = r.execution_context?.context || p.execution_context?.context || {};
+  const wa = r.whatsapp_context || p.whatsapp_context || {};
+  const vars = r.execution_context?.vars || p.execution_context?.vars || {};
+  const contact = ctx.contact || {};
+
+  if (!cleanValue(p.phone)) {
+    p.phone = ctx.phone_number || wa.conversation?.phone_number || vars.known_phone || "";
+  }
+  if (!cleanValue(p.customerName)) {
+    p.customerName = contact.name || contact.profile_name || contact.display_name
+      || wa.conversation?.contact_name || vars.known_customer_name || "";
+  }
+  if (!cleanValue(p.product)) {
+    p.product = vars.last_product_title || vars.last_product_handle || "";
+  }
+  return p;
 }
 
 function buildMessage(payload) {
