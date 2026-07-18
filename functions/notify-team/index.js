@@ -85,11 +85,13 @@ function buildMessage(payload) {
   const lines = [];
   lines.push("🟢 <b>Voucher recibido — validar y enviar</b>");
 
+  const advance = cleanValue(p.advance ?? p.adelanto);
   const rows = [
     ["Cliente", p.customerName],
     ["Telefono", p.phone],
     ["Producto", p.product],
     ["Total", formatTotal(p.total)],
+    ["Adelanto", formatTotal(advance || "30")],
     ["Courier", p.courier],
     ["Agencia/Direccion", p.destination],
     ["DNI", p.dni],
