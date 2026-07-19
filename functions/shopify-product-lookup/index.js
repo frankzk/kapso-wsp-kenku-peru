@@ -312,10 +312,15 @@ async function handleRequest(request, env = globalThis) {
 
     let product = null;
     let catalogSearch = null;
+    // ¿El match es CONFIABLE? true si vino por link/handle o por la busqueda de
+    // catalogo (que ya exige alta confianza). El fallback amplio del Admin
+    // (primer resultado) NO es confiable: en consultas vagas ("para el hongo")
+    // agarra un producto al azar. Se usa para no declarar "agotado" en falso.
+    let reliableMatch = false;
 
     for (const handle of handles) {
       product = await getPublicProductByHandle(config, handle);
-      if (product) break;
+      if (product) { reliableMatch = true; break; }
     }
 
     if (!product) {
@@ -323,25 +328,27 @@ async function handleRequest(request, env = globalThis) {
 
       for (const handle of handles) {
         product = getCatalogProductByHandle(catalog, handle);
-        if (product) break;
+        if (product) { reliableMatch = true; break; }
       }
 
       if (!product && queryText) {
         catalogSearch = searchCatalogProducts(catalog, queryText, handles);
         product = catalogSearch.product;
+        if (product) reliableMatch = true;
       }
     }
 
     if (!product && config.token) {
       for (const handle of handles) {
         product = await getProductByHandle(config, handle);
-        if (product) break;
+        if (product) { reliableMatch = true; break; }
       }
     }
 
     if (!product && queryText && config.token) {
       const products = await searchProducts(config, queryText, handles);
       product = products[0] || null;
+      // fallback amplio: reliableMatch queda en false a proposito.
     }
 
     if (!product) {
@@ -397,6 +404,24 @@ async function handleRequest(request, env = globalThis) {
 
     const normalizedProduct = normalizeAnyProduct(product, config.publicShopDomain);
     const outOfStock = isProductOutOfStock(normalizedProduct);
+
+    // Guarda anti "agotado" en falso: si el match NO es confiable (vino del
+    // fallback amplio del Admin en una consulta vaga) y ademas esta agotado, NO
+    // declares ese producto agotado — casi seguro es un producto equivocado
+    // (ej. "para el hongo" -> "Sellador de Silicona"). Pide aclarar en vez de
+    // matar una venta de un producto que probablemente SI hay.
+    if (outOfStock && !reliableMatch) {
+      await logSearchMiss(env, queryText, "low_confidence_oos");
+      const msg = "Para no darte un dato equivocado, ¿me confirmas el nombre exacto del producto o me pasas el link/captura? Asi te doy el precio correcto al toque 😊";
+      return json({
+        found: false,
+        reason: "needs_clarification",
+        input: queryText,
+        message: msg,
+        customerMessage: msg,
+        nextAction: "ask_product",
+      });
+    }
 
     if (outOfStock) {
       // Nunca ofrecer un producto agotado como alternativa: buscar solo alternativas EN STOCK
