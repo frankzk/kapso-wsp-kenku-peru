@@ -843,14 +843,27 @@ function buildAddress(customer, input = {}) {
   const nameParts = splitCustomerName(customer.name || customer.fullName || customer.full_name || "");
   const firstName = nameParts.firstName || "Cliente";
   const lastName = nameParts.lastName || "Kenku";
+  // Respaldo de ciudad/provincia desde la cobertura ya calculada (input.coverage)
+  // y desde el input directo. El agente a veces manda la direccion pero NO el
+  // distrito/provincia dentro de customer -> sin ciudad, la direccion de envio de
+  // Shopify queda vacia. La cobertura SIEMPRE trae el distrito (se verifico con
+  // check_coverage), asi que la usamos como fuente confiable.
+  const cov = input.coverage || {};
+  const covNorm = cov.normalized || {};
+  const city = customer.district || customer.distrito || customer.city
+    || cov.district || cov.distrito || covNorm.district || covNorm.distrito
+    || input.district || input.distrito || "";
+  const province = customer.province || customer.provincia
+    || cov.province || cov.provincia || covNorm.province || covNorm.provincia
+    || input.province || input.provincia || "";
   return {
     firstName,
     lastName,
     phone: normalizePhone(customer.phone || input.phone),
     address1: customer.address || customer.direccion || "Por coordinar",
     address2: customer.reference || customer.referencia || "",
-    city: customer.district || customer.distrito || "",
-    province: customer.province || customer.provincia || "",
+    city,
+    province,
     country: "PE",
     zip: "",
   };
@@ -975,6 +988,8 @@ function buildTags(input) {
 function buildNote(input, customerLookup) {
   const customer = input.customer || {};
   const quote = input.quote || {};
+  const cov = input.coverage || {};
+  const covNorm = cov.normalized || {};
   const lines = [
     "Pedido creado desde WhatsApp/Kapso.",
     `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
@@ -982,9 +997,9 @@ function buildNote(input, customerLookup) {
     "Metodo: Contraentrega - efectivo o Yape",
     `Cliente: ${customer.name || customer.fullName || ""}`,
     `Telefono: ${customer.phone || input.phone || ""}`,
-    `Distrito: ${customer.district || customer.distrito || ""}`,
-    `Provincia: ${customer.province || customer.provincia || ""}`,
-    `Region: ${customer.region || customer.departamento || ""}`,
+    `Distrito: ${customer.district || customer.distrito || cov.district || cov.distrito || covNorm.district || covNorm.distrito || ""}`,
+    `Provincia: ${customer.province || customer.provincia || cov.province || cov.provincia || covNorm.province || covNorm.provincia || ""}`,
+    `Region: ${customer.region || customer.departamento || cov.region || cov.departamento || covNorm.region || ""}`,
     `Direccion: ${customer.address || customer.direccion || ""}`,
     `Referencia: ${customer.reference || customer.referencia || ""}`,
   ];
