@@ -506,8 +506,8 @@ Resumen corto antes de crear orden (contraentrega):
 Despues de crear orden:
 - Responde breve: "Listo, tu pedido quedo registrado. Nuestro equipo coordinara el despacho por aqui."
 `,
-    "provider_model_id": "de8992a1-6f21-4a30-9d37-f8645f66e14e",
-    "provider_model_name": "gpt-4.1",
+    "provider_model_id": "6172658f-422b-4224-8df3-d7795fbc5cc3",
+    "provider_model_name": "gpt-4.1-mini",
     "temperature": 0.2,
     "max_iterations": 40,
     "max_tokens": 8192,
@@ -1067,8 +1067,8 @@ function audioAgentConfig(audioUrl) {
         `usando esta URL como archivo de audio: ${audioUrl} (tipo de media: audio). ` +
         "No escribas ningun texto al cliente, no agregues caption, no llames otras herramientas. " +
         "Despues de enviar el audio, llama complete_task de inmediato.",
-      provider_model_id: "de8992a1-6f21-4a30-9d37-f8645f66e14e",
-      provider_model_name: "gpt-4.1",
+      provider_model_id: "cf09bcf3-647f-4692-a3f8-d38e5fc2e94f",
+      provider_model_name: "deepseek/deepseek-chat-v3.1",
       temperature: 0,
       max_iterations: 3,
       max_tokens: 512,
@@ -1101,8 +1101,8 @@ function photoAgentConfig() {
         "4) Si devuelve media con al menos un item, envia SOLO la primera imagen con send_media (archivo = mediaUrl/url, caption = el titulo del producto). " +
         "5) NUNCA escribas mensajes de texto al cliente, NUNCA pegues URLs como texto, NUNCA envies mas de una foto. " +
         "6) Al final llama complete_task siempre.",
-      provider_model_id: "de8992a1-6f21-4a30-9d37-f8645f66e14e",
-      provider_model_name: "gpt-4.1",
+      provider_model_id: "cf09bcf3-647f-4692-a3f8-d38e5fc2e94f",
+      provider_model_name: "deepseek/deepseek-chat-v3.1",
       temperature: 0,
       max_iterations: 6,
       max_tokens: 1024,
