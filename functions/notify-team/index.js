@@ -5,6 +5,13 @@
 
 const TELEGRAM_API_BASE = "https://api.telegram.org";
 
+// Destinatarios adicionales fijos del equipo (ademas del TELEGRAM_CHAT_ID
+// principal y del secret TELEGRAM_CHAT_IDS). Se dejan embebidos porque la
+// inyeccion del secret TELEGRAM_CHAT_IDS resulto poco confiable en el runtime.
+// Cada persona debe haber iniciado el bot (Start) para poder recibir.
+//   8844863582 = Daphne Zuniga
+const EXTRA_TEAM_CHAT_IDS = ["8844863582"];
+
 async function handler(request, env = globalThis) {
   return handleRequest(request, env);
 }
@@ -157,7 +164,7 @@ function getConfig(env = globalThis) {
     env.tELEGRAMCHATIDS ||
     globalThis.TELEGRAM_CHAT_IDS ||
     globalThis.tELEGRAMCHATIDS;
-  const chatIds = parseChatIds(primary, extra);
+  const chatIds = parseChatIds(primary, extra, EXTRA_TEAM_CHAT_IDS.join(","));
   return { token, chatIds, chatId: chatIds[0] || "" };
 }
 

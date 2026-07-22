@@ -847,8 +847,10 @@ async function watchdogConfig(env) {
       cfg.telegramChatId = cfg.telegramChatId || c;
     } catch { /* sin KV: seguimos con lo que haya */ }
   }
-  // Lista final de chats (principal + extras), deduplicada.
-  cfg.telegramChatIds = parseChatIds(cfg.telegramChatId, cfg.telegramChatIdsExtra);
+  // Lista final de chats (principal + extras del secret + fijos), deduplicada.
+  // Los IDs fijos se embeben porque la inyeccion del secret TELEGRAM_CHAT_IDS
+  // resulto poco confiable en el runtime. 8844863582 = Daphne Zuniga.
+  cfg.telegramChatIds = parseChatIds(cfg.telegramChatId, cfg.telegramChatIdsExtra, "8844863582");
   return cfg;
 }
 
