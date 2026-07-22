@@ -38,7 +38,7 @@
     {
       "label": "respondio",
       "source": "fu-terminal",
-      "target": "sales-agent"
+      "target": "loop-guard"
     },
     {
       "label": "terminar",

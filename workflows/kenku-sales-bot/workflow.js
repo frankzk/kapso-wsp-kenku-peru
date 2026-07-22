@@ -893,9 +893,13 @@ workflow.addNode("fu-terminal", {
   ],
 }, { position: { x: 1000, y: 100 }, displayName: "Seguir o terminar" });
 workflow.addEdge("sales-agent", "fu-terminal");
-// Carrera: el cliente escribio mientras el agente cerraba -> volver al agente
-// (salta init-customer, igual que las re-entradas del ladder).
-workflow.addEdge("fu-terminal", "sales-agent", { label: "respondio" });
+// Carrera: el cliente escribio mientras el agente cerraba -> re-entrar por
+// loop-guard (igual que TODAS las re-entradas fu-wr*), NO directo a sales-agent.
+// loop-guard compara la generacion y corta las ejecuciones stale/duplicadas via
+// "silencio"; ir directo a sales-agent saltaba ese guard y hacia loop
+// sales-agent<->fu-terminal hasta el tope de 200 pasos por tick (emails "Failed"
+// y, si habia mensaje pendiente, reenvio del mismo texto ~20 veces al cliente).
+workflow.addEdge("fu-terminal", "loop-guard", { label: "respondio" });
 
 workflow.addNode("fu-end", {
   type: "set_variable",
