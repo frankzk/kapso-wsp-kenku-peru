@@ -831,6 +831,8 @@ async function watchdogConfig(env) {
     kapsoApiBase: g("KAPSO_API_BASE", "kAPSOAPIBASE") || "https://api.kapso.ai",
     telegramToken: g("TELEGRAM_BOT_TOKEN", "tELEGRAMBOTTOKEN"),
     telegramChatId: g("TELEGRAM_CHAT_ID", "tELEGRAMCHATID"),
+    // Destinatarios extra (coma/espacio/;) para difundir la alerta a mas chats.
+    telegramChatIdsExtra: g("TELEGRAM_CHAT_IDS", "tELEGRAMCHATIDS"),
   };
   // Fallback a KV del proyecto (mismo patron que create-shopify-order).
   if (env?.KV && (!cfg.kapsoApiKey || !cfg.telegramToken || !cfg.telegramChatId)) {
@@ -845,7 +847,25 @@ async function watchdogConfig(env) {
       cfg.telegramChatId = cfg.telegramChatId || c;
     } catch { /* sin KV: seguimos con lo que haya */ }
   }
+  // Lista final de chats (principal + extras), deduplicada.
+  cfg.telegramChatIds = parseChatIds(cfg.telegramChatId, cfg.telegramChatIdsExtra);
   return cfg;
+}
+
+function parseChatIds(...values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (!value) continue;
+    for (const part of String(value).split(/[\s,;]+/)) {
+      const id = part.trim();
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+  }
+  return out;
 }
 
 async function maybeRunWatchdog(env, { force = false } = {}) {
@@ -925,13 +945,20 @@ async function watchdogSweep(cfg, env, now) {
 
   const lines = fresh.map((c) => `• *${c.name}* (+${c.phone}) — ${c.minutes} min esperando\n  _"${c.text}"_`);
   const text = `⚠️ *Clientes esperando respuesta* (bot en silencio >3 min)\n\n${lines.join("\n")}\n\nEntra a Kapso para atenderlos.`;
-  try {
-    await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: cfg.telegramChatId, text, parse_mode: "Markdown" }),
-    });
-  } catch { /* Telegram caido: el dedupe TTL hara que se reintente luego */ }
+  // Difunde a todos los chats (principal + extras). Un chat que falle (ej. no
+  // inicio el bot con /start) no corta el envio a los demas; el dedupe TTL ya
+  // marco a los clientes como alertados.
+  const chats = cfg.telegramChatIds && cfg.telegramChatIds.length ? cfg.telegramChatIds : [cfg.telegramChatId];
+  for (const chatId of chats) {
+    if (!chatId) continue;
+    try {
+      await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+      });
+    } catch { /* Telegram caido para este chat: seguimos con los demas */ }
+  }
 
   return { ran: true, candidates: candidates.length, alerted: fresh.length };
 }

@@ -19,19 +19,31 @@ async function handleRequest(request, env = globalThis) {
   const payload = enrichPayload(await readJson(request));
   const config = getConfig(env);
 
-  if (!config.token || !config.chatId) {
+  if (!config.token || !config.chatIds.length) {
     // Falta credencial: no rompas el flujo, solo reporta ok=false (sin filtrar el token).
     return json({ ok: false, reason: "missing_telegram_config" });
   }
 
   const text = buildMessage(payload);
 
+  // Difunde la alerta a todos los chats configurados (chat principal + extras).
+  // El ok se decide por el chat PRINCIPAL: que un extra falle (ej. no inicio el
+  // bot con /start) no rompe el flujo ni oculta el exito del chat principal.
+  const results = [];
+  for (const chatId of config.chatIds) {
+    results.push(await sendToChat(config.token, chatId, text));
+  }
+  const primary = results[0];
+  return json({ ok: primary.ok, results });
+}
+
+async function sendToChat(token, chatId, text) {
   try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/bot${config.token}/sendMessage`, {
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: config.chatId,
+        chat_id: chatId,
         text,
         parse_mode: "HTML",
         disable_web_page_preview: true,
@@ -46,12 +58,12 @@ async function handleRequest(request, env = globalThis) {
       } catch {
         // ignore parse errors
       }
-      return json({ ok: false, reason: "telegram_error", status: res.status, description });
+      return { chatId, ok: false, reason: "telegram_error", status: res.status, description };
     }
 
-    return json({ ok: true });
+    return { chatId, ok: true };
   } catch (err) {
-    return json({ ok: false, reason: "request_failed", error: String(err && err.message ? err.message : err) });
+    return { chatId, ok: false, reason: "request_failed", error: String(err && err.message ? err.message : err) };
   }
 }
 
@@ -133,12 +145,36 @@ function getConfig(env = globalThis) {
     env.tELEGRAMBOTTOKEN ||
     globalThis.TELEGRAM_BOT_TOKEN ||
     globalThis.tELEGRAMBOTTOKEN;
-  const chatId =
+  const primary =
     env.TELEGRAM_CHAT_ID ||
     env.tELEGRAMCHATID ||
     globalThis.TELEGRAM_CHAT_ID ||
     globalThis.tELEGRAMCHATID;
-  return { token, chatId };
+  // Destinatarios adicionales (coma/espacio/;): asi se agregan mas chats sin
+  // tocar el TELEGRAM_CHAT_ID principal. Se envia a todos, deduplicando.
+  const extra =
+    env.TELEGRAM_CHAT_IDS ||
+    env.tELEGRAMCHATIDS ||
+    globalThis.TELEGRAM_CHAT_IDS ||
+    globalThis.tELEGRAMCHATIDS;
+  const chatIds = parseChatIds(primary, extra);
+  return { token, chatIds, chatId: chatIds[0] || "" };
+}
+
+function parseChatIds(...values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (!value) continue;
+    for (const part of String(value).split(/[\s,;]+/)) {
+      const id = part.trim();
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+  }
+  return out;
 }
 
 async function readJson(request) {
