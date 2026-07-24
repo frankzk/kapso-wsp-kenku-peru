@@ -850,17 +850,38 @@ function buildAddress(customer, input = {}) {
   // check_coverage), asi que la usamos como fuente confiable.
   const cov = input.coverage || {};
   const covNorm = cov.normalized || {};
-  const city = customer.district || customer.distrito || customer.city
+  let city = customer.district || customer.distrito || customer.city
     || cov.district || cov.distrito || covNorm.district || covNorm.distrito
     || input.district || input.distrito || "";
-  const province = customer.province || customer.provincia
+  let province = customer.province || customer.provincia
     || cov.province || cov.provincia || covNorm.province || covNorm.provincia
     || input.province || input.provincia || "";
+  const address1 = customer.address || customer.direccion || "Por coordinar";
+
+  // Respaldo: si el agente metio distrito/provincia dentro del texto de la
+  // direccion en vez de mandarlos por separado (ej. "Av. Huanacure 221,
+  // INDEPENDENCIA, Lima"), los extraemos de los ultimos segmentos separados por
+  // coma. Sin ciudad, Shopify no muestra la direccion de envio.
+  if ((!city || !province) && address1 && address1 !== "Por coordinar") {
+    const parts = address1.split(",").map((s) => s.replace(/\(.*?\)/g, "").trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      if (!city) city = parts[parts.length - 2];
+      if (!province) province = parts[parts.length - 1];
+    } else if (parts.length === 2 && !city) {
+      city = parts[parts.length - 1];
+    }
+  }
+
+  // Shopify necesita una ciudad no vacia para poblar la direccion de envio.
+  // Si aun no la tenemos, usamos la provincia; y si tampoco, dejamos una marca
+  // clara para que logistica la complete (mejor que quede en blanco).
+  if (!city) city = province || "Por coordinar";
+
   return {
     firstName,
     lastName,
     phone: normalizePhone(customer.phone || input.phone),
-    address1: customer.address || customer.direccion || "Por coordinar",
+    address1,
     address2: customer.reference || customer.referencia || "",
     city,
     province,
@@ -986,33 +1007,29 @@ function buildTags(input) {
 }
 
 function buildNote(input, customerLookup) {
+  // Nota acotada: solo lo que el equipo de logistica necesita de un vistazo.
+  // Cliente/telefono ya salen en el bloque "Contacto"; el Shopify customer id y
+  // el Kapso conversation id ya salen en "Informacion adicional" (metacampos);
+  // por eso NO se repiten aqui. La direccion SI se conserva porque el campo
+  // estructurado de Shopify a veces queda incompleto.
   const customer = input.customer || {};
-  const quote = input.quote || {};
   const cov = input.coverage || {};
   const covNorm = cov.normalized || {};
-  const lines = [
-    "Pedido creado desde WhatsApp/Kapso.",
-    `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
-    `Total cotizado: S/ ${formatMoney(quote.total || 0)}`,
-    "Metodo: Contraentrega - efectivo o Yape",
-    `Cliente: ${customer.name || customer.fullName || ""}`,
-    `Telefono: ${customer.phone || input.phone || ""}`,
-    `Distrito: ${customer.district || customer.distrito || cov.district || cov.distrito || covNorm.district || covNorm.distrito || ""}`,
-    `Provincia: ${customer.province || customer.provincia || cov.province || cov.provincia || covNorm.province || covNorm.provincia || ""}`,
-    `Region: ${customer.region || customer.departamento || cov.region || cov.departamento || covNorm.region || ""}`,
-    `Direccion: ${customer.address || customer.direccion || ""}`,
-    `Referencia: ${customer.reference || customer.referencia || ""}`,
-  ];
+  const district = customer.district || customer.distrito || cov.district || cov.distrito || covNorm.district || covNorm.distrito || "";
+  const province = customer.province || customer.provincia || cov.province || cov.provincia || covNorm.province || covNorm.provincia || "";
+  const address = customer.address || customer.direccion || "";
+  const reference = customer.reference || customer.referencia || "";
+  const place = [district, province].filter(Boolean).join(", ");
+  const entrega = [address, reference && `Ref: ${reference}`, place].filter(Boolean).join(" · ");
 
-  if (customerLookup?.customerId) {
-    lines.push(`Shopify customer: ${customerLookup.customerId} (${customerLookup.status})`);
-  } else if (customerLookup?.status) {
-    lines.push(`Shopify customer lookup: ${customerLookup.status}`);
-  }
+  const lines = [
+    "Pedido WhatsApp/Kapso · Contraentrega (efectivo o Yape)",
+    `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
+  ];
+  if (entrega) lines.push(`Entrega: ${entrega}`);
 
   const specialNote = sanitizeNoteText(input.specialDeliveryNote || input.special_delivery_note);
   if (specialNote) lines.push(`Fecha/hora solicitada: ${specialNote}`);
-  if (input.conversationId) lines.push(`Kapso conversation: ${input.conversationId}`);
   return lines.filter(Boolean).join("\n");
 }
 
