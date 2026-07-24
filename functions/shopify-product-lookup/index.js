@@ -1464,8 +1464,26 @@ function formatMoney(value) {
   return (Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2);
 }
 
+// Elimina el byte nulo (\u0000) y demas controles C0 (menos \t \n \r) de
+// todos los strings de la respuesta. Un producto con un \u0000 en el
+// titulo/descripcion (dato sucio de Shopify) reventaba la ejecucion al
+// guardarse como variable: "PG::UntranslatableCharacter: \u0000 cannot be
+// converted to text".
+function stripControlChars(value) {
+  if (typeof value === "string") {
+    return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  }
+  if (Array.isArray(value)) return value.map(stripControlChars);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const key of Object.keys(value)) out[key] = stripControlChars(value[key]);
+    return out;
+  }
+  return value;
+}
+
 function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify(stripControlChars(body)), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" },
   });
