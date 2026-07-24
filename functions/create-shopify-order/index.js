@@ -1021,11 +1021,15 @@ function buildNote(input, customerLookup) {
   const reference = customer.reference || customer.referencia || "";
   const place = [district, province].filter(Boolean).join(", ");
   const entrega = [address, reference && `Ref: ${reference}`, place].filter(Boolean).join(" · ");
+  const name = customer.name || customer.fullName || customer.full_name || "";
+  const phone = customer.phone || input.phone || "";
+  const contacto = [name, phone].filter(Boolean).join(" · ");
 
   const lines = [
     "Pedido WhatsApp/Kapso · Contraentrega (efectivo o Yape)",
     `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
   ];
+  if (contacto) lines.push(`Contacto: ${contacto}`);
   if (entrega) lines.push(`Entrega: ${entrega}`);
 
   const specialNote = sanitizeNoteText(input.specialDeliveryNote || input.special_delivery_note);
