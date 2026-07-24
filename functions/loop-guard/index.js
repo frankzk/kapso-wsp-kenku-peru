@@ -49,8 +49,53 @@ async function handleRequest(request, env = globalThis) {
     if (!response.ok) return decision(edges, false, ["historial_no_disponible"]);
     const data = await response.json();
 
+    const sortedMessages = [...(data?.data || [])]
+      .sort((a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0));
+    const latestInbound = sortedMessages.find((message) => message?.kapso?.direction === "inbound");
+    const generation = latestInbound
+      ? String(latestInbound.id || latestInbound.timestamp || "")
+      : "";
+    const executionGeneration = String(payload.execution_context?.vars?.followup_generation || "");
+
+    if (env?.KV && generation) {
+      const generationKey = `followup_generation:${conversationId}`;
+      const storedGeneration = String(await env.KV.get(generationKey) || "");
+
+      // Una escalera vieja volvio a entrar despues de que otra ejecucion ya
+      // atendio un inbound nuevo. Se termina sin volver a escribir al cliente.
+      if (executionGeneration && storedGeneration && executionGeneration !== storedGeneration) {
+        return decision(edges, true, ["ejecucion_obsoleta"], { followup_generation: executionGeneration });
+      }
+
+      // Dos triggers pueden intentar procesar el mismo inbound. La ejecucion
+      // que ya trae la generacion es la continuacion legitima; una ejecucion
+      // nueva sin generacion y con claim existente es duplicada.
+      const claimKey = `inbound_claim:${conversationId}:${generation}`;
+      if (!executionGeneration && await env.KV.get(claimKey)) {
+        return decision(edges, true, ["inbound_duplicado"], { followup_generation: generation });
+      }
+      await Promise.all([
+        env.KV.put(generationKey, generation, { expirationTtl: 7 * 24 * 60 * 60 }),
+        env.KV.put(claimKey, "1", { expirationTtl: 24 * 60 * 60 }),
+      ]);
+    }
+
+    // Guard anti-rebote de control-flow. El loop sales-agent<->fu-terminal<->
+    // loop-guard NO genera mensajes nuevos, asi que detectLoopRisk (basado en
+    // contenido) es ciego a el. Si loop-guard se re-invoca varias veces para el
+    // MISMO inbound (misma generation) en poco tiempo, es un rebote sin mensaje
+    // nuevo del cliente -> cortar con silencio antes de reventar el tope de pasos.
+    if (env?.KV && conversationId) {
+      const reentryKey = `lg_reentry:${conversationId}:${generation || "none"}`;
+      const reentries = Number(await env.KV.get(reentryKey) || 0) + 1;
+      await env.KV.put(reentryKey, String(reentries), { expirationTtl: 90 });
+      if (reentries >= 5) {
+        return decision(edges, true, ["rebote_control_flow:" + reentries], generation ? { followup_generation: generation } : {});
+      }
+    }
+
     const { risk, reasons } = detectLoopRisk(data?.data || []);
-    return decision(edges, risk, reasons);
+    return decision(edges, risk, reasons, generation ? { followup_generation: generation } : {});
   } catch (error) {
     return decision(edges, false, ["error:" + String(error?.message || error).slice(0, 120)]);
   }
@@ -100,14 +145,14 @@ function detectLoopRisk(messages) {
   return { risk: reasons.length > 0, reasons };
 }
 
-function decision(edges, risk, reasons) {
+function decision(edges, risk, reasons, extraVars = {}) {
   const target = risk ? "silencio" : "atender";
   const nextEdge = edges.includes(target) ? target : (edges[0] || target);
   return json({
     next_edge: nextEdge,
     loop_risk: risk,
     reasons,
-    vars: { loop_risk: risk },
+    vars: { loop_risk: risk, ...extraVars },
   });
 }
 
