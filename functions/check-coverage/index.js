@@ -833,6 +833,10 @@ async function watchdogConfig(env) {
     telegramChatId: g("TELEGRAM_CHAT_ID", "tELEGRAMCHATID"),
     // Destinatarios extra (coma/espacio/;) para difundir la alerta a mas chats.
     telegramChatIdsExtra: g("TELEGRAM_CHAT_IDS", "tELEGRAMCHATIDS"),
+    // Webhook del dashboard externo (cola "Atender ahora"). Mismo contrato que
+    // el postStoreHandoff de notify-team. Requiere estos secrets en ESTA funcion.
+    storeWebhookUrl: g("STORE_WEBHOOK_URL", "sTOREWEBHOOKURL"),
+    storeWebhookSecret: g("STORE_WEBHOOK_SECRET", "sTOREWEBHOOKSECRET"),
   };
   // Fallback a KV del proyecto (mismo patron que create-shopify-order).
   if (env?.KV && (!cfg.kapsoApiKey || !cfg.telegramToken || !cfg.telegramChatId)) {
@@ -945,6 +949,10 @@ async function watchdogSweep(cfg, env, now) {
 
   if (fresh.length === 0) return { ran: true, candidates: candidates.length, alerted: 0 };
 
+  // Aviso al dashboard: un POST best-effort por cada cliente esperando, para que
+  // caiga en la cola "Atender ahora". Independiente del envio a Telegram.
+  try { await postWaitingToStore(cfg, fresh); } catch { /* nunca romper el watchdog */ }
+
   const lines = fresh.map((c) => `• *${c.name}* (+${c.phone}) — ${c.minutes} min esperando\n  _"${c.text}"_`);
   const text = `⚠️ *Clientes esperando respuesta* (bot en silencio >3 min)\n\n${lines.join("\n")}\n\nEntra a Kapso para atenderlos.`;
   // Difunde a todos los chats (principal + extras). Un chat que falle (ej. no
@@ -963,6 +971,44 @@ async function watchdogSweep(cfg, env, now) {
   }
 
   return { ran: true, candidates: candidates.length, alerted: fresh.length };
+}
+
+// POST best-effort al webhook del dashboard: uno por cada cliente esperando.
+// Mismo contrato que postStoreHandoff de notify-team (event workflow.execution.handoff).
+// El dashboard deduplica por telefono, asi que reportar el mismo cliente en
+// barridos consecutivos es inocuo. Nunca rompe el watchdog ni el envio a Telegram.
+async function postWaitingToStore(cfg, fresh) {
+  if (!cfg.storeWebhookUrl) return;
+  for (const c of fresh) {
+    try {
+      const body = JSON.stringify({
+        event: "workflow.execution.handoff",
+        phone_number: String(c.phone || "").replace(/[^\d]/g, ""),
+        conversation_id: c.id || "",
+        reason: "esperando respuesta",
+        context_summary: String(c.text || "").replace(/\s+/g, " ").trim(),
+      });
+      const headers = { "Content-Type": "application/json" };
+      if (cfg.storeWebhookSecret) {
+        headers["X-Webhook-Secret"] = cfg.storeWebhookSecret;
+        const sig = await hmacHex(cfg.storeWebhookSecret, body);
+        if (sig) headers["X-Kapso-Signature"] = sig;
+      }
+      await fetch(cfg.storeWebhookUrl, { method: "POST", headers, body });
+    } catch { /* best-effort por cliente: seguimos con los demas */ }
+  }
+}
+
+// Firma HMAC-SHA256 (hex) del cuerpo con el secret. Best-effort ("" si falla).
+async function hmacHex(secret, body) {
+  try {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(body));
+    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "";
+  }
 }
 
 // Administracion por invocacion directa (privada, requiere X-API-Key de Kapso):
