@@ -1,7 +1,14 @@
-// notify-team: alerta interna al equipo por Telegram.
+// notify-team: alerta interna al equipo por Telegram + aviso de handoff al dashboard.
 // Se invoca cuando un cliente envia el voucher/adelanto (flujo Shalom/Olva) y el
-// bot deriva a validacion logistica. NUNCA escribe al cliente: solo manda un push
-// al chat de Telegram del dueno via la Bot API.
+// bot deriva a validacion logistica, o cuando el bot deriva a un humano (reclamo,
+// mayorista, "quiero un asesor"). NUNCA escribe al cliente.
+//
+// Hace dos cosas, ambas best-effort e independientes entre si:
+//   1) Telegram: push al chat del equipo via la Bot API.
+//   2) Dashboard: si el evento trae `reason` (handoff real), POST al webhook de la
+//      tienda para que el lead caiga en la cola "Atender ahora". El flujo de
+//      voucher (sin `reason`) NO toca el dashboard, para no resetear el estado del
+//      lead.
 
 const TELEGRAM_API_BASE = "https://api.telegram.org";
 
@@ -26,6 +33,11 @@ async function handleRequest(request, env = globalThis) {
   const payload = enrichPayload(await readJson(request));
   const config = getConfig(env);
 
+  // 1) Aviso al dashboard (handoff). Independiente de Telegram: corre aunque
+  //    falte la config de Telegram. Solo dispara si hay `reason` (handoff real).
+  await postStoreHandoff(config, payload);
+
+  // 2) Telegram.
   if (!config.token || !config.chatIds.length) {
     // Falta credencial: no rompas el flujo, solo reporta ok=false (sin filtrar el token).
     return json({ ok: false, reason: "missing_telegram_config" });
@@ -43,6 +55,78 @@ async function handleRequest(request, env = globalThis) {
   const primary = results[0];
   return json({ ok: primary.ok, results });
 }
+
+// --- Aviso de handoff al dashboard de la tienda -----------------------------
+
+// Firma HMAC-SHA256 (hex) del cuerpo con el secret, para que el dashboard pueda
+// validar el POST igual que valida los webhooks de Kapso. Best-effort.
+async function hmacHex(secret, body) {
+  try {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(body));
+    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "";
+  }
+}
+
+// POST al webhook del dashboard cuando el bot deriva a un humano. Best-effort: no
+// afecta el retorno ni el envio a Telegram. Solo dispara con `reason` (handoff
+// real: reclamo / mayorista / "quiero un asesor"); el flujo de voucher (sin
+// reason) NO postea, para no pisar el estado del lead en el dashboard.
+async function postStoreHandoff(config, payload) {
+  const url = config.storeWebhookUrl;
+  if (!url) return;
+  const reason = cleanValue(payload.reason);
+  if (!reason) return;
+  const phone = String(payload.phone || "").replace(/[^\d]/g, "");
+  const body = JSON.stringify({
+    event: "workflow.execution.handoff",
+    phone_number: phone,
+    conversation_id: deriveConversationId(payload),
+    reason,
+    context_summary: cleanValue(payload.note || payload.context_summary),
+  });
+  const headers = { "Content-Type": "application/json" };
+  if (config.storeWebhookSecret) {
+    headers["X-Webhook-Secret"] = config.storeWebhookSecret;
+    const sig = await hmacHex(config.storeWebhookSecret, body);
+    if (sig) headers["X-Kapso-Signature"] = sig;
+  }
+  try {
+    await fetch(url, { method: "POST", headers, body });
+  } catch {}
+}
+
+// Id de conversacion desde el contexto de ejecucion (para enlazar el lead con la
+// conversacion de Kapso). Best-effort: "" si no se encuentra.
+function deriveConversationId(payload) {
+  const o = payload || {};
+  const ec = (o.execution_context && typeof o.execution_context === "object") ? o.execution_context : {};
+  const ecCtx = (ec.context && typeof ec.context === "object") ? ec.context : {};
+  const ecSys = (ec.system && typeof ec.system === "object") ? ec.system : {};
+  const cands = [
+    o.conversationId, o.conversation_id, o.whatsapp_conversation_id,
+    ecCtx.conversation_id, ecCtx.whatsapp_conversation_id,
+    ecSys.conversation_id, ec.conversation_id,
+    o.whatsapp_context && o.whatsapp_context.conversation && o.whatsapp_context.conversation.id,
+  ];
+  for (const c of cands) {
+    if (c && typeof c === "string") return c;
+  }
+  const msgs = o.whatsapp_context && o.whatsapp_context.messages;
+  if (Array.isArray(msgs)) {
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      const m = msgs[i] || {};
+      const id = (m.kapso && m.kapso.whatsapp_conversation_id) || m.whatsapp_conversation_id;
+      if (id) return String(id);
+    }
+  }
+  return "";
+}
+
+// --- Telegram ---------------------------------------------------------------
 
 async function sendToChat(token, chatId, text) {
   try {
@@ -99,10 +183,21 @@ function enrichPayload(raw) {
   return p;
 }
 
+// Encabezado segun el motivo. Sin `reason` = flujo de voucher (identico a antes).
+// Con `reason` = handoff a humano, con encabezado acorde.
+function headerFor(reason) {
+  const r = cleanValue(reason).toLowerCase();
+  if (r.includes("reclamo") || r.includes("queja")) return "🔴 <b>RECLAMO — atender URGENTE</b>";
+  if (r.includes("mayorista")) return "📦 <b>Pedido mayorista — coordinar</b>";
+  if (r) return `🔔 <b>${escapeHtml(cleanValue(reason))}</b>`;
+  return "🟢 <b>Voucher recibido — validar y enviar</b>";
+}
+
 function buildMessage(payload) {
   const p = payload || {};
+  const reason = cleanValue(p.reason);
   const lines = [];
-  lines.push("🟢 <b>Voucher recibido — validar y enviar</b>");
+  lines.push(headerFor(reason));
 
   const advance = cleanValue(p.advance ?? p.adelanto);
   const rows = [
@@ -110,7 +205,8 @@ function buildMessage(payload) {
     ["Telefono", p.phone],
     ["Producto", p.product],
     ["Total", formatTotal(p.total)],
-    ["Adelanto", formatTotal(advance || "30")],
+    // El adelanto por defecto (S/30) es del flujo de voucher; en un handoff no aplica.
+    ["Adelanto", formatTotal(advance || (reason ? "" : "30"))],
     ["Courier", p.courier],
     ["Agencia/Direccion", p.destination],
     ["DNI", p.dni],
@@ -165,7 +261,15 @@ function getConfig(env = globalThis) {
     globalThis.TELEGRAM_CHAT_IDS ||
     globalThis.tELEGRAMCHATIDS;
   const chatIds = parseChatIds(primary, extra, EXTRA_TEAM_CHAT_IDS.join(","));
-  return { token, chatIds, chatId: chatIds[0] || "" };
+  // URL + secret del dashboard de la tienda (runtime_config en Kapso). Kapso
+  // expone las claves con la primera letra en minuscula (sTOREWEBHOOKURL).
+  const storeWebhookUrl =
+    env.STORE_WEBHOOK_URL || env.sTOREWEBHOOKURL ||
+    globalThis.STORE_WEBHOOK_URL || globalThis.sTOREWEBHOOKURL || "";
+  const storeWebhookSecret =
+    env.STORE_WEBHOOK_SECRET || env.sTOREWEBHOOKSECRET ||
+    globalThis.STORE_WEBHOOK_SECRET || globalThis.sTOREWEBHOOKSECRET || "";
+  return { token, chatIds, chatId: chatIds[0] || "", storeWebhookUrl, storeWebhookSecret };
 }
 
 function parseChatIds(...values) {
@@ -211,4 +315,5 @@ globalThis.__kenkuNotifyTeam = {
   getConfig,
   handleRequest,
   handler,
+  postStoreHandoff,
 };
