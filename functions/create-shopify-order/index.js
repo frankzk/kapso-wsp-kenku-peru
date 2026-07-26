@@ -832,7 +832,18 @@ function buildProductSearchQueries(text) {
   const words = unique(normalized.split(/\s+/).filter((word) => word.length >= 3).slice(0, 8));
   const queries = [];
   if (words.length > 0) {
+    // 1) Todas las palabras (mas preciso).
     queries.push(words.map((word) => `title:*${escapeSearch(word)}*`).join(" AND "));
+    // 2) Fallback tolerante: solo las palabras mas distintivas (las mas largas).
+    //    Asi un titulo con una palabra extra o mal escrita ("Cooper" vs "Copper",
+    //    "Saludable" de mas) igual resuelve, en vez de fallar y derivar a humano.
+    const distinctive = [...words].sort((a, b) => b.length - a.length);
+    for (const n of [3, 2]) {
+      if (distinctive.length >= n) {
+        queries.push(distinctive.slice(0, n).map((word) => `title:*${escapeSearch(word)}*`).join(" AND "));
+      }
+    }
+    // 3) Texto libre.
     queries.push(words.slice(0, 5).join(" "));
   }
   if (normalized) queries.push(escapeSearch(normalized));
