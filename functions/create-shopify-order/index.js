@@ -704,14 +704,53 @@ async function resolveLineItems(config, items) {
   const resolved = [];
   for (const item of items) {
     if (item.variantId) {
-      resolved.push({ ...item, variantId: normalizeVariantId(item.variantId) });
+      // Se marca para validar: el agente a veces manda un variantId inventado o
+      // truncado (ej. "437"). Si no existe en Shopify se re-resuelve por producto.
+      resolved.push({ ...item, variantId: normalizeVariantId(item.variantId), _agentVariant: true });
       continue;
     }
     const product = await findProductForItem(config, item);
     const variant = chooseVariant(product, item);
     if (variant?.id) resolved.push({ ...item, variantId: normalizeVariantId(variant.id) });
   }
+
+  // Validar los variantId que dio el agente. Si alguno NO existe (Shopify
+  // devolvia "Line items product variant X not found" y el pedido caia en
+  // handoff), lo re-resolvemos desde handle/productUrl/productTitle del item.
+  const toCheck = resolved.filter((it) => it._agentVariant && it.variantId).map((it) => it.variantId);
+  if (toCheck.length) {
+    const validIds = await fetchExistingVariantIds(config, toCheck);
+    for (const it of resolved) {
+      if (!it._agentVariant) continue;
+      delete it._agentVariant;
+      if (!it.variantId || validIds.has(it.variantId)) continue;
+      const product = await findProductForItem(config, it);
+      const variant = chooseVariant(product, it);
+      it.variantId = variant?.id ? normalizeVariantId(variant.id) : "";
+    }
+  }
   return resolved.filter((item) => item.variantId);
+}
+
+// Devuelve el subconjunto de variantIds que SI existen en Shopify. Si la
+// consulta falla, no bloquea: asume que todos son validos (comportamiento previo).
+async function fetchExistingVariantIds(config, ids) {
+  const uniq = [...new Set((ids || []).filter(Boolean))];
+  const out = new Set();
+  if (!uniq.length) return out;
+  const query = `#graphql
+    query ValidateVariants($ids: [ID!]!) {
+      nodes(ids: $ids) { ... on ProductVariant { id } }
+    }`;
+  try {
+    const data = await shopifyGraphql(config, query, { ids: uniq });
+    for (const node of data.nodes || []) {
+      if (node?.id) out.add(node.id);
+    }
+  } catch {
+    for (const id of uniq) out.add(id);
+  }
+  return out;
 }
 
 async function findProductForItem(config, item) {
