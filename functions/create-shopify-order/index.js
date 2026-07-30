@@ -86,7 +86,8 @@ async function handleRequest(request, env = globalThis) {
         outOfStockVariants,
         customerLookup,
         orderPreview: {
-          customerId: orderInput.customerId || null,
+          customer: orderInput.customer || null,
+          customerId: customerLookup?.customerId || null,
           lineItems: orderInput.lineItems,
           phone: orderInput.phone,
           email: orderInput.email || null,
@@ -205,6 +206,16 @@ const CUSTOMER_CREATE_MUTATION = `#graphql
   mutation customerCreate($input: CustomerInput!) {
     customerCreate(input: $input) {
       customer { id displayName firstName lastName email phone defaultAddress { phone address1 city province country zip } }
+      userErrors { field message }
+    }
+  }`;
+
+// CustomerInput.addresses quedo deprecado (API 2026-01+) y la tienda corre
+// 2026-04: la direccion se adjunta con una mutation aparte tras crear el cliente.
+const CUSTOMER_ADDRESS_CREATE_MUTATION = `#graphql
+  mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!, $setAsDefault: Boolean) {
+    customerAddressCreate(customerId: $customerId, address: $address, setAsDefault: $setAsDefault) {
+      customerAddress { id }
       userErrors { field message }
     }
   }`;
@@ -387,11 +398,29 @@ async function buildOrderInput(config, input, options = {}) {
     presentmentCurrency: "PEN",
   };
 
+  // Asociar el cliente al pedido. OrderCreateOrderInput NO tiene un campo
+  // `customerId`: se usa `customer.toAssociate` (cliente existente) o
+  // `customer.toUpsert` (crear/actualizar). El bug anterior (order.customerId)
+  // se ignoraba y el pedido quedaba SIN cliente.
+  const email = normalizeEmail(customer.email || input.email || customerLookup?.email);
   if (customerLookup?.customerId) {
-    order.customerId = customerLookup.customerId;
+    order.customer = { toAssociate: { id: customerLookup.customerId } };
+  } else if (email) {
+    // Respaldo: si no logramos crear/encontrar el cliente pero hay email, que
+    // Shopify lo cree/asocie como parte del pedido (toUpsert dedupe por email).
+    const nameParts = splitCustomerName(
+      String(customer.name || customer.fullName || customer.full_name || "").trim()
+      || [shippingAddress.firstName, shippingAddress.lastName].filter(Boolean).join(" ")
+    );
+    order.customer = {
+      toUpsert: {
+        email,
+        firstName: nameParts.firstName || "Cliente",
+        lastName: nameParts.lastName || "Kenku",
+      },
+    };
   }
 
-  const email = normalizeEmail(customer.email || input.email || customerLookup?.email);
   if (email) {
     order.email = email;
   }
@@ -610,13 +639,28 @@ async function createShopifyCustomer(config, { phone, email, firstName, lastName
   if (cleanEmail) input.email = cleanEmail;
   if (note) input.note = note;
 
-  const mailingAddress = mailingAddressFromOrderAddress(address);
-  if (mailingAddress) {
-    input.addresses = [mailingAddress];
-  }
-
+  // NO adjuntar addresses aqui: CustomerInput.addresses esta deprecado (2026-01+)
+  // y en 2026-04 hace fallar customerCreate -> antes el pedido quedaba SIN cliente.
   const data = await shopifyGraphql(config, CUSTOMER_CREATE_MUTATION, { input });
-  return data.customerCreate || { customer: null, userErrors: [{ message: "empty customerCreate response" }] };
+  const result = data.customerCreate || { customer: null, userErrors: [{ message: "empty customerCreate response" }] };
+
+  // Best-effort: guarda la direccion como default en el perfil (para reconocer al
+  // cliente recurrente). Nunca bloquea: si falla, el cliente ya quedo creado/asociado.
+  if (result.customer?.id) {
+    const mailingAddress = mailingAddressFromOrderAddress(address);
+    if (mailingAddress) {
+      try {
+        await shopifyGraphql(config, CUSTOMER_ADDRESS_CREATE_MUTATION, {
+          customerId: result.customer.id,
+          address: mailingAddress,
+          setAsDefault: true,
+        });
+      } catch (_) {
+        // direccion best-effort; el cliente ya existe y se asociara al pedido igual
+      }
+    }
+  }
+  return result;
 }
 
 function mailingAddressFromOrderAddress(address) {
