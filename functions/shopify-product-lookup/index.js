@@ -1105,7 +1105,11 @@ function publicProductToNormalized(product, publicShopDomain, options = {}) {
     id: toShopifyGid("Product", product.id),
     handle: product.handle,
     title: product.title || product.handle,
-    description: product.description || "",
+    // El endpoint /products.json trae la descripcion en `body_html` (no en
+    // `description`); el endpoint /products/{handle}.js la trae en `description`.
+    // Sin este fallback, los productos hallados por BUSQUEDA (catalogo) llegaban
+    // SIN descripcion y el bot negaba beneficios reales (ej. hongos en el serum).
+    description: product.description || product.body_html || "",
     productType: product.type || product.product_type || "",
     vendor: product.vendor || "",
     tags: normalizePublicTags(product.tags),
