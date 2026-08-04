@@ -12,6 +12,7 @@ const AD_PRODUCT_MAP = {
   "120250561081440066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra
   "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
+  "120252904020210120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (segun el dueno -> Nails Repairing)
 };
 
 // Busca al cliente en Shopify por telefono (o email) para reconocer clientes
