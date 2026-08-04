@@ -10,10 +10,12 @@ const AD_PRODUCT_MAP = {
   "120248448610150056": "true-beauty-aceite-post-afeitado-donut-glaseado",           // Adios Irritacion Post-Afeitado
   "120249183604400267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies
   "120249183576750267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies (variante)
+  "120249921111920267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies (variante)
   "120250561081440066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra
   "120250269305230267": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
+  "120248592918830056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (variante -> Hair+)
   "120253283957870120": "shampoo-de-cebolla-rebrota-fortalecimiento-capilar-y-control-de-caida-con-romero-y-canela", // Mas densidad, menos caida (Shampoo de Cebolla REBROTA — confirmado por el dueno)
   "120248136956750056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (Shampoo Biru Anticaspa)
   "120248136956730056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (variante -> Shampoo Biru Anticaspa)
