@@ -17,7 +17,7 @@ const AD_PRODUCT_MAP = {
   "120248136956750056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (Shampoo Biru Anticaspa)
   "120248136956730056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (variante -> Shampoo Biru Anticaspa)
   "120248446351820056": "truefem-balance-capsulas-para-el-equilibrio-hormonal-y-bienestar-femenino-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (TrueFem Balance)
-  "120248592509430056": "truefem-balance-capsulas-para-el-equilibrio-hormonal-y-bienestar-femenino-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> TrueFem Balance)
+  "120248592509430056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120253239645720120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+)
   "120253239652220120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+, variante)
   "120248370663120056": "prozenith-pro-capsules-capsulas-metabolicas-para-control-de-antojos-y-bienestar-metabolico-60-capsulas-superhuman™", // Controla tus antojos naturalmente (Prozenix Pro)
