@@ -14,6 +14,11 @@ const AD_PRODUCT_MAP = {
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
   "120248136956750056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (Shampoo Biru Anticaspa)
   "120248446351820056": "truefem-balance-capsulas-para-el-equilibrio-hormonal-y-bienestar-femenino-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (TrueFem Balance)
+  "120253239645720120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+)
+  "120253239652220120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+, variante)
+  "120248370663120056": "prozenith-pro-capsules-capsulas-metabolicas-para-control-de-antojos-y-bienestar-metabolico-60-capsulas-superhuman™", // Controla tus antojos naturalmente (Prozenix Pro)
+  "120248563525800056": "magnesio-12-en-1-complex-capsulas-para-energia-relajacion-muscular-y-bienestar-integral-120-capsulas-superhuman™", // 12 Tipos de Magnesio (Magnesio 12 en 1 Complex)
+  "120248519247800056": "kojic-acid-turmeric-cleansing-pads",                          // Ilumina Tu Piel Apagada (variante -> KojicPads)
   // "Energia Sin Estimulantes" (120252904020210120): sin mapear a proposito; el
   // dueno va a corregir el anuncio. Agregar aqui cuando defina el producto real.
 };
