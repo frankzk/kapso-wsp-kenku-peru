@@ -56,6 +56,30 @@ async function handleRequest(request, env = globalThis) {
     const orderInput = build.orderInput;
     const customerLookup = build.customerLookup;
 
+    // Requisito duro para CONTRAENTREGA: direccion realmente entregable. Un pedido
+    // contraentrega necesita ciudad/distrito real Y (calle+numero O una referencia
+    // clara). Si falta, NO lo creamos con "Por coordinar" (eso genero ordenes
+    // basura como #KP126229, Camana sin direccion): pedimos la direccion. Cuando la
+    // haya, check_coverage decide contraentrega vs agencia (Shalom + adelanto).
+    if (!dryRun) {
+      const addr = orderInput.shippingAddress || {};
+      const isPlaceholder = (v) => {
+        const s = String(v || "").trim().toLowerCase();
+        return !s || s === "por coordinar";
+      };
+      const noCity = isPlaceholder(addr.city);
+      const noStreet = isPlaceholder(addr.address1);
+      const noReference = isPlaceholder(addr.address2);
+      if (noCity || (noStreet && noReference)) {
+        return json({
+          ok: false,
+          reason: "address_incomplete",
+          message: "No registro el pedido: falta la direccion completa. Pide al cliente su *distrito* y su *direccion exacta* (calle y numero, o una referencia clara). Cuando la tengas, corre check_coverage con ese distrito: si da contraentrega, crea el pedido; si da agencia (Shalom), sigue la ruta de agencia con el adelanto de S/30. NUNCA registres un pedido contraentrega con la direccion en 'Por coordinar'.",
+          customerLookup,
+        });
+      }
+    }
+
     // Defensa anti-contraentrega en zona equivocada: re-verifica la cobertura con
     // check-coverage (fuente de verdad). Si la zona NO es contraentrega, no crea
     // la orden de pago-al-recibir; deriva a validacion logistica (Shalom/adelanto).
