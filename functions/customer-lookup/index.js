@@ -21,6 +21,7 @@ const AD_PRODUCT_MAP = {
   "120248370663120056": "prozenith-pro-capsules-capsulas-metabolicas-para-control-de-antojos-y-bienestar-metabolico-60-capsulas-superhuman™", // Controla tus antojos naturalmente (Prozenix Pro)
   "120248563525800056": "magnesio-12-en-1-complex-capsulas-para-energia-relajacion-muscular-y-bienestar-integral-120-capsulas-superhuman™", // 12 Tipos de Magnesio (Magnesio 12 en 1 Complex)
   "120248519247800056": "kojic-acid-turmeric-cleansing-pads",                          // Ilumina Tu Piel Apagada (variante -> KojicPads)
+  "120253082365510120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (asignacion TEMPORAL por el dueno mientras corrige el anuncio)
   // "Energia Sin Estimulantes" (120252904020210120): sin mapear a proposito; el
   // dueno va a corregir el anuncio. Agregar aqui cuando defina el producto real.
 };
