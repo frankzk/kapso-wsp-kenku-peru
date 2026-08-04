@@ -75,6 +75,7 @@ async function handleRequest(request, env = globalThis) {
       // retornaba aqui y el anuncio se perdia, dejando al bot sin saber el
       // producto (pedia link/captura en vez de reconocerlo).
       const adReferral = await fetchAdReferral(env, payload);
+      await alertUnmappedAd(env, adReferral, input.phone || "");
       return json({
         ok: true,
         found: false,
@@ -95,6 +96,7 @@ async function handleRequest(request, env = globalThis) {
       fetchAdReferral(env, payload),
       logAbLead(env, conversationId, abVariant(phone)),
     ]);
+    await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
       return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
     }
@@ -332,6 +334,44 @@ async function fetchAdReferral(env, payload) {
     // El referral es informativo: si falla, el lookup sigue sin el.
   }
   return null;
+}
+
+// Alerta en tiempo real: si un lead llega desde un anuncio (CTWA) cuyo ad_id NO
+// esta en AD_PRODUCT_MAP, el bot no puede reconocer el producto con seguridad.
+// Avisamos por Telegram (via notify-team) para mapearlo rapido. Determinístico:
+// corre al inicio de cada conversacion, no depende del LLM. Dedupe por ad_id
+// (1 aviso cada 6h) para no spamear si el mismo anuncio trae muchos leads.
+async function alertUnmappedAd(env, adReferral, phone) {
+  try {
+    const adId = adReferral && adReferral.adId;
+    if (!adId || AD_PRODUCT_MAP[adId]) return;
+    const apiKey = env.KAPSO_API_KEY || env.kAPSOAPIKEY || globalThis.KAPSO_API_KEY || "";
+    if (!apiKey) return;
+
+    const kv = env.KV || globalThis.KV;
+    const dedupeKey = `unmapped_ad_alert:${adId}`;
+    if (kv) {
+      if (await kv.get(dedupeKey)) return;
+      await kv.put(dedupeKey, "1", { expirationTtl: 6 * 60 * 60 });
+    }
+
+    const headline = String(adReferral.headline || "(sin titular)").slice(0, 120);
+    await fetch("https://api.kapso.ai/platform/v1/functions/00dd67bd-df4b-4477-af5c-2530c44a5b60/invoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify({
+        input: {
+          reason: "ANUNCIO SIN MAPEAR",
+          skipStoreWebhook: true,
+          phone: String(phone || ""),
+          product: headline,
+          note: `Anuncio "${headline}" (adId ${adId}) SIN producto asignado. Entro un cliente y el bot no puede reconocer el producto. Agrega este anuncio al mapa (pasale a Claude el adId + producto, o edita AD_PRODUCT_MAP).`,
+        },
+      }),
+    });
+  } catch {
+    // best-effort: nunca bloquea el lookup del cliente
+  }
 }
 
 function unwrapInput(payload) {

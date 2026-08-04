@@ -76,6 +76,9 @@ async function hmacHex(secret, body) {
 // real: reclamo / mayorista / "quiero un asesor"); el flujo de voucher (sin
 // reason) NO postea, para no pisar el estado del lead en el dashboard.
 async function postStoreHandoff(config, payload) {
+  // Alertas internas (ej. "anuncio sin mapear") solo van a Telegram, nunca al
+  // dashboard: no son handoffs reales y no deben tocar el estado del lead.
+  if (payload && payload.skipStoreWebhook) return;
   const url = config.storeWebhookUrl;
   if (!url) return;
   const reason = cleanValue(payload.reason);
