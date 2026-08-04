@@ -1,6 +1,18 @@
 const DEFAULT_SHOP_DOMAIN = "kenkuperu.myshopify.com";
 const DEFAULT_API_VERSION = "2026-04";
 
+// Mapa deterministico anuncio (CTWA) -> handle del producto real. El titular/
+// cuerpo del anuncio NO siempre resuelve por busqueda (ej. "Adios Irritacion
+// Post-Afeitado" o "hongos en pies" caian en productos equivocados o en un set
+// generico de suplementos), asi que fijamos el producto por el ad_id.
+// Para agregar un anuncio nuevo: pon su Source ID (ad_id) -> handle del producto.
+const AD_PRODUCT_MAP = {
+  "120248448610150056": "true-beauty-aceite-post-afeitado-donut-glaseado",           // Adios Irritacion Post-Afeitado
+  "120249183604400267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies
+  "120250561081440066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra
+  "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
+};
+
 // Busca al cliente en Shopify por telefono (o email) para reconocer clientes
 // recurrentes: si existe, devuelve sus datos y su direccion guardada para que
 // el bot solo CONFIRME la direccion en lugar de volver a pedir todos los datos.
@@ -55,7 +67,21 @@ async function handleRequest(request, env = globalThis) {
     const email = normalizeEmail(input.email || "");
 
     if (!phone && !email && !input.debugQuery) {
-      return json({ ok: false, found: false, reason: "missing_phone", message: "Falta el telefono (o email) del cliente para buscarlo." });
+      // Sin telefono no podemos buscar al cliente en Shopify, PERO si el lead
+      // vino de un anuncio (CTWA) igual debemos leer el adReferral: antes se
+      // retornaba aqui y el anuncio se perdia, dejando al bot sin saber el
+      // producto (pedia link/captura en vez de reconocerlo).
+      const adReferral = await fetchAdReferral(env, payload);
+      return json({
+        ok: true,
+        found: false,
+        reason: "missing_phone",
+        phone: null,
+        adReferral,
+        vars: buildFlowVars(null, null, adReferral, ""),
+        message: "No hay telefono para buscar al cliente en Shopify; tratalo como cliente nuevo."
+          + (adReferral ? " Llego desde un anuncio (adReferral): deduce el producto del headline/body del anuncio y presentalo directo; NO pidas link ni captura." : ""),
+      });
     }
 
     const config = getConfig(env);
@@ -226,6 +252,9 @@ function buildFlowVars(match, addressSummary, adReferral, phone) {
     ad_referral_source_type: adReferral?.sourceType || null,
     ad_referral_ad_id: adReferral?.adId || null,
     ad_referral_source_url: adReferral?.sourceUrl || null,
+    // Handle del producto EXACTO del anuncio (mapa deterministico por ad_id).
+    // Si viene, el bot debe presentar ESE producto y no adivinar por el titular.
+    ad_referral_product_handle: (adReferral?.adId && AD_PRODUCT_MAP[adReferral.adId]) || null,
     ab_variant: abVariant(phone),
   };
 }
