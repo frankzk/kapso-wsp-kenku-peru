@@ -21,6 +21,7 @@ const AD_PRODUCT_MAP = {
   "120253283957870120": "shampoo-de-cebolla-rebrota-fortalecimiento-capilar-y-control-de-caida-con-romero-y-canela", // Mas densidad, menos caida (Shampoo de Cebolla REBROTA — confirmado por el dueno)
   "120248136956750056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (Shampoo Biru Anticaspa)
   "120248136956730056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (variante -> Shampoo Biru Anticaspa)
+  "120248299887110056": "shampoo-biru-anticaspa-ideaslabco",                          // ¿Cansado de la caspa...? (variante -> Shampoo Biru Anticaspa)
   "120248446351820056": "truefem-balance-capsulas-para-el-equilibrio-hormonal-y-bienestar-femenino-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (TrueFem Balance)
   "120248592509430056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120248592492790056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
