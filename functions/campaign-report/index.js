@@ -52,11 +52,40 @@ async function handleRequest(request, env = globalThis) {
   // Guarda de acceso: si hay key configurada, exigirla. Si no hay key configurada,
   // bloquear por defecto (no exponer ventas por accidente).
   const provided = params.key || request.headers.get("x-dashboard-key") || "";
-  if (!config.dashboardKey || provided !== config.dashboardKey) {
+  const authorized = (config.dashboardKey && provided === config.dashboardKey)
+    || (config.internalKey && provided === config.internalKey);
+  if (!authorized) {
     const body = wantsJson
       ? json({ error: "unauthorized" }, 401)
       : html(renderUnauthorized(), 401);
     return body;
+  }
+
+  // Modo ligero SOLO conversion del bot (conversaciones nuevas -> pedidos del bot).
+  // Evita fetchMetaInsights (Meta no esta conectado y tumbaba el reporte). Devuelve
+  // 200 con los numeros y aisla errores por sub-fetch.
+  if (params.only === "conversion") {
+    const range = resolveRange(params);
+    let sales = null, salesErr = null, conv = null, convErr = null;
+    try { sales = await fetchOrderAggregates(config, range); } catch (e) { salesErr = safeError(e); }
+    try { conv = await fetchConversationStats(config, range); } catch (e) { convErr = safeError(e); }
+    const convByDay = conv && conv.byDay instanceof Map ? Object.fromEntries(conv.byDay) : {};
+    const ordByDay = sales && sales.whatsappOrdersByDay instanceof Map ? Object.fromEntries(sales.whatsappOrdersByDay) : {};
+    const days = [...new Set([...Object.keys(convByDay), ...Object.keys(ordByDay)])].sort();
+    const perDay = days.map((d) => {
+      const c = convByDay[d] || 0, o = ordByDay[d] || 0;
+      return { day: d, conversations: c, botOrders: o, rate: c > 0 ? round2(o / c) : null };
+    });
+    const conversations = conv ? conv.total : null;
+    const botOrders = sales ? sales.whatsappOrders : null;
+    const conversionRate = (conversations && botOrders != null) ? round2(botOrders / conversations) : null;
+    return json({
+      ok: true,
+      range: { since: range.since, until: range.until, days: range.days },
+      conversations, botOrders, conversionRate,
+      perDay,
+      notes: { convTruncated: conv && conv.truncated, convStatsError: conv && conv.error, salesErr, convErr },
+    }, 200);
   }
 
   try {
@@ -113,6 +142,9 @@ function getConfig(env = globalThis) {
     metaAdAccountId: normalizeAdAccountId(g("META_AD_ACCOUNT_ID", "mETAADACCOUNTID")),
     metaApiVersion: g("META_API_VERSION", "mETAAPIVERSION") || DEFAULT_META_API_VERSION,
     dashboardKey: g("DASHBOARD_ACCESS_KEY", "dASHBOARDACCESSKEY"),
+    // Segunda llave SOLO para reportes internos (no toca la del dashboard ni el
+    // job de Telegram). Permite correr el reporte JSON sin exponer la key publica.
+    internalKey: g("INTERNAL_REPORT_KEY", "iNTERNALREPORTKEY"),
     kapsoApiKey: g("KAPSO_API_KEY", "kAPSOAPIKEY"),
     kapsoApiBase: g("KAPSO_API_BASE", "kAPSOAPIBASE") || "https://api.kapso.ai",
     phoneNumberIds: parsePhoneIds(g("WHATSAPP_PHONE_NUMBER_IDS", "wHATSAPPPHONENUMBERIDS")),
