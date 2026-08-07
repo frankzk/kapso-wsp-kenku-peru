@@ -19,6 +19,7 @@ const AD_PRODUCT_MAP = {
   "120253592159250066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592159230066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592247790066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
+  "120253592159130066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120246240033570250": "feel-virgin-gel-intimo-reafirmante-e-hidratante-con-aloe-vera-y-acido-hialuronico-30-ml", // FEEL VIRGIN – Gel Intimo
   "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
@@ -32,6 +33,7 @@ const AD_PRODUCT_MAP = {
   "120248592492790056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120248645582130056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120253351277920120": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas", // Piernas menos pesadas al final del dia (Cayenne Pepper)
+  "120253351779620120": "suplemento-natural-para-higado-y-puede-favorecer-el-drenaje-del", // Drenaje linfatico suave y natural (LINFOVIT - Higado y Drenaje Linfatico)
   "120253239645720120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+)
   "120253239652220120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+, variante)
   "120248370663120056": "prozenith-pro-capsules-capsulas-metabolicas-para-control-de-antojos-y-bienestar-metabolico-60-capsulas-superhuman™", // Controla tus antojos naturalmente (Prozenix Pro)
