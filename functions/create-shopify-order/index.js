@@ -80,6 +80,20 @@ async function handleRequest(request, env = globalThis) {
       }
     }
 
+    // Requisito duro: telefono de contacto REAL. Los leads que entran por
+    // username de WhatsApp no traen numero, y el flujo llegaba a crear el
+    // pedido con phone vacio: quedaba un cliente con direccion completa al que
+    // era IMPOSIBLE contactar para coordinar la entrega. Sin celular valido no
+    // hay pedido; se pide y despues se reintenta.
+    if (!dryRun && !isPeruMobile(orderInput.phone || input.phone)) {
+      return json({
+        ok: false,
+        reason: "phone_missing",
+        message: "No registro el pedido: falta el numero de celular del cliente. Este chat NO expone telefono (entro por username de WhatsApp), asi que no podemos coordinar la entrega ni contactarlo si se corta la conversacion. Pideselo de forma natural y directa: \"Para coordinar la entrega necesito tu *numero de celular* 📱 ¿Cual es?\". Debe ser un celular peruano de 9 digitos que empiece con 9. Cuando lo tengas, vuelve a llamar create_shopify_order incluyendo ese numero en el campo phone.",
+        customerLookup,
+      });
+    }
+
     // Defensa anti-contraentrega en zona equivocada: re-verifica la cobertura con
     // check-coverage (fuente de verdad). Si la zona NO es contraentrega, no crea
     // la orden de pago-al-recibir; deriva a validacion logistica (Shalom/adelanto).
@@ -1309,6 +1323,14 @@ function normalizePhone(value) {
 
 function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
+}
+
+// Celular peruano valido: 9 digitos que empiezan en 9 (con o sin prefijo 51).
+// Distingue un numero real de un vacio o de un placeholder tipo "por coordinar".
+function isPeruMobile(value) {
+  let digits = phoneDigits(value);
+  if (digits.startsWith("51") && digits.length === 11) digits = digits.slice(2);
+  return digits.length === 9 && digits.startsWith("9");
 }
 
 function samePhoneDigits(a, b) {

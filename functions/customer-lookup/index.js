@@ -113,8 +113,12 @@ async function handleRequest(request, env = globalThis) {
         reason: "missing_phone",
         phone: null,
         adReferral,
-        vars: buildFlowVars(null, null, adReferral, ""),
+        vars: buildFlowVars(null, null, adReferral, "", contactIdentity(input)),
         message: "No hay telefono para buscar al cliente en Shopify; tratalo como cliente nuevo."
+          + " ESTE LEAD NO TIENE CELULAR (entro por username de WhatsApp): no podemos contactarlo"
+          + " fuera del chat ni coordinar la entrega. Pide su numero de celular JUNTO con la"
+          + " direccion, en el mismo mensaje, apenas llegues a datos de envio. NO cierres el"
+          + " pedido sin el."
           + (adReferral ? " Llego desde un anuncio (adReferral): deduce el producto del headline/body del anuncio y presentalo directo; NO pidas link ni captura." : ""),
       });
     }
@@ -140,7 +144,7 @@ async function handleRequest(request, env = globalThis) {
         phone: phone || null,
         email: email || null,
         adReferral,
-        vars: buildFlowVars(null, null, adReferral, phone),
+        vars: buildFlowVars(null, null, adReferral, phone, contactIdentity(input)),
         message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente."
           + (adReferral ? " OJO: llego desde un anuncio (adReferral); si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
       });
@@ -180,7 +184,7 @@ async function handleRequest(request, env = globalThis) {
         : null,
       addressSummary,
       adReferral,
-      vars: buildFlowVars(match, addressSummary, adReferral, phone),
+      vars: buildFlowVars(match, addressSummary, adReferral, phone, contactIdentity(input)),
       hint: (ordersCount > 0
         ? "Cliente recurrente: saludalo con cercania y, al llegar al envio, CONFIRMA la direccion guardada en vez de pedir todos los datos de nuevo."
         : "Cliente registrado sin pedidos previos: confirma sus datos guardados antes de usarlos.")
@@ -277,8 +281,14 @@ async function shopifyGraphql(config, query, variables) {
 // (clave "vars"): asi el resultado queda disponible via get_variable tanto si
 // la funcion corre como nodo del workflow (init-customer) como si la llama el
 // agente como herramienta.
-function buildFlowVars(match, addressSummary, adReferral, phone) {
+function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
+  // Lead SIN telefono: llego por username de WhatsApp. No tenemos como
+  // contactarlo fuera del chat ni coordinar la entrega, asi que el bot debe
+  // pedir el celular COMO PARTE de los datos de envio (no al final).
+  const needsPhone = !isPeruMobile(phone);
   return {
+    needs_phone: needsPhone,
+    contact_username: contact.username || null,
     known_customer_found: Boolean(match),
     known_customer_name: match?.firstName || match?.displayName || null,
     known_customer_id: match?.id || null,
@@ -411,10 +421,23 @@ function unwrapInput(payload) {
 }
 
 function enrichPhoneFromContext(input, payload) {
-  if (input.phone) return;
   const p = payload || {};
+  // Identidad alterna del contacto: los leads que llegan por USERNAME de
+  // WhatsApp (Meta 2026) no exponen telefono — solo username y
+  // business_scoped_user_id. La guardamos siempre para que el flujo sepa
+  // distinguir "no tengo telefono" de "no lo busque".
+  const convo = p.whatsapp_context?.conversation || {};
+  if (!input.username) {
+    input.username = convo.username || p.execution_context?.context?.username || null;
+  }
+  if (!input.businessScopedUserId) {
+    input.businessScopedUserId = convo.business_scoped_user_id
+      || p.execution_context?.context?.business_scoped_user_id
+      || null;
+  }
+  if (input.phone) return;
   const phone =
-    p.whatsapp_context?.conversation?.phone_number ||
+    convo.phone_number ||
     p.execution_context?.context?.phone_number ||
     p.execution_context?.context?.contact?.phone_number;
   if (phone) input.phone = phone;
@@ -440,6 +463,21 @@ function normalizePhone(value) {
 
 function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
+}
+
+function contactIdentity(input) {
+  return {
+    username: input?.username || null,
+    businessScopedUserId: input?.businessScopedUserId || null,
+  };
+}
+
+// Celular peruano valido: 9 digitos que empiezan en 9 (con o sin prefijo 51).
+// Sirve para distinguir un numero real de un vacio o de un placeholder.
+function isPeruMobile(value) {
+  let digits = phoneDigits(value);
+  if (digits.startsWith("51") && digits.length === 11) digits = digits.slice(2);
+  return digits.length === 9 && digits.startsWith("9");
 }
 
 function samePhoneDigits(a, b) {
