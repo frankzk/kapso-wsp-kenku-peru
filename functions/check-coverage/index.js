@@ -212,7 +212,7 @@ async function handleRequest(request, env = globalThis) {
   const payload = await readJson(request);
 
   // Debug/mantenimiento del watchdog (invocacion directa con X-API-Key).
-  if (payload.watchdogDebug || payload.watchdogSeed || payload.forceSweep) {
+  if (payload.watchdogDebug || payload.watchdogSeed || payload.forceSweep || payload.forceLeakSweep || payload.leakTestAlert) {
     return watchdogAdmin(payload, env);
   }
 
@@ -224,6 +224,7 @@ async function handleRequest(request, env = globalThis) {
     // de clientes sin respuesta (compuerta KV: max 1 barrido cada 10 min).
     const routed = await routeFollowup(payload, env);
     try { await maybeRunWatchdog(env); } catch { /* nunca romper el ruteo */ }
+    try { await maybeRunLeakDetector(env); } catch { /* nunca romper el ruteo */ }
     return routed;
   }
 
@@ -874,6 +875,174 @@ function parseChatIds(...values) {
   return out;
 }
 
+// ============================================================================
+// DETECTOR DE NARRACION FILTRADA
+// El agente corre con message_delivery_mode="tool_only": no tiene canal de texto
+// libre, asi que todo lo que "dice" sale por una herramienta de envio. Un modelo
+// chico mete ahi su razonamiento y el cliente lee "Ambos valores existen, asi que
+// procedo con el product_media_lookup" o "Ahora completo la tarea".
+// send-text lo bloquea por codigo, pero Kapso OBLIGA a mantener habilitada
+// send_notification_to_user (es el canal de entrega del modo tool_only), asi que
+// queda un bypass. Este barrido detecta lo que se escape y avisa por Telegram.
+// ============================================================================
+
+const LEAK_SWEEP_INTERVAL_MS = 5 * 60 * 1000;   // max un barrido cada 5 min
+const LEAK_LOOKBACK_MS = 20 * 60 * 1000;        // ventana inicial si no hay barrido previo
+const LEAK_ALERT_TTL_S = 24 * 60 * 60;          // no repetir el mismo mensaje en 24h
+const LEAK_MAX_CONVOS = 25;                     // tope de conversaciones por barrido
+const LEAK_MAX_ALERTS = 5;                      // tope de avisos por barrido
+
+// Nombres de herramientas internas: jamas aparecen en un mensaje legitimo.
+const LEAK_TOOL_NAMES = [
+  "complete_task", "handoff_to_human", "save_variable", "get_variable",
+  "enter_waiting", "send_media", "send_notification_to_user", "send_text",
+  "get_whatsapp_context", "get_current_datetime", "get_execution_metadata",
+  "product_media_lookup", "shopify_product_lookup", "check_coverage",
+  "create_shopify_order", "customer_lookup", "send_buttons", "send_payment",
+  "quote_order", "notify_team", "loop_guard",
+];
+
+// Frases de proceso. Ancladas para no pisar texto legitimo ("te paso el precio",
+// "te vamos a llamar a tu numero", "paso a paso" NO deben caer aca).
+const LEAK_PATTERNS = [
+  /\bprocedo\s+con\b/i,
+  /\bahora\s+(procedo|llamo|completo|envio|uso)\b/i,
+  /\bvoy\s+a\s+(llamar|usar|ejecutar|invocar)\b/i,
+  /\bprimero\s+(llamo|voy\s+a\s+llamar)\b/i,
+  /\bpaso\s+\d+\s*:/i,
+  /\bel\s+resultado\s+(muestra|devolvio|indica)\b/i,
+  /\bambos\s+valores\s+existen\b/i,
+  /\bla\s+herramienta\s+(devolvio|indica|dice)\b/i,
+  /\b(el\s+)?lookup\s+(devolvio|muestra)\b/i,
+  /\bcompleto\s+la\s+tarea\b/i,
+];
+
+function textLeaksReasoning(text) {
+  const value = String(text || "");
+  if (!value.trim()) return false;
+  const lower = value.toLowerCase();
+  for (const tool of LEAK_TOOL_NAMES) {
+    if (lower.includes(tool)) return true;
+  }
+  for (const re of LEAK_PATTERNS) {
+    if (re.test(value)) return true;
+  }
+  return false;
+}
+
+async function maybeRunLeakDetector(env, { force = false, sinceMs, maxConvos } = {}) {
+  if (!env?.KV) return { ran: false, reason: "no_kv" };
+  const now = Date.now();
+  const last = Number(await env.KV.get("leakdetect:last_sweep") || 0);
+  if (!force && now - last < LEAK_SWEEP_INTERVAL_MS) return { ran: false, reason: "gated" };
+  await env.KV.put("leakdetect:last_sweep", String(now), { expirationTtl: 3600 });
+
+  const cfg = await watchdogConfig(env);
+  if (!cfg.kapsoApiKey || !cfg.telegramToken || !cfg.telegramChatId) {
+    return { ran: false, reason: "missing_credentials" };
+  }
+  const since = Number.isFinite(sinceMs)
+    ? sinceMs
+    : (last ? last - 60 * 1000 : now - LEAK_LOOKBACK_MS); // 1 min de solape
+  return leakSweep(cfg, env, now, since, maxConvos || LEAK_MAX_CONVOS);
+}
+
+async function leakSweep(cfg, env, now, since, maxConvos = LEAK_MAX_CONVOS) {
+  const found = [];
+  let inspected = 0;
+
+  for (const phoneId of WATCHDOG_PHONE_IDS) {
+    if (inspected >= maxConvos) break;
+    let convos = [];
+    try {
+      const url = `${cfg.kapsoApiBase}/platform/v1/whatsapp/conversations`
+        + `?phone_number_id=${encodeURIComponent(phoneId)}&limit=100`;
+      const res = await fetch(url, { headers: { "X-API-Key": cfg.kapsoApiKey } });
+      if (!res.ok) continue;
+      convos = (await res.json())?.data || [];
+    } catch { continue; }
+
+    // La lista viene ordenada por recencia y el filtro last_active_after de la API
+    // NO filtra (devuelve siempre el limite), asi que acotamos por fecha aca y
+    // cortamos apenas salimos de la ventana.
+    for (const convo of convos) {
+      if (inspected >= maxConvos) break;
+      const active = Date.parse(convo.last_active_at || convo.updated_at || "");
+      if (!Number.isFinite(active)) continue;
+      if (active < since) break;
+      inspected += 1;
+
+      let messages = [];
+      try {
+        const mUrl = `${cfg.kapsoApiBase}/meta/whatsapp/v24.0/${encodeURIComponent(phoneId)}`
+          + `/messages?conversation_id=${encodeURIComponent(convo.id)}&limit=25`;
+        const mRes = await fetch(mUrl, { headers: { "X-API-Key": cfg.kapsoApiKey } });
+        if (!mRes.ok) continue;
+        const body = await mRes.json();
+        messages = body?.data || body?.messages || [];
+      } catch { continue; }
+
+      for (const msg of messages) {
+        const meta = msg.kapso || {};
+        if (meta.direction !== "outbound") continue;
+        const text = (msg.text && msg.text.body) || "";
+        if (!textLeaksReasoning(text)) continue;
+
+        const stamp = Number(meta.timestamp || msg.timestamp || 0) * 1000;
+        if (Number.isFinite(stamp) && stamp > 0 && stamp < since) continue; // viejo
+        found.push({
+          id: msg.id || meta.last_message_id || `${convo.id}:${text.slice(0, 24)}`,
+          name: convo.contact_name || convo.phone_number || convo.username || "?",
+          conversationId: convo.id,
+          text: text.slice(0, 180),
+        });
+      }
+    }
+  }
+
+  // Dedupe: cada mensaje filtrado se avisa una sola vez.
+  const fresh = [];
+  for (const item of found) {
+    const key = `leakdetect:alerted:${item.id}`;
+    if (await env.KV.get(key)) continue;
+    await env.KV.put(key, "1", { expirationTtl: LEAK_ALERT_TTL_S });
+    fresh.push(item);
+    if (fresh.length >= LEAK_MAX_ALERTS) break;
+  }
+
+  if (!fresh.length) return { ran: true, inspected, found: found.length, alerted: 0 };
+
+  await sendLeakAlert(cfg, fresh);
+  return { ran: true, inspected, found: found.length, alerted: fresh.length };
+}
+
+// Envia el aviso de narracion filtrada a todos los chats de Telegram del equipo.
+// Un chat que falle no corta el envio a los demas.
+async function sendLeakAlert(cfg, items, { test = false } = {}) {
+  const lines = items.map((f) => `• *${f.name}*\n  _"${f.text}"_`);
+  const head = test
+    ? "🧪 *PRUEBA del detector de narracion* (ignorar)"
+    : "🐛 *El bot filtro su razonamiento al cliente*";
+  const foot = test
+    ? "Si lees esto, el aviso funciona: un caso real llegara igual."
+    : "Salio por send_notification_to_user (send_text si lo bloquea). Revisa la conversacion en Kapso.";
+  const text = `${head}\n\n${lines.join("\n")}\n\n${foot}`;
+  const chats = cfg.telegramChatIds && cfg.telegramChatIds.length ? cfg.telegramChatIds : [cfg.telegramChatId];
+  let sent = 0;
+  for (const chatId of chats) {
+    if (!chatId) continue;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+      });
+      if (res.ok) sent += 1;
+    } catch { /* un chat caido no corta los demas */ }
+  }
+  return sent;
+}
+
 async function maybeRunWatchdog(env, { force = false } = {}) {
   if (!env?.KV) return { ran: false, reason: "no_kv" };
   if (!force && isQuietHourPeru()) return { ran: false, reason: "quiet_hours" };
@@ -1033,6 +1202,26 @@ async function watchdogAdmin(payload, env) {
     const result = await maybeRunWatchdog(env, { force: true });
     return json({ ok: true, ...result });
   }
+  // Prueba del canal de aviso: manda una alerta de ejemplo por el mismo camino
+  // que usaria un leak real (misma config, mismo formato). Solo para verificar.
+  if (payload.leakTestAlert) {
+    const cfg = await watchdogConfig(env);
+    if (!cfg.telegramToken || !cfg.telegramChatId) return json({ ok: false, reason: "missing_credentials" });
+    const sample = [{ name: "PRUEBA (no es un caso real)", text: "Ambos valores existen, asi que procedo con el product_media_lookup" }];
+    const sent = await sendLeakAlert(cfg, sample, { test: true });
+    return json({ ok: true, testAlertSent: sent });
+  }
+  if (payload.forceLeakSweep) {
+    // leakSweepMinutes: ventana hacia atras solo para pruebas manuales.
+    const minutes = Number(payload.leakSweepMinutes);
+    const maxConvos = Number(payload.leakMaxConvos);
+    const result = await maybeRunLeakDetector(env, {
+      force: true,
+      sinceMs: Number.isFinite(minutes) && minutes > 0 ? Date.now() - minutes * 60 * 1000 : undefined,
+      maxConvos: Number.isFinite(maxConvos) && maxConvos > 0 ? maxConvos : undefined,
+    });
+    return json({ ok: true, ...result });
+  }
   const cfg = await watchdogConfig(env);
   return json({
     ok: true,
@@ -1048,6 +1237,10 @@ globalThis.__kenkuCheckCoverage = {
   maybeRunWatchdog,
   watchdogSweep,
   watchdogConfig,
+  maybeRunLeakDetector,
+  leakSweep,
+  sendLeakAlert,
+  textLeaksReasoning,
   cleanDistrictText,
   detectCourier,
   isSpecificShalomAgency,
