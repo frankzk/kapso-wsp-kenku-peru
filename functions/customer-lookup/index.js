@@ -51,6 +51,61 @@ const AD_PRODUCT_MAP = {
   "120253082365500120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (el creativo es el serum de hongos; el titular del enlace es de otro producto)
 };
 
+// Respaldo por TITULAR del anuncio. Meta genera variantes del mismo creativo con
+// adIds nuevos, y cada variante entraba sin mapear: el cliente quedaba mal
+// atendido hasta que alguien agregaba el id a mano. Estos titulares identifican
+// el producto sin ambiguedad, asi que una variante nueva se resuelve sola.
+//
+// SOLO titulares inequivocos. Quedan FUERA a proposito:
+//  - "Recupera Tu Equilibrio Diario": el mismo titular se uso para TrueFem
+//    Balance y para Saffron+ Advanced. Sin el adId no se puede decidir.
+//  - "Energia Sin Estimulantes": el titular no corresponde al creativo (el video
+//    es el serum de hongos). Una variante futura si podria ser un energizante.
+// Ante la duda, NO agregar: es preferible la alerta y que lo confirme el dueno.
+const AD_HEADLINE_MAP = {
+  "elimina hongos en pies": "nails-repairing-suero-reparador-de-unas",
+  "adios irritacion post-afeitado": "true-beauty-aceite-post-afeitado-donut-glaseado",
+  "el poder de la semilla negra": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels",
+  "ilumina tu piel apagada": "kojic-acid-turmeric-cleansing-pads",
+  "controla tus antojos naturalmente": "prozenith-pro-capsules-capsulas-metabolicas-para-control-de-antojos-y-bienestar-metabolico-60-capsulas-superhuman™",
+  "12 tipos de magnesio": "magnesio-12-en-1-complex-capsulas-para-energia-relajacion-muscular-y-bienestar-integral-120-capsulas-superhuman™",
+  "potencia tu enfoque diario": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad",
+  "drenaje linfatico suave y natural": "suplemento-natural-para-higado-y-puede-favorecer-el-drenaje-del",
+  "piernas menos pesadas al final del dia": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas",
+  "revive tu cabello": "keratina-romero-ortiga-biotina-champu-nutritivo-y-regenerador-para-cabello-grueso-y-voluminoso-220-ml-tgideas™",
+  "cansado de la caspa": "shampoo-biru-anticaspa-ideaslabco",
+  "mas densidad menos caida": "shampoo-de-cebolla-rebrota-fortalecimiento-capilar-y-control-de-caida-con-romero-y-canela",
+  "recupera fuerza y densidad": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™",
+  "feel virgin": "feel-virgin-gel-intimo-reafirmante-e-hidratante-con-aloe-vera-y-acido-hialuronico-30-ml",
+};
+
+// Normaliza un titular para comparar: sin acentos, sin emojis ni signos, en
+// minusculas y con espacios colapsados.
+function normalizeHeadline(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Resuelve el producto del anuncio: primero por adId (autoritativo, lo confirma
+// el dueno), y si no esta, por titular. Devuelve null si ninguno resuelve.
+function resolveAdProductHandle(adReferral) {
+  const adId = adReferral && adReferral.adId;
+  if (adId && AD_PRODUCT_MAP[adId]) return { handle: AD_PRODUCT_MAP[adId], via: "ad_id" };
+  const headline = normalizeHeadline(adReferral && adReferral.headline);
+  if (!headline) return null;
+  for (const [key, handle] of Object.entries(AD_HEADLINE_MAP)) {
+    // La clave tambien se normaliza, asi no importa como este escrita en el mapa
+    // (acentos, guiones, comas). Contencion porque los titulares reales traen
+    // emojis o texto extra ("❄️ ¿Cansado de la caspa que aparece todo el tiempo?").
+    if (headline.includes(normalizeHeadline(key))) return { handle, via: "headline" };
+  }
+  return null;
+}
+
 // Busca al cliente en Shopify por telefono (o email) para reconocer clientes
 // recurrentes: si existe, devuelve sus datos y su direccion guardada para que
 // el bot solo CONFIRME la direccion en lugar de volver a pedir todos los datos.
@@ -302,9 +357,11 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
     ad_referral_source_type: adReferral?.sourceType || null,
     ad_referral_ad_id: adReferral?.adId || null,
     ad_referral_source_url: adReferral?.sourceUrl || null,
-    // Handle del producto EXACTO del anuncio (mapa deterministico por ad_id).
-    // Si viene, el bot debe presentar ESE producto y no adivinar por el titular.
-    ad_referral_product_handle: (adReferral?.adId && AD_PRODUCT_MAP[adReferral.adId]) || null,
+    // Handle del producto EXACTO del anuncio: por ad_id si esta mapeado, si no
+    // por titular inequivoco. Si viene, el bot debe presentar ESE producto y no
+    // adivinar. ad_referral_match_via dice cual de los dos lo resolvio.
+    ad_referral_product_handle: resolveAdProductHandle(adReferral)?.handle || null,
+    ad_referral_match_via: resolveAdProductHandle(adReferral)?.via || null,
     ab_variant: abVariant(phone),
   };
 }
@@ -401,16 +458,23 @@ async function alertUnmappedAd(env, adReferral, phone) {
     }
 
     const headline = String(adReferral.headline || "(sin titular)").slice(0, 120);
+    // Si el respaldo por titular ya lo resolvio, el cliente NO quedo mal
+    // atendido: la alerta es solo para que se fije el adId en el mapa.
+    const fallback = resolveAdProductHandle(adReferral);
+    const covered = fallback && fallback.via === "headline";
+    const note = covered
+      ? `Anuncio "${headline}" (adId ${adId}) sin adId en el mapa, PERO el respaldo por titular lo resolvio a "${fallback.handle}": el cliente si fue atendido con el producto correcto. Agrega el adId al mapa cuando puedas (no es urgente).`
+      : `Anuncio "${headline}" (adId ${adId}) SIN producto asignado y el titular tampoco lo resuelve. El bot NO puede reconocer el producto y el cliente queda mal atendido. Pasale a Claude el adId + producto.`;
     await fetch("https://api.kapso.ai/platform/v1/functions/00dd67bd-df4b-4477-af5c-2530c44a5b60/invoke", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
         input: {
-          reason: "ANUNCIO SIN MAPEAR",
+          reason: covered ? "ANUNCIO SIN MAPEAR (cubierto por titular)" : "ANUNCIO SIN MAPEAR",
           skipStoreWebhook: true,
           phone: String(phone || ""),
           product: headline,
-          note: `Anuncio "${headline}" (adId ${adId}) SIN producto asignado. Entro un cliente y el bot no puede reconocer el producto. Agrega este anuncio al mapa (pasale a Claude el adId + producto, o edita AD_PRODUCT_MAP).`,
+          note,
         },
       }),
     });
