@@ -537,7 +537,7 @@ async function fetchAbTest(env, range) {
     // (ab_lead:<YYYY-MM-DD>:<A|B>:<id>), asi que basta con listar: un kv.get por
     // clave tumbaba al worker cuando habia miles de leads acumulados.
     const tally = { A: { leads: 0, orders: 0 }, B: { leads: 0, orders: 0 } };
-    for (const [prefix, field] of [["ab_lead:", "leads"], ["ab_order:", "orders"]]) {
+    for (const [prefix, field] of [["abx_lead:", "leads"], ["abx_order:", "orders"]]) {
       let cursor;
       for (let page = 0; page < 20; page += 1) {
         const list = await kv.list({ prefix, cursor, limit: 1000 });
