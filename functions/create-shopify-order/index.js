@@ -1116,7 +1116,10 @@ async function logAbOrder(env, orderName, variant, conversationId) {
   try {
     const kv = env?.KV || globalThis.KV;
     if (!kv || !orderName || !variant) return;
-    await kv.put(`ab_order:${orderName}`, JSON.stringify({ variant, conversationId: conversationId || null, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    // Fecha (dia Lima) y variante EN EL NOMBRE de la clave: el reporte cuenta
+    // listando, sin un kv.get por clave.
+    const day = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    await kv.put(`ab_order:${day}:${variant}:${orderName}`, JSON.stringify({ variant, conversationId: conversationId || null, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
   } catch {
     // best effort
   }

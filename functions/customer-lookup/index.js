@@ -389,11 +389,20 @@ function abVariant(phone) {
 // Registra el lead A/B una sola vez por conversacion (clave idempotente por
 // conversationId; si ya existe, no reescribe para conservar la fecha original).
 // campaign-report agrega estos eventos para comparar conversion por variante.
+// Dia calendario en Lima (UTC-5, sin DST) en formato YYYY-MM-DD.
+function limaDayNow() {
+  return new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 async function logAbLead(env, conversationId, variant) {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv || !conversationId || !variant) return;
-    const key = `ab_lead:${conversationId}`;
+    // La fecha (dia Lima) y la variante van EN EL NOMBRE de la clave: asi el
+    // reporte cuenta listando y no necesita un kv.get por clave (con miles de
+    // leads eso tumbaba al worker). El valor queda por si hace falta depurar.
+    const day = limaDayNow();
+    const key = `ab_lead:${day}:${variant}:${conversationId}`;
     if (await kv.get(key)) return;
     await kv.put(key, JSON.stringify({ variant, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
   } catch {

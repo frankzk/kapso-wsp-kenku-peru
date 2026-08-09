@@ -62,6 +62,21 @@ async function handleRequest(request, env = globalThis) {
     return body;
   }
 
+  // Modo ligero SOLO prueba A/B. El reporte completo se cae cuando Meta no esta
+  // conectado, asi que la lectura del experimento va aislada aca.
+  if (params.only === "ab") {
+    const range = resolveRange(params);
+    const ab = await fetchAbTest(env, range);
+    const lift = (ab && ab.A && ab.B && ab.A.rate && ab.B.rate) ? round2(ab.B.rate / ab.A.rate - 1) : null;
+    return json({
+      ok: true,
+      range: { since: range.since, until: range.until, days: range.days },
+      ab,
+      liftBvsA: lift,
+      note: "A = control (pide ubicacion tras el precio). B = cierre rapido (precio + cantidad juntos).",
+    }, 200);
+  }
+
   // Modo ligero SOLO conversion del bot (conversaciones nuevas -> pedidos del bot).
   // Evita fetchMetaInsights (Meta no esta conectado y tumbaba el reporte). Devuelve
   // 200 con los numeros y aisla errores por sub-fetch.
@@ -518,21 +533,21 @@ async function fetchAbTest(env, range) {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv) return { available: false };
-    const sinceMs = new Date(`${range.since}T00:00:00-05:00`).getTime();
-    const untilMs = new Date(`${range.until}T23:59:59-05:00`).getTime();
-    const inRange = (at) => { const t = Date.parse(at || ""); return Number.isFinite(t) && t >= sinceMs && t <= untilMs; };
-
+    // Las claves llevan la fecha y la variante en el NOMBRE
+    // (ab_lead:<YYYY-MM-DD>:<A|B>:<id>), asi que basta con listar: un kv.get por
+    // clave tumbaba al worker cuando habia miles de leads acumulados.
     const tally = { A: { leads: 0, orders: 0 }, B: { leads: 0, orders: 0 } };
     for (const [prefix, field] of [["ab_lead:", "leads"], ["ab_order:", "orders"]]) {
       let cursor;
-      for (let page = 0; page < 10; page += 1) {
+      for (let page = 0; page < 20; page += 1) {
         const list = await kv.list({ prefix, cursor, limit: 1000 });
         for (const entry of list.keys || []) {
-          const raw = await kv.get(entry.name);
-          if (!raw) continue;
-          let rec; try { rec = JSON.parse(raw); } catch { continue; }
-          if (!inRange(rec.at)) continue;
-          if (tally[rec.variant]) tally[rec.variant][field] += 1;
+          const parts = String(entry.name || "").split(":");
+          const day = parts[1];
+          const variant = parts[2];
+          if (!day || !tally[variant]) continue;          // formato viejo: se ignora
+          if (day < range.since || day > range.until) continue;
+          tally[variant][field] += 1;
         }
         if (list.list_complete || !list.cursor) break;
         cursor = list.cursor;
