@@ -21,7 +21,10 @@
   `function_slug` → `function_id` (eso lo hace el CLI en `kapso push`). Antes
   de enviar, rellenar `function_id` en los decide de tipo function y en cada
   item de `flow_agent_function_tools`, y verificar después con GET que ninguna
-  referencia quede en null. IDs de funciones del proyecto Kenku:
+  referencia quede en null. Para eso está
+  `node scripts/build-api-definition.mjs <dir-del-workflow>`, que inyecta los
+  ids y aborta si algún slug no está mapeado. IDs de funciones del proyecto
+  Kenku:
   shopify-product-lookup=21cd24f1-ed57-4303-988c-043bf4bc8069,
   product-media-lookup=d4e6365e-4736-4e92-872a-259adb6634f2,
   quote-order=ae2db7b7-918c-4b73-b36e-979668920347,
@@ -61,11 +64,29 @@
   campaign-report; Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
 
+## Workflows del proyecto
+
+- `kenku-sales-bot` — bot de ventas. Trigger en el Sandbox
+  (`597907523413541`). Es el workflow grande (43 nodos, prompt de ~370 líneas).
+- `kenku-recovery-bot` — recuperación de pedidos retornados (contraentrega
+  fallida). Trigger en **Kenku 630** (`1241670942359671`). La plantilla
+  `recuperacion_pedido_retornado` la dispara Kapta desde fuera; el workflow
+  arranca cuando el cliente responde. Objetivo único: cobrar el adelanto de
+  S/30 por Yape y reenviar por Shalom. Ver
+  `workflows/kenku-recovery-bot/README.md`.
+- **No mezclar los dos**: cada uno está atado a un `phoneNumberId` distinto.
+  Si algún día el 630 también atiende ventas, hay que meter un router de
+  entrada, no duplicar triggers.
+
 ## Datos del proyecto Kenku
 
-- phoneNumberId actual: `597907523413541` (Sandbox WhatsApp de Kapso, para
-  pruebas). Al conectar el número definitivo, reemplazarlo en todo el repo y
-  en `wHATSAPPPHONENUMBERIDS` del yaml de campaign-report.
+- Números de WhatsApp: `597907523413541` (Sandbox, pruebas del sales-bot) y
+  `1241670942359671` = **Kenku 630**, +51 935 903 630, producción, config
+  `9f077d88-6cf0-4e7f-9461-78ed292e2041` (recuperación de retornados).
+  Al conectar el número definitivo de ventas, reemplazar el sandbox en todo el
+  repo y en `wHATSAPPPHONENUMBERIDS` del yaml de campaign-report.
+- Adelanto de S/30 (Shalom y recuperación): Yape **930 555 309**, titular
+  **Grupo GF SAC**. Confirmado por el dueño el 2026-08-09.
 - Los `functions/**/function.yaml` están gitignorados (contienen secretos);
   la config vive en Kapso y en la copia local del usuario.
 - Productos estrella para enganche: *Black Seed Oil* y *NAD+ Resveratrol*.

@@ -87,9 +87,9 @@ Referencia: los valores actuales están en el proyecto Aurela
 
 ## Para revisar (decisiones de negocio heredadas de Aurela)
 
-- **Yape / razón social** en `functions/check-coverage/index.js` (envíos Shalom):
-  quedó "Yape: Grupo GF SAC (razón social de Kenku) · 930 555 309". Verificar
-  que la razón social y el número de Yape apliquen también a Kenku.
+- ~~**Yape / razón social**~~ ✅ Confirmado por el dueño el 2026-08-09: el
+  adelanto de S/30 va al Yape **930 555 309**, titular **Grupo GF SAC**. Aplica
+  tanto a los envíos Shalom del sales-bot como al `kenku-recovery-bot`.
 - **Promos 3x2 / 5x3** y envío gratis desde S/40: los prompts y `quote-order`
   las asumen. Confirmar que Kenku mantiene las mismas promociones.
 - **Prefijo de pedidos `#AUR`**: los ejemplos del prompt usan `#AUR...`. Kenku

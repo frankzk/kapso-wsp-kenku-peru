@@ -655,8 +655,9 @@ const WATCHDOG_SWEEP_INTERVAL_MS = 10 * 60 * 1000;   // min entre barridos
 const WATCHDOG_MIN_SILENCE_MS = 15 * 60 * 1000;      // cliente esperando >15 min
 const WATCHDOG_MAX_SILENCE_MS = 6 * 60 * 60 * 1000;  // ignorar silencios >6h (viejos)
 const WATCHDOG_ALERT_TTL_S = 6 * 60 * 60;            // no re-alertar la misma conversacion por 6h
-// TODO(Kenku): reemplazar por el/los phoneNumberId reales del proyecto Kenku Peru.
-const WATCHDOG_PHONE_IDS = ["597907523413541"];
+// Sandbox (pruebas del sales-bot) + Kenku 630 (recuperacion de retornados).
+// TODO(Kenku): quitar el sandbox cuando el sales-bot pase al numero definitivo.
+const WATCHDOG_PHONE_IDS = ["597907523413541", "1241670942359671"];
 const WATCHDOG_MAX_ALERTS = 6;
 
 // Mensajes de cierre triviales del cliente que NO requieren respuesta del bot:

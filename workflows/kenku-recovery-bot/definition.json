@@ -1,0 +1,798 @@
+{
+  "edges": [
+    {
+      "label": "next",
+      "source": "start",
+      "target": "init-stage"
+    },
+    {
+      "label": "next",
+      "source": "init-stage",
+      "target": "init-hint"
+    },
+    {
+      "label": "next",
+      "source": "init-hint",
+      "target": "recovery-agent"
+    },
+    {
+      "label": "next",
+      "source": "recovery-agent",
+      "target": "rc-terminal"
+    },
+    {
+      "label": "terminar",
+      "source": "rc-terminal",
+      "target": "rc-end"
+    },
+    {
+      "label": "seguir",
+      "source": "rc-terminal",
+      "target": "rc-w1"
+    },
+    {
+      "label": "next",
+      "source": "rc-w1",
+      "target": "rc-wr1"
+    },
+    {
+      "label": "respondio",
+      "source": "rc-wr1",
+      "target": "recovery-agent"
+    },
+    {
+      "label": "timeout",
+      "source": "rc-wr1",
+      "target": "rc-g1"
+    },
+    {
+      "label": "enviar",
+      "source": "rc-g1",
+      "target": "rc-s1"
+    },
+    {
+      "label": "esperar",
+      "source": "rc-g1",
+      "target": "rc-h1"
+    },
+    {
+      "label": "next",
+      "source": "rc-h1",
+      "target": "rc-wr1"
+    },
+    {
+      "label": "next",
+      "source": "rc-s1",
+      "target": "rc-w2"
+    },
+    {
+      "label": "next",
+      "source": "rc-w2",
+      "target": "rc-wr2"
+    },
+    {
+      "label": "respondio",
+      "source": "rc-wr2",
+      "target": "recovery-agent"
+    },
+    {
+      "label": "timeout",
+      "source": "rc-wr2",
+      "target": "rc-g2"
+    },
+    {
+      "label": "enviar",
+      "source": "rc-g2",
+      "target": "rc-s2"
+    },
+    {
+      "label": "esperar",
+      "source": "rc-g2",
+      "target": "rc-h2"
+    },
+    {
+      "label": "next",
+      "source": "rc-h2",
+      "target": "rc-wr2"
+    },
+    {
+      "label": "next",
+      "source": "rc-s2",
+      "target": "rc-w3"
+    },
+    {
+      "label": "next",
+      "source": "rc-w3",
+      "target": "rc-wr3"
+    },
+    {
+      "label": "respondio",
+      "source": "rc-wr3",
+      "target": "recovery-agent"
+    },
+    {
+      "label": "timeout",
+      "source": "rc-wr3",
+      "target": "rc-g3"
+    },
+    {
+      "label": "enviar",
+      "source": "rc-g3",
+      "target": "rc-s3"
+    },
+    {
+      "label": "esperar",
+      "source": "rc-g3",
+      "target": "rc-h3"
+    },
+    {
+      "label": "next",
+      "source": "rc-h3",
+      "target": "rc-wr3"
+    },
+    {
+      "label": "next",
+      "source": "rc-s3",
+      "target": "rc-w4"
+    },
+    {
+      "label": "next",
+      "source": "rc-w4",
+      "target": "rc-wr4"
+    },
+    {
+      "label": "respondio",
+      "source": "rc-wr4",
+      "target": "recovery-agent"
+    },
+    {
+      "label": "timeout",
+      "source": "rc-wr4",
+      "target": "rc-g4"
+    },
+    {
+      "label": "enviar",
+      "source": "rc-g4",
+      "target": "rc-s4"
+    },
+    {
+      "label": "esperar",
+      "source": "rc-g4",
+      "target": "rc-h4"
+    },
+    {
+      "label": "next",
+      "source": "rc-h4",
+      "target": "rc-wr4"
+    },
+    {
+      "label": "next",
+      "source": "rc-s4",
+      "target": "rc-lost"
+    }
+  ],
+  "nodes": [
+    {
+      "data": {
+        "config": {},
+        "node_type": "start"
+      },
+      "id": "start",
+      "position": {
+        "x": 100,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "system_prompt": "\nEres Akemi, asesora de Kenku Peru por WhatsApp. Este chat es una campana de RECUPERACION DE PEDIDO RETORNADO, no una venta nueva.\n\nQUE PASO (contexto que ya conoce el cliente):\n- El cliente compro por contraentrega, el courier intento entregar y NO se logro (no contesto, no estaba, cambio de opinion, direccion incompleta, etc.).\n- El paquete fue RETORNADO al almacen de Kenku en Lima y ahi sigue, guardado a su nombre.\n- Antes de este chat, el cliente recibio una plantilla de WhatsApp que le dice exactamente eso y que le ofrece reenviarlo por *Shalom* con un adelanto de S/30.\n- Este chat existe porque el cliente RESPONDIO esa plantilla. Responder ya es una senal de interes: tratalo como alguien que quiere su pedido, no como un desconocido.\n\nREGLA DE ORO (por encima de todo lo demas):\n- Tu unico objetivo es que el cliente pague el *adelanto de S/30* por Yape y te mande el voucher.\n- Cada mensaje tuyo debe acercarlo a ese pago. Si el cliente se desvia (pregunta por otros productos, precios nuevos, promociones), respondes en UNA linea y vuelves de inmediato al adelanto.\n- Nunca vuelvas a ofrecer contraentrega. La contraentrega ya se intento y fallo: por eso el reenvio requiere adelanto. Esto no es negociable.\n- Nunca cierres el chat sin haber pedido el adelanto al menos una vez.\n\nDE DONDE SACAS LOS DATOS DEL PEDIDO:\n- Llama get_whatsapp_context al inicio y busca en el historial el mensaje SALIENTE de la plantilla de recuperacion (contiene \"tu paquete fue retornado a nuestros almacenes en Lima\").\n- De ese mensaje extraes: nombre del cliente, *codigo de pedido* y *detalle del pedido* (productos y cantidades). Guardalos con save_variable como recovery_customer_name, recovery_order_name y recovery_items.\n- Llama customer_lookup UNA vez con el telefono del chat para confirmar nombre y direccion previa. No le anuncies al cliente que lo estas buscando.\n- NUNCA inventes un codigo de pedido, un producto, un monto total ni una fecha. Si no encuentras el dato en el historial, habla del pedido en general (\"tu pedido\") sin inventar el codigo.\n- Si en el historial NO existe la plantilla de recuperacion (el cliente escribio a este numero por su cuenta), NO hables de pedidos retornados ni de adelantos: saluda corto, dile que este numero es solo para seguimiento de pedidos y llama handoff_to_human. Nunca inventes un retorno que no ocurrio.\n\nPRIMER MENSAJE (apenas el cliente responde, sea lo que sea que escriba):\n- Cualquier respuesta cuenta como \"quiero continuar\": el boton de la plantilla, un \"si\", un \"?\", un \"hola\", un audio o incluso una queja. En TODOS los casos tu primera respuesta entrega los datos de Yape.\n- No preguntes \"deseas continuar?\" antes de dar los datos: la plantilla ya prometio \"te enviaremos los datos para continuar\". Preguntarlo otra vez pierde al cliente.\n- Estructura exacta de tu primer mensaje (2 mensajes seguidos):\n\n  Msg 1 (contexto corto, con su nombre y codigo si los tienes):\n  \"¡Hola [nombre]! 😊 Soy *Akemi* de Kenku.\n\n  Tu pedido *[codigo]* está guardado en nuestro almacén de Lima, listo para volver a salir 📦\"\n\n  Msg 2 (el pago, en bloque limpio y copiable):\n  \"Para reprogramarlo por *Shalom* solo necesito el *adelanto de S/30*:\n\n  *Yape:* 930 555 309\n  *Nombre:* Grupo GF SAC\n\n  Ese monto *se descuenta de tu total*, el saldo lo pagas al recoger 😊\n\n  Envíame la captura y te confirmo el despacho. ¿A qué agencia *Shalom* te lo enviamos?\"\n\n- Si no tienes el codigo de pedido, escribe \"Tu pedido está guardado...\" sin codigo. Nunca pongas un placeholder tipo [codigo] en el mensaje real.\n\nDESPUES DE DAR EL YAPE:\n- Datos que necesitas para despachar, en este orden y solo si faltan: (1) agencia/oficina *Shalom* de destino, (2) *DNI* del titular que recogera.\n- NO pidas direccion exacta de casa ni referencia: en Shalom el cliente recoge en agencia.\n- No pidas mas de un dato por mensaje, salvo que el cliente ya venga dando varios.\n- No repitas los datos de Yape en cada mensaje: ya los diste. Repitelos solo si el cliente los pide, dice que no los ve, o han pasado varios mensajes sin avanzar.\n\nCUANDO EL CLIENTE ENVIA EL VOUCHER (captura, foto del Yape, o dice \"ya pagué\" / \"ya te yapeé\"):\n- No digas que el pedido esta confirmado automaticamente. Haz DOS cosas internas y luego responde:\n  1) Llama notify_team con: customerName, phone, product (los items del pedido), total si lo sabes, courier=\"Shalom\", destination=agencia Shalom, dni si lo tienes, paymentReported=\"adelanto S/30 Yape - recuperacion de pedido retornado [codigo]\", note=\"RECUPERACION pedido retornado\". notify_team es una ALERTA INTERNA por Telegram: el cliente NUNCA la ve. Si devuelve ok=false, no se lo menciones y continua igual.\n  2) Llama handoff_to_human con el resumen interno (codigo de pedido, items, agencia Shalom, DNI, adelanto reportado, telefono).\n- Luego responde al cliente, corto y calido: que recibiste el voucher, que su pedido pasa a despacho y que le llegara su codigo de seguimiento Shalom por aqui.\n- Guarda stage=\"derivado_logistica\" y llama complete_task.\n\nMANEJO DE OBJECIONES (aqui se gana o se pierde la recuperacion):\nResponde SIEMPRE con empatia en una linea y luego el argumento, corto. Nunca discutas ni culpes al cliente por el intento fallido.\n\n1) \"¿Por qué tengo que adelantar? / antes era contraentrega\"\n   -> \"Te entiendo 😊 El primer envío ya salió contraentrega y volvió, y el reenvío tiene un costo que asumimos nosotros. El *S/30* no es un cobro extra: *se descuenta de tu total*. Es lo que nos permite volver a despacharlo hoy.\"\n\n2) \"Yo sí estaba / nadie me llamó / no llegó nadie\"\n   -> Dale la razon sin pelear: \"Lamento que haya pasado eso 🙏 Justo por eso ahora te lo mandamos a la agencia *Shalom* que elijas: lo recoges cuando puedas, sin depender de que te ubiquen.\"\n\n3) \"¿Y si pago todo al recoger?\"\n   -> \"El saldo sí lo pagas al recoger 😊 El *S/30* es lo que libera el despacho desde almacén, por eso va antes. Es la única forma en que podemos reenviarlo.\"\n\n4) \"No confío / ¿es seguro? / ¿cómo sé que me llegará?\"\n   -> \"Totalmente válido 🙌 El Yape sale a nombre de *Grupo GF SAC*, que es la razón social de Kenku. Apenas envíes la captura te paso tu *código de seguimiento Shalom* para que lo veas en camino.\"\n\n5) \"Ya no lo quiero / ya no me interesa\"\n   -> UN intento honesto: recordarle el beneficio del producto que pidio y que el adelanto va a cuenta del total, no se pierde. Ej: \"Qué pena 😔 Tu [producto] sigue apartado a tu nombre y el *S/30* se descuenta del total, así que no pierdes nada. ¿Lo dejamos encaminado hoy?\"\n   -> Si vuelve a decir que no, ACEPTA con calidez, sin insistir mas: \"Sin problema, gracias por avisarme 😊 Si más adelante lo quieres, escríbeme por aquí.\" Guarda stage=\"no_interesado\" y llama complete_task.\n\n6) \"No tengo Yape\"\n   -> \"No hay problema 😊 Déjame consultarte una alternativa de pago y te confirmo por aquí.\" Llama handoff_to_human con el motivo. NUNCA inventes cuentas bancarias, CCI, Plin ni otros medios: solo existe el Yape indicado.\n\n7) \"Dame descuento / hazme una rebaja / que sea menos de 30\"\n   -> No inventes descuentos ni bajes el adelanto. Reencuadra UNA vez: \"El *S/30* no se suma a tu total, se descuenta 😊 O sea que pagas lo mismo que ibas a pagar, solo que una parte ahora.\" Si insiste, llama handoff_to_human.\n\n8) \"Mándalo de nuevo contraentrega\"\n   -> Explica UNA vez: \"Después de un retorno ya no podemos reenviar contraentrega 😔 Pero con el *S/30* lo despacho hoy y el resto lo pagas al recoger.\" Si insiste una segunda vez, llama handoff_to_human. No lo repitas una tercera vez.\n\n9) \"Después te aviso / mañana / ahorita no puedo\"\n   -> NO lo marques como no interesado. Responde corto y amable (\"Perfecto, aquí te espero 😊 Tu pedido queda apartado.\"), guarda stage=\"esperando_voucher\" con followup_hint acorde y llama complete_task. El sistema le mandara recordatorios.\n\n10) Reclamo, cliente molesto, menciona Indecopi / estafa / denuncia\n   -> UNA sola respuesta con empatia breve, sin justificar ni discutir. Llama notify_team con note=\"RECLAMO - recuperacion\" y luego handoff_to_human. Guarda stage=\"reclamo\" y no sigas respondiendo.\n\nLIMITES (importantes: protegen la reputacion del numero):\n- Maximo DOS argumentos por objecion. Si el cliente repite la misma negativa una tercera vez, deja de insistir: cierra con calidez o deriva con handoff_to_human.\n- Nunca mandes dos mensajes seguidos pidiendo el pago sin que el cliente haya escrito en medio.\n- Nunca uses culpa, presion agresiva, amenazas de cobro, ni frases tipo \"es tu última oportunidad\", \"vas a perder tu pedido\" o \"te vamos a reportar\".\n- Nunca prometas fechas exactas de entrega ni horas. Puedes decir \"sale hoy\" o \"sale mañana\" solo respecto al despacho, no a la llegada.\n\nPROHIBIDO:\n- Ofrecer contraentrega en este flujo.\n- Crear ordenes en Shopify, cotizar, aplicar promos 3x2/5x3 o mandar el catalogo. El pedido ya existe.\n- Inventar codigos de pedido, montos, productos, stock, codigos de seguimiento o medios de pago.\n- Escribir URLs de imagenes o Markdown de enlace.\n- Mencionar procesos internos, herramientas, workflows o que eres un bot.\n\nTONO:\n- Peruana, calida, directa. Tutea siempre.\n- Mensajes MUY breves: 1 a 3 lineas. Maximo 2 emojis por mensaje.\n- Resalta en negrita (*texto*) el codigo de pedido, el monto del adelanto, el Yape y el nombre del titular.\n- Separa ideas con saltos de linea, no parrafos corridos.\n- Una sola pregunta al final de cada mensaje.\n\nSEGUIMIENTOS (OBLIGATORIO):\n- Cada vez que terminas tu turno esperando respuesta del cliente DEBES guardar stage + followup_hint con save_variable y llamar complete_task. Sin eso no se disparan los recordatorios y la recuperacion se pierde en silencio.\n- Valores exactos de stage:\n  • \"recuperacion_contactado\" — le diste el Yape y esperas reaccion.\n  • \"esperando_voucher\" — quedo en pagar y mandar la captura.\n  • \"esperando_datos\" — falta agencia Shalom o DNI.\n  • \"derivado_logistica\" — voucher recibido, ya derivaste. TERMINAL.\n  • \"no_interesado\" — rechazo claro y repetido. TERMINAL.\n  • \"reclamo\" — reclamo o cliente molesto. TERMINAL.\n- followup_hint es una frase corta en segunda persona que recuerde el punto exacto donde quedaron. Ejemplos: \"quedamos en el adelanto de S/30 para reprogramar tu pedido\", \"me ibas a decir a que agencia Shalom lo enviamos\".\n- El sistema detiene los seguimientos en los stages TERMINAL y cuando llamas handoff_to_human. No anuncies al cliente que le haras seguimiento ni menciones tiempos.\n",
+          "provider_model_id": "de8992a1-6f21-4a30-9d37-f8645f66e14e",
+          "provider_model_name": "gpt-4.1",
+          "temperature": 0.2,
+          "max_iterations": 30,
+          "max_tokens": 4096,
+          "reasoning_effort": null,
+          "observer_prompt_mode": "analysis_only",
+          "message_delivery_mode": "auto_send_assistant_text",
+          "enabled_default_tools": [
+            "get_execution_metadata",
+            "get_whatsapp_context",
+            "get_current_datetime",
+            "save_variable",
+            "get_variable",
+            "complete_task",
+            "handoff_to_human"
+          ],
+          "sandbox_enabled": false,
+          "sandbox_network_mode": "allow_all",
+          "sandbox_allowed_outbound_hosts": [],
+          "flow_agent_function_tools": [
+            {
+              "name": "customer_lookup",
+              "description": "Busca al cliente en la base de Shopify por su telefono. Devuelve nombre, cantidad de pedidos previos y la direccion guardada. Llamar UNA vez al inicio de la conversacion con el telefono del chat.",
+              "function_name": "Customer Lookup",
+              "function_slug": "customer-lookup",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "description": "Telefono del cliente en formato internacional, ej +51918100477. Usa el numero del chat de WhatsApp (get_whatsapp_context)."
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "Email del cliente, solo si lo menciono."
+                  }
+                },
+                "required": [
+                  "phone"
+                ]
+              }
+            },
+            {
+              "name": "notify_team",
+              "description": "Alerta interna al equipo por Telegram cuando el cliente reporta el adelanto de la recuperacion, pide una alternativa de pago o presenta un reclamo. NUNCA es visible para el cliente. Llamala junto con handoff_to_human.",
+              "function_name": "Notify Team",
+              "function_slug": "notify-team",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "customerName": {
+                    "type": "string",
+                    "description": "Nombre completo del cliente."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Numero de WhatsApp del cliente."
+                  },
+                  "product": {
+                    "type": "string",
+                    "description": "Producto(s) y cantidad del pedido retornado."
+                  },
+                  "total": {
+                    "type": "string",
+                    "description": "Monto total del pedido (en soles), si se conoce."
+                  },
+                  "courier": {
+                    "type": "string",
+                    "description": "Courier de reenvio: Shalom."
+                  },
+                  "destination": {
+                    "type": "string",
+                    "description": "Agencia/oficina Shalom de destino."
+                  },
+                  "dni": {
+                    "type": "string",
+                    "description": "DNI del titular que recogera."
+                  },
+                  "paymentReported": {
+                    "type": "string",
+                    "description": "Adelanto reportado por el cliente (ej. adelanto S/30 Yape, nro de operacion)."
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "Nota interna. Usa siempre el prefijo RECUPERACION para distinguirlo de ventas nuevas."
+                  },
+                  "conversationId": {
+                    "type": "string",
+                    "description": "ID de la conversacion de Kapso si esta disponible."
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          ],
+          "flow_agent_app_integration_tools": [],
+          "flow_agent_webhooks": [],
+          "flow_agent_knowledge_bases": [],
+          "flow_agent_mcp_servers": [],
+          "flow_agent_resources": []
+        },
+        "node_type": "agent",
+        "display_name": "Recovery Agent"
+      },
+      "id": "recovery-agent",
+      "position": {
+        "x": 620,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "value_type": "string",
+          "variable_name": "stage",
+          "variable_value": "recuperacion_contactado"
+        },
+        "node_type": "set_variable",
+        "display_name": "Init stage"
+      },
+      "id": "init-stage",
+      "position": {
+        "x": 250,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "value_type": "string",
+          "variable_name": "followup_hint",
+          "variable_value": "quedamos en el adelanto de S/30 para reprogramar el envio de tu pedido"
+        },
+        "node_type": "set_variable",
+        "display_name": "Init followup_hint"
+      },
+      "id": "init-hint",
+      "position": {
+        "x": 400,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "La recuperacion sigue abierta: continuar con la cadencia de recordatorios.",
+              "label": "seguir"
+            },
+            {
+              "description": "Estado terminal (voucher derivado a logistica, no interesado, reclamo o handoff): no enviar mas recordatorios.",
+              "label": "terminar"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Seguir o terminar"
+      },
+      "id": "rc-terminal",
+      "position": {
+        "x": 1000,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "value_type": "boolean",
+          "variable_name": "followup_done",
+          "variable_value": true
+        },
+        "node_type": "set_variable",
+        "display_name": "Fin (terminal)"
+      },
+      "id": "rc-end",
+      "position": {
+        "x": 1000,
+        "y": 320
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 2700
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera 1"
+      },
+      "id": "rc-w1",
+      "position": {
+        "x": 1320,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "El cliente respondio durante la espera: devolver el control al agente.",
+              "label": "respondio"
+            },
+            {
+              "description": "Vencio la espera sin respuesta del cliente: evaluar el envio del recordatorio.",
+              "label": "timeout"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Reanudacion 1"
+      },
+      "id": "rc-wr1",
+      "position": {
+        "x": 1320,
+        "y": 240
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "Horario permitido en Peru: enviar el recordatorio ahora.",
+              "label": "enviar"
+            },
+            {
+              "description": "Horario de silencio (00:00-07:00 Peru): esperar y reintentar mas tarde.",
+              "label": "esperar"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Horario 1"
+      },
+      "id": "rc-g1",
+      "position": {
+        "x": 1320,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 1800
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera horario 1"
+      },
+      "id": "rc-h1",
+      "position": {
+        "x": 1470,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "message": "¿Pudiste hacer el Yape? 😊 Con el *adelanto de S/30* dejo tu pedido separado y sale hoy mismo por Shalom.\n\n*Yape:* 930 555 309 — *Grupo GF SAC*",
+          "phone_number_id": "1241670942359671"
+        },
+        "node_type": "send_text",
+        "display_name": "Recordatorio 1"
+      },
+      "id": "rc-s1",
+      "position": {
+        "x": 1320,
+        "y": 520
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 11700
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera 2"
+      },
+      "id": "rc-w2",
+      "position": {
+        "x": 1640,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "El cliente respondio durante la espera: devolver el control al agente.",
+              "label": "respondio"
+            },
+            {
+              "description": "Vencio la espera sin respuesta del cliente: evaluar el envio del recordatorio.",
+              "label": "timeout"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Reanudacion 2"
+      },
+      "id": "rc-wr2",
+      "position": {
+        "x": 1640,
+        "y": 240
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "Horario permitido en Peru: enviar el recordatorio ahora.",
+              "label": "enviar"
+            },
+            {
+              "description": "Horario de silencio (00:00-07:00 Peru): esperar y reintentar mas tarde.",
+              "label": "esperar"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Horario 2"
+      },
+      "id": "rc-g2",
+      "position": {
+        "x": 1640,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 1800
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera horario 2"
+      },
+      "id": "rc-h2",
+      "position": {
+        "x": 1790,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "message": "Te aclaro algo importante 🙌 El *S/30 no es un cobro extra*: se descuenta de tu total y el saldo lo pagas recién al recoger en Shalom.\n\n¿Te ayudo a completarlo?",
+          "phone_number_id": "1241670942359671"
+        },
+        "node_type": "send_text",
+        "display_name": "Recordatorio 2"
+      },
+      "id": "rc-s2",
+      "position": {
+        "x": 1640,
+        "y": 520
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 28800
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera 3"
+      },
+      "id": "rc-w3",
+      "position": {
+        "x": 1960,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "El cliente respondio durante la espera: devolver el control al agente.",
+              "label": "respondio"
+            },
+            {
+              "description": "Vencio la espera sin respuesta del cliente: evaluar el envio del recordatorio.",
+              "label": "timeout"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Reanudacion 3"
+      },
+      "id": "rc-wr3",
+      "position": {
+        "x": 1960,
+        "y": 240
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "Horario permitido en Peru: enviar el recordatorio ahora.",
+              "label": "enviar"
+            },
+            {
+              "description": "Horario de silencio (00:00-07:00 Peru): esperar y reintentar mas tarde.",
+              "label": "esperar"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Horario 3"
+      },
+      "id": "rc-g3",
+      "position": {
+        "x": 1960,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 1800
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera horario 3"
+      },
+      "id": "rc-h3",
+      "position": {
+        "x": 2110,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "message": "Tu pedido sigue guardado a tu nombre en nuestro almacén de Lima 📦 Puedo liberarlo hoy con el *adelanto de S/30* al Yape *930 555 309* (*Grupo GF SAC*).\n\n¿Lo dejamos encaminado?",
+          "phone_number_id": "1241670942359671"
+        },
+        "node_type": "send_text",
+        "display_name": "Recordatorio 3"
+      },
+      "id": "rc-s3",
+      "position": {
+        "x": 1960,
+        "y": 520
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 36000
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera 4"
+      },
+      "id": "rc-w4",
+      "position": {
+        "x": 2280,
+        "y": 100
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "El cliente respondio durante la espera: devolver el control al agente.",
+              "label": "respondio"
+            },
+            {
+              "description": "Vencio la espera sin respuesta del cliente: evaluar el envio del recordatorio.",
+              "label": "timeout"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Reanudacion 4"
+      },
+      "id": "rc-wr4",
+      "position": {
+        "x": 2280,
+        "y": 240
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "conditions": [
+            {
+              "description": "Horario permitido en Peru: enviar el recordatorio ahora.",
+              "label": "enviar"
+            },
+            {
+              "description": "Horario de silencio (00:00-07:00 Peru): esperar y reintentar mas tarde.",
+              "label": "esperar"
+            }
+          ],
+          "decision_type": "function",
+          "function_slug": "check-coverage"
+        },
+        "node_type": "decide",
+        "display_name": "Horario 4"
+      },
+      "id": "rc-g4",
+      "position": {
+        "x": 2280,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "has_timeout": true,
+          "timeout_seconds": 1800
+        },
+        "node_type": "wait_for_response",
+        "display_name": "Espera horario 4"
+      },
+      "id": "rc-h4",
+      "position": {
+        "x": 2430,
+        "y": 380
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "message": "Último mensajito, prometido 🙏 Si todavía lo quieres, con el *adelanto de S/30* lo despacho y te paso tu código de seguimiento Shalom.\n\nSi prefieres verlo con una asesora, dime *asesora* y te paso con una 😊",
+          "phone_number_id": "1241670942359671"
+        },
+        "node_type": "send_text",
+        "display_name": "Recordatorio 4"
+      },
+      "id": "rc-s4",
+      "position": {
+        "x": 2280,
+        "y": 520
+      },
+      "type": "flow-node"
+    },
+    {
+      "data": {
+        "config": {
+          "value_type": "string",
+          "variable_name": "stage",
+          "variable_value": "lead_perdido"
+        },
+        "node_type": "set_variable",
+        "display_name": "Recuperacion perdida"
+      },
+      "id": "rc-lost",
+      "position": {
+        "x": 2600,
+        "y": 520
+      },
+      "type": "flow-node"
+    }
+  ]
+}
