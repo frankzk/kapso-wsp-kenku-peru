@@ -46,6 +46,7 @@ const AD_PRODUCT_MAP = {
   "120248519247800056": "kojic-acid-turmeric-cleansing-pads",                          // Ilumina Tu Piel Apagada (variante -> KojicPads)
   "120253082365510120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (asignacion TEMPORAL por el dueno mientras corrige el anuncio)
   "120252904020210120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (asignacion TEMPORAL por el dueno mientras corrige el anuncio)
+  "120253082365500120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (el creativo es el serum de hongos; el titular del enlace es de otro producto)
 };
 
 // Busca al cliente en Shopify por telefono (o email) para reconocer clientes
