@@ -11,6 +11,8 @@ envío por Shalom**.
 | | |
 |---|---|
 | Slug | `kenku-recovery-bot` |
+| Workflow id | `533dcf64-91d9-411a-a12d-16ca3fd375de` (desplegado y `active` el 2026-08-09) |
+| Trigger id | `b2a34b61-06e2-4ebb-a6f3-272d044212e1` |
 | Número | Kenku 630 · +51 935 903 630 · `phoneNumberId` `1241670942359671` |
 | Config de WhatsApp | `9f077d88-6cf0-4e7f-9461-78ed292e2041` |
 | Trigger | `inbound_message` (arranca cuando el cliente **responde**) |
@@ -229,13 +231,20 @@ GET que **ningún** `function_id` haya quedado en `null`, tanto en los nodos
 Si se aplicó por API, avisar antes del siguiente `kapso push` para hacer
 `git pull && kapso pull` y realinear el baseline.
 
-### Requisitos antes de activar
+### Estado del despliegue
 
-- [ ] `check-coverage` redesplegada con el 630 en `WATCHDOG_PHONE_IDS`
+- [x] Workflow creado, definición cargada (27 nodos / 34 aristas, ningún
+      `function_id` en null) y `status: active`.
+- [x] Trigger `inbound_message` en el 630, activo y único.
+- [x] `check-coverage` redesplegada con el 630 en `WATCHDOG_PHONE_IDS`
       (detecta conversaciones donde el cliente escribió y el bot no respondió).
-- [ ] Secrets ya presentes en `check-coverage` (`KAPSO_API_KEY`, Telegram) y en
-      `notify-team` (Telegram) — no hacen falta secrets nuevos.
-- [ ] Kapta configurado para disparar la plantilla desde el 630 con los 3
+- [x] Secrets ya presentes en `check-coverage` (`KAPSO_API_KEY`, Telegram) y en
+      `notify-team` (Telegram) — no hicieron falta secrets nuevos.
+- [ ] **Kapta**: configurar el disparo de la plantilla desde el 630 con los 3
       parámetros del contrato (§1).
-- [ ] Prueba en vivo: enviarse la plantilla a un número propio, responder con el
-      botón y verificar que llegan los dos mensajes con el Yape.
+- [ ] **Prueba en vivo**: enviarse la plantilla a un número propio, responder con
+      el botón y verificar que llegan los dos mensajes con el Yape.
+
+> Ojo con `kapso pull`/`kapso push` después de este despliegue: se aplicó por
+> Platform API, así que hay que hacer `git pull && kapso pull` antes del
+> siguiente push para realinear el baseline.

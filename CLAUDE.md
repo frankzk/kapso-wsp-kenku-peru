@@ -50,6 +50,21 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+## ⚠️ El repo puede estar DESFASADO respecto a producción
+
+Comprobado el 2026-08-09: el repo llevaba meses atrás de lo desplegado.
+`check-coverage` vivía con 55 KB en Kapso contra 36 KB en git (faltaban el
+detector de narración filtrada, el guard de generación stale, el webhook del
+dashboard y los umbrales reales del watchdog), y la definición viva de
+`kenku-sales-bot` tiene 3 nodos que el repo no conoce (`loop-guard`,
+`loop-end`, `init-customer`).
+
+**Antes de hacer PATCH/deploy de cualquier función o workflow, traer primero lo
+vivo y comparar** (`GET /platform/v1/functions/{id}` → campo `code`;
+`GET /platform/v1/workflows/{id}/definition`). Empujar el archivo del repo sin
+mirar borra trabajo de producción. `check-coverage/index.js` ya quedó
+sincronizado con lo vivo; `kenku-sales-bot` **todavía no**.
+
 ## Secrets de funciones (LECCION IMPORTANTE)
 
 - Las variables de entorno de las funciones se configuran como **Secrets** vía
