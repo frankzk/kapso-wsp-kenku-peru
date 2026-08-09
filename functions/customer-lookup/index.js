@@ -22,6 +22,7 @@ const AD_PRODUCT_MAP = {
   "120253592159230066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592247790066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592159130066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
+  "120250238762300267": "nattokinase-mejora-la-circulacion-arterial-90-capsulas", // Lee esto si tienes la presion alta (Nattokinase)
   "120246240033570250": "feel-virgin-gel-intimo-reafirmante-e-hidratante-con-aloe-vera-y-acido-hialuronico-30-ml", // FEEL VIRGIN – Gel Intimo
   "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
@@ -77,6 +78,10 @@ const AD_HEADLINE_MAP = {
   "mas densidad menos caida": "shampoo-de-cebolla-rebrota-fortalecimiento-capilar-y-control-de-caida-con-romero-y-canela",
   "recupera fuerza y densidad": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™",
   "feel virgin": "feel-virgin-gel-intimo-reafirmante-e-hidratante-con-aloe-vera-y-acido-hialuronico-30-ml",
+  // "presion alta" no devuelve nada en el catalogo (el producto se llama
+  // "Mejora de Circulacion Arterial"), asi que sin este respaldo el bot ofrecia
+  // suplementos masculinos a quien venia por la presion.
+  "si tienes la presion alta": "nattokinase-mejora-la-circulacion-arterial-90-capsulas",
 };
 
 // Normaliza un titular para comparar: sin acentos, sin emojis ni signos, en
