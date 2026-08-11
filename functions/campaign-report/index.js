@@ -24,10 +24,10 @@ const MAX_ORDER_PAGES = 12; // 12 x 250 = 3000 ordenes por rango
 const MAX_META_PAGES = 20;
 const MAX_CONV_PAGES = 50; // por numero: 50 x 100 = 5000 conversaciones por rango
 const MAX_CONV_DAYS = 16;  // la conversion se calcula para rangos <= 16 dias (evita timeouts del worker)
-// Numeros de produccion de Kenku Peru ("Kenku Peru 981" y "Kenku 451",
-// conectados al workflow) mas "Kenku Peru 348" (historico) y sandbox de
+// Numeros de produccion de Kenku Peru ("Kenku Peru 981", "Kenku 451" y
+// "Kenku 600", conectados al workflow) mas "Kenku Peru 348" (historico) y sandbox de
 // pruebas. Override con WHATSAPP_PHONE_NUMBER_IDS.
-const DEFAULT_PHONE_NUMBER_IDS = ["1145171692021464", "1239315459260256", "951608524703564", "597907523413541"];
+const DEFAULT_PHONE_NUMBER_IDS = ["1145171692021464", "1239315459260256", "951608524703564", "1117623181444547", "597907523413541"];
 const DEFAULT_DAYS = 30;
 const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000; // America/Lima = UTC-5 (sin DST)
 

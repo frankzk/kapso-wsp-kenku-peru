@@ -801,7 +801,7 @@ const WATCHDOG_SWEEP_INTERVAL_MS = 2 * 60 * 1000;    // max un barrido cada 2 mi
 const WATCHDOG_MIN_SILENCE_MS = 3 * 60 * 1000;       // cliente esperando >3 min
 const WATCHDOG_MAX_SILENCE_MS = 6 * 60 * 60 * 1000;  // ignorar silencios >6h (viejos)
 const WATCHDOG_ALERT_TTL_S = 6 * 60 * 60;            // no re-alertar la misma conversacion por 6h
-const WATCHDOG_PHONE_IDS = ["1239315459260256", "951608524703564", "597907523413541"];
+const WATCHDOG_PHONE_IDS = ["1239315459260256", "951608524703564", "1117623181444547", "597907523413541"];
 const WATCHDOG_MAX_ALERTS = 10;
 
 // Mensajes de cierre triviales del cliente que NO requieren respuesta del bot:
