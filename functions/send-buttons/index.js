@@ -32,7 +32,10 @@ async function handleRequest(request, env = globalThis) {
       payload.whatsapp_context?.phone_number_id ||
       payload.execution_context?.system?.whatsapp_config?.phone_number_id ||
       payload.execution_context?.context?.phone_number_id;
-    const to = resolveRecipient(conv, payload.execution_context?.context, input.to);
+    const to =
+      input.to ||
+      conv.phone_number ||
+      payload.execution_context?.context?.phone_number;
 
     const bodyText = String(input.bodyText || input.body_text || input.text || "").trim();
     const buttons = normalizeButtons(input.buttons);
@@ -118,22 +121,3 @@ function json(body) {
 }
 
 globalThis.__kenkuSendButtons = { handler, handleRequest, normalizeButtons };
-
-// Destinatario correcto del envio. Los contactos que entran por USERNAME de
-// WhatsApp no tienen telefono y Kapso guarda en phone_number los DIGITOS del
-// business_scoped_user_id (ej. phone_number "1586627056237556" con bsuid
-// "PE.1586627056237556"). Enviar a ese "numero" falla SIEMPRE con el error 131026
-// de Meta ("Message undeliverable"): el destinatario valido es el bsuid COMPLETO,
-// con su prefijo de pais (PE., CO., ...).
-function resolveRecipient(conv, ctx, explicit) {
-  conv = conv || {};
-  ctx = ctx || {};
-  if (explicit) return String(explicit);
-  const phone = String(conv.phone_number || ctx.phone_number || "").trim();
-  const bsuid = String(conv.business_scoped_user_id || ctx.business_scoped_user_id || "").trim();
-  if (bsuid) {
-    const digits = bsuid.includes(".") ? bsuid.split(".").pop() : bsuid;
-    if (!phone || phone === digits) return bsuid;
-  }
-  return phone || bsuid || "";
-}
