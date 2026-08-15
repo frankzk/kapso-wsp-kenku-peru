@@ -23,6 +23,8 @@ const AD_PRODUCT_MAP = {
   "120253592247790066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592159130066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120250238762300267": "nattokinase-mejora-la-circulacion-arterial-90-capsulas", // Lee esto si tienes la presion alta (Nattokinase)
+  "120253556996440120": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml", // Equilibrio de azucar para tu dia a dia (SUGAR CONTROL - Berberina y Curcuma)
+  "120253553230980120": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml", // Equilibrio de azucar para tu dia a dia (variante -> SUGAR CONTROL)
   "120246240033570250": "feel-virgin-gel-intimo-reafirmante-e-hidratante-con-aloe-vera-y-acido-hialuronico-30-ml", // FEEL VIRGIN – Gel Intimo
   "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
@@ -50,6 +52,7 @@ const AD_PRODUCT_MAP = {
   "120253082365510120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (asignacion TEMPORAL por el dueno mientras corrige el anuncio)
   "120252904020210120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (asignacion TEMPORAL por el dueno mientras corrige el anuncio)
   "120253082365500120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (el creativo es el serum de hongos; el titular del enlace es de otro producto)
+  "120252904445640120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (4a variante; creativo del serum de hongos, confirmado por el dueno)
 };
 
 // Respaldo por TITULAR del anuncio. Meta genera variantes del mismo creativo con
@@ -82,6 +85,7 @@ const AD_HEADLINE_MAP = {
   // "Mejora de Circulacion Arterial"), asi que sin este respaldo el bot ofrecia
   // suplementos masculinos a quien venia por la presion.
   "si tienes la presion alta": "nattokinase-mejora-la-circulacion-arterial-90-capsulas",
+  "equilibrio de azucar": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml",
 };
 
 // Normaliza un titular para comparar: sin acentos, sin emojis ni signos, en
