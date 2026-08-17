@@ -402,8 +402,25 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
-    const normalizedProduct = normalizeAnyProduct(product, config.publicShopDomain);
-    const outOfStock = isProductOutOfStock(normalizedProduct);
+    let normalizedProduct = normalizeAnyProduct(product, config.publicShopDomain);
+    let outOfStock = isProductOutOfStock(normalizedProduct);
+    let stockRescued = false;
+
+    // Segunda opinion antes de declarar "agotado". El stock del catalogo PUBLICO
+    // (products.json / endpoint publico) refleja la disponibilidad del canal
+    // Tienda online y Shopify lo cachea, asi que puede ir atrasado respecto al
+    // inventario real. Paso con el Nattokinase: el bot dijo "agotado" y el
+    // cliente se fue, cuando en Shopify habia 489 unidades. Antes de matar una
+    // venta se re-verifica contra la Admin API, que si ve el inventario.
+    if (outOfStock) {
+      const rescued = await verifyStockWithAdmin(config, normalizedProduct);
+      if (rescued) {
+        normalizedProduct = rescued;
+        outOfStock = false;
+        stockRescued = true;
+        await logSearchMiss(env, queryText || normalizedProduct.handle, "public_oos_admin_ok");
+      }
+    }
 
     // Guarda anti "agotado" en falso: si el match NO es confiable (vino del
     // fallback amplio del Admin en una consulta vaga) y ademas esta agotado, NO
@@ -444,6 +461,9 @@ async function handleRequest(request, env = globalThis) {
       source: normalizedProduct.__source || "shopify",
       product: normalizedProduct,
       outOfStock: false,
+      // true = el catalogo publico lo daba por agotado pero la Admin confirmo
+      // stock real. Sirve para detectar desfases del feed publico.
+      stockRescued,
       customerMessage: buildProductFoundMessage(normalizedProduct),
       nextAction: "ask_quantity",
     });
@@ -1213,6 +1233,27 @@ function normalizeProduct(product) {
 function normalizeAnyProduct(product) {
   if (product?.priceRange && Array.isArray(product.variants)) return product;
   return normalizeProduct(product);
+}
+
+// Re-verifica el stock contra la Admin API cuando el catalogo publico dice que
+// no hay. Devuelve el producto normalizado de la Admin si SI hay stock (para
+// usar sus datos, que son los reales), o null si tambien esta agotado ahi.
+// Nunca lanza: ante cualquier problema devuelve null y se respeta lo que dijo
+// el catalogo publico.
+async function verifyStockWithAdmin(config, product) {
+  try {
+    if (!config.token || !product || !product.handle) return null;
+    // Si ya vino de la Admin (trae inventoryQuantity), no hay segunda fuente.
+    const fromAdmin = (product.variants || []).some((v) => typeof v.inventoryQuantity === "number");
+    if (fromAdmin) return null;
+    const admin = await getProductByHandle(config, product.handle);
+    if (!admin) return null;
+    const normalized = normalizeProduct(admin);
+    if (isProductOutOfStock(normalized)) return null;
+    return normalized;
+  } catch {
+    return null;
+  }
 }
 
 function isProductOutOfStock(product) {
