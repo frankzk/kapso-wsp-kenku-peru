@@ -63,10 +63,7 @@ async function handleRequest(request, env = globalThis) {
     // haya, check_coverage decide contraentrega vs agencia (Shalom + adelanto).
     if (!dryRun) {
       const addr = orderInput.shippingAddress || {};
-      const isPlaceholder = (v) => {
-        const s = String(v || "").trim().toLowerCase();
-        return !s || s === "por coordinar";
-      };
+      const isPlaceholder = isAddressPlaceholder;
       const noCity = isPlaceholder(addr.city);
       const noStreet = isPlaceholder(addr.address1);
       const noReference = isPlaceholder(addr.address2);
@@ -969,6 +966,27 @@ function buildProductSearchQueries(text) {
   }
   if (normalized) queries.push(escapeSearch(normalized));
   return unique(queries);
+}
+
+// Un campo de direccion NO sirve si esta vacio o si es relleno. La plantilla de
+// carrito abandonado manda "Direccion Registrada: -, -." y el agente reenviaba
+// ese "-, -" como direccion real: el guard solo conocia "" y "por coordinar",
+// asi que lo dejaba pasar y se creaba un pedido inentregable (#KP129457).
+// Criterio: sin al menos 3 caracteres alfanumericos no es una direccion.
+const ADDRESS_PLACEHOLDERS = new Set([
+  "por coordinar", "por confirmar", "sin direccion", "no tiene", "no tengo",
+  "pendiente", "na", "n a", "s n", "sn", "ninguna", "ninguno", "x", "xx", "xxx",
+]);
+
+function isAddressPlaceholder(value) {
+  const raw = String(value == null ? "" : value).trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!raw) return true;
+  const compact = raw.replace(/[^a-z0-9]+/g, " ").trim();
+  if (!compact) return true;                       // solo guiones/puntos/comas
+  if (ADDRESS_PLACEHOLDERS.has(compact)) return true;
+  const alnum = raw.replace(/[^a-z0-9]/g, "");
+  return alnum.length < 3;                         // "-, -", ".", "12" -> relleno
 }
 
 function buildAddress(customer, input = {}) {
