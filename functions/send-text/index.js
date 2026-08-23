@@ -148,38 +148,22 @@ async function handleRequest(request, env = globalThis) {
       conv.phone_number ||
       payload.execution_context?.context?.phone_number;
 
-    // Leads que entran por username: no tienen phone_number, solo BSUID.
-    // El proxy Meta de Kapso (POST /meta/whatsapp/v24.0/{pnid}/messages) acepta
-    // el BSUID en `to`, pero al despacharlo le quita el prefijo de pais
-    // ("PE.948592654941065" -> "948592654941065") y lo manda como si fuera un
-    // telefono: Meta responde 131026 "Message undeliverable" y el cliente no
-    // recibe nada. Comprobado el 2026-08-23 en una misma conversacion y con
-    // minutos de diferencia: lo enviado por este proxy quedo `failed` con
-    // recipient_id=948592654941065, mientras que lo enviado por los canales
-    // internos de Kapso (nodo send_text, send_media) llego con
-    // recipient_user_id=PE.948592654941065. No hay otro parametro: `to` es el
-    // unico campo de destinatario que el proxy reconoce.
-    // Mientras Kapso no lo corrija, para estos contactos NO se usa el proxy: se
-    // devuelve el texto YA SANITIZADO para que el agente lo mande por
-    // send_notification_to_user, que si va por el canal interno.
-    if (!to) {
-      const bsuid =
-        conv.business_scoped_user_id ||
-        payload.execution_context?.context?.business_scoped_user_id ||
-        conv.businessScopedUserId ||
-        payload.execution_context?.context?.businessScopedUserId;
-      if (bsuid) {
-        return json({
-          ok: false,
-          reason: "use_native_channel",
-          text: clean,
-          removed,
-          message: "Este cliente entro por usuario de WhatsApp y no se le puede escribir por este canal. Manda AHORA send_notification_to_user con EXACTAMENTE el texto del campo `text`, sin cambiarle nada y sin agregar nada. No vuelvas a intentar send_text con este cliente.",
-        });
-      }
-    }
+    // Los leads que entran por username no tienen phone_number, solo un BSUID
+    // ("PE.948592654941065"). Meta NO los direcciona por `to`: para ellos el
+    // campo es `recipient`. Mandar el BSUID en `to` parece funcionar (responde
+    // 200 con un messageId) pero Meta le quita el prefijo de pais y lo trata
+    // como telefono, asi que el mensaje termina en 131026 "Message
+    // undeliverable" y el cliente no recibe nada. Se ve en la respuesta:
+    // con `to` el eco vuelve como "wa_id":"948592654941065", con `recipient`
+    // vuelve como "user_id":"PE.948592654941065", que es el que llega.
+    const bsuid =
+      input.recipient ||
+      conv.business_scoped_user_id ||
+      payload.execution_context?.context?.business_scoped_user_id ||
+      conv.businessScopedUserId ||
+      payload.execution_context?.context?.businessScopedUserId;
 
-    if (!apiKey || !phoneNumberId || !to) {
+    if (!apiKey || !phoneNumberId || !(to || bsuid)) {
       return json({
         ok: false,
         reason: "missing_context",
@@ -193,7 +177,8 @@ async function handleRequest(request, env = globalThis) {
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        to,
+        // Si hay telefono se usa `to`; si el lead entro por username, `recipient`.
+        ...(to ? { to } : { recipient: bsuid }),
         type: "text",
         text: { body: clean },
       }),

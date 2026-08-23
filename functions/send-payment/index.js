@@ -51,12 +51,23 @@ async function handleRequest(request, env = globalThis) {
       input.to ||
       conv.phone_number ||
       payload.execution_context?.context?.phone_number;
+    // Los leads que entran por username no tienen phone_number, solo un BSUID
+    // ("PE.948592654941065"), y Meta no los direcciona por `to` sino por
+    // `recipient`. Mandarlos en `to` responde 200 con un messageId, pero Meta
+    // le quita el prefijo de pais, lo trata como telefono y el mensaje muere en
+    // 131026 "Message undeliverable" sin que el cliente reciba nada.
+    const bsuid =
+      input.recipient ||
+      conv.business_scoped_user_id ||
+      payload.execution_context?.context?.business_scoped_user_id ||
+      conv.businessScopedUserId ||
+      payload.execution_context?.context?.businessScopedUserId;
 
     const courier = String(input.courier || input.metodo || "").toLowerCase();
     const isOlva = courier.includes("olva");
     const text = isOlva ? olvaMessage() : shalomMessage();
 
-    if (!apiKey || !phoneNumberId || !to) {
+    if (!apiKey || !phoneNumberId || !(to || bsuid)) {
       // Fallback: si no hay contexto para enviar, devolvemos el texto EXACTO para
       // que el agente lo envie tal cual (con el numero fijo ya incluido).
       return json({
@@ -72,7 +83,7 @@ async function handleRequest(request, env = globalThis) {
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
         messaging_product: "whatsapp",
-        to,
+        ...(to ? { to } : { recipient: bsuid }),
         type: "text",
         text: { body: text },
       }),

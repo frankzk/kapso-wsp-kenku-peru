@@ -50,6 +50,29 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+## Enviar a leads que entran por username (LECCION IMPORTANTE)
+
+- Los leads que llegan por usuario de WhatsApp no tienen `phone_number`: solo un
+  **BSUID** (`business_scoped_user_id`, formato `PE.948592654941065`).
+- Al postear a `https://api.kapso.ai/meta/whatsapp/v24.0/{pnid}/messages`, esos
+  contactos van en **`recipient`**, NO en `to`. `to` es solo para telefonos.
+- Mandar el BSUID en `to` **parece** funcionar: responde 200 con un `messages[].id`.
+  Pero Meta le quita el prefijo del pais, lo trata como telefono y el mensaje
+  muere despues con `131026 Message undeliverable`; el cliente no recibe nada.
+  Un 200 con messageId NO es prueba de entrega: hay que mirar `kapso.status` y
+  `kapso.statuses[].errors[]` del mensaje.
+- Como distinguirlo en la respuesta del envio: con `to` el eco vuelve como
+  `"wa_id":"948592654941065"`; con `recipient` vuelve como
+  `"user_id":"PE.948592654941065"`, que es el que llega. Igual en los webhooks:
+  los fallidos traen `recipient_id`, los entregados `recipient_user_id`.
+- No existe ningun otro parametro: `to_user_id`, `bsuid`,
+  `business_scoped_user_id`, `recipient_user_id`, `username` y
+  `to_parent_user_id` devuelven 400, y `recipient_type` solo acepta
+  `individual`/`group` (Meta rechaza `user_id`).
+- Ya corregido (2026-08-23) en `send-text`, `send-buttons` y `send-payment`.
+  Cualquier funcion nueva que envie mensajes debe resolver el BSUID igual.
+- Doc de Kapso: https://docs.kapso.ai/docs/whatsapp/business-scoped-user-ids
+
 ## Secrets de funciones (LECCION IMPORTANTE)
 
 - Las variables de entorno de las funciones se configuran como **Secrets** vía
