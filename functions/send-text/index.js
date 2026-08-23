@@ -143,14 +143,41 @@ async function handleRequest(request, env = globalThis) {
       payload.whatsapp_context?.phone_number_id ||
       payload.execution_context?.system?.whatsapp_config?.phone_number_id ||
       payload.execution_context?.context?.phone_number_id;
-    // Los leads que entran por username no tienen phone_number: para ellos el
-    // destinatario valido es el business_scoped_user_id.
     const to =
       input.to ||
       conv.phone_number ||
-      payload.execution_context?.context?.phone_number ||
-      conv.business_scoped_user_id ||
-      payload.execution_context?.context?.business_scoped_user_id;
+      payload.execution_context?.context?.phone_number;
+
+    // Leads que entran por username: no tienen phone_number, solo BSUID.
+    // El proxy Meta de Kapso (POST /meta/whatsapp/v24.0/{pnid}/messages) acepta
+    // el BSUID en `to`, pero al despacharlo le quita el prefijo de pais
+    // ("PE.948592654941065" -> "948592654941065") y lo manda como si fuera un
+    // telefono: Meta responde 131026 "Message undeliverable" y el cliente no
+    // recibe nada. Comprobado el 2026-08-23 en una misma conversacion y con
+    // minutos de diferencia: lo enviado por este proxy quedo `failed` con
+    // recipient_id=948592654941065, mientras que lo enviado por los canales
+    // internos de Kapso (nodo send_text, send_media) llego con
+    // recipient_user_id=PE.948592654941065. No hay otro parametro: `to` es el
+    // unico campo de destinatario que el proxy reconoce.
+    // Mientras Kapso no lo corrija, para estos contactos NO se usa el proxy: se
+    // devuelve el texto YA SANITIZADO para que el agente lo mande por
+    // send_notification_to_user, que si va por el canal interno.
+    if (!to) {
+      const bsuid =
+        conv.business_scoped_user_id ||
+        payload.execution_context?.context?.business_scoped_user_id ||
+        conv.businessScopedUserId ||
+        payload.execution_context?.context?.businessScopedUserId;
+      if (bsuid) {
+        return json({
+          ok: false,
+          reason: "use_native_channel",
+          text: clean,
+          removed,
+          message: "Este cliente entro por usuario de WhatsApp y no se le puede escribir por este canal. Manda AHORA send_notification_to_user con EXACTAMENTE el texto del campo `text`, sin cambiarle nada y sin agregar nada. No vuelvas a intentar send_text con este cliente.",
+        });
+      }
+    }
 
     if (!apiKey || !phoneNumberId || !to) {
       return json({
