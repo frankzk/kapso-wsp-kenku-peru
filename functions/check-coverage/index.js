@@ -915,10 +915,17 @@ const LEAK_PATTERNS = [
   /\bla\s+herramienta\s+(devolvio|indica|dice)\b/i,
   /\b(el\s+)?lookup\s+(devolvio|muestra)\b/i,
   /\bcompleto\s+la\s+tarea\b/i,
+  /\bsegun\s+(las\s+)?instrucciones\b/i,
+  /\bdebo\s+(llamar|usar|ejecutar|invocar|enviar)\b/i,
+  /\bno\s+fue\s+encontrado\s+en\s+la\s+busqueda\b/i,
+  /\bbusqueda\s+de\s+medios\b/i,
+  /\bno\s+(devolvio|arrojo)\s+(resultados|nada|datos)\b/i,
+  /\b(la\s+)?(busqueda|consulta)\s+no\s+(devolvio|arrojo|encontro)\b/i,
 ];
 
 function textLeaksReasoning(text) {
-  const value = String(text || "");
+  // Sin acentos: los patrones se escriben sin tilde y cubren las dos formas.
+  const value = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (!value.trim()) return false;
   const lower = value.toLowerCase();
   for (const tool of LEAK_TOOL_NAMES) {

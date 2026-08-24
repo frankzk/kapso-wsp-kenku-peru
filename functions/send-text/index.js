@@ -31,6 +31,11 @@ const TOOL_NAMES = [
 
 // Frases de proceso/estado. Ancladas a proposito para no pisar texto legitimo:
 // "te paso el precio" o "te vamos a llamar a tu numero" NO deben caer aca.
+// Se prueban contra el texto SIN acentos (ver stripAccents): escribirlos aca sin
+// tilde alcanza para las dos formas. Antes habia que duplicar cada patron
+// ("dejame"/"déjame") y el que se olvidaba se colaba: asi paso
+// "El producto no fue encontrado en la busqueda de medios" (con tilde en
+// "búsqueda") entera al cliente.
 const PROCESS_PATTERNS = [
   /\bprocedo\s+con\b/i,
   /\bahora\s+(procedo|llamo|completo|envio|uso)\b/i,
@@ -43,13 +48,23 @@ const PROCESS_PATTERNS = [
   /\b(el\s+)?lookup\s+(devolvio|muestra)\b/i,
   /\bhago\s+el\s+lookup\b/i,
   /\bdejame\s+revisar\b/i,
-  /\bdéjame\s+revisar\b/i,
   /\bcompleto\s+la\s+tarea\b/i,
   /\bfinalizar\s+la\s+tarea\b/i,
+  // Narracion de resultados internos de herramientas.
+  /\bsegun\s+(las\s+)?instrucciones\b/i,
+  /\bdebo\s+(llamar|usar|ejecutar|invocar|enviar)\b/i,
+  /\bno\s+fue\s+encontrado\s+en\s+la\s+busqueda\b/i,
+  /\bbusqueda\s+de\s+medios\b/i,
+  /\bno\s+(devolvio|arrojo)\s+(resultados|nada|datos)\b/i,
+  /\b(la\s+)?(busqueda|consulta)\s+no\s+(devolvio|arrojo|encontro)\b/i,
 ];
 
+function stripAccents(text) {
+  return String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 function looksLikeNarration(fragment) {
-  const text = String(fragment || "");
+  const text = stripAccents(fragment);
   if (!text.trim()) return false;
   const lower = text.toLowerCase();
   for (const tool of TOOL_NAMES) {
