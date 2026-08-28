@@ -197,8 +197,10 @@ async function handleRequest(request, env = globalThis) {
     const [search, adReferral] = await Promise.all([
       searchCustomers(config, { phone, email, debugQuery: input.debugQuery }),
       fetchAdReferral(env, payload),
-      logAbLead(env, conversationId, abVariant(phone)),
     ]);
+    // El tipo de entrada sale del mismo fetch del referral, asi que el registro
+    // A/B va DESPUES y no en paralelo: sin eso no se puede guardar en la clave.
+    await logAbLead(env, conversationId, abVariant(phone), adReferral?.entryType || "otro");
     await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
       return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
@@ -372,13 +374,22 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
     ad_referral_product_handle: resolveAdProductHandle(adReferral)?.handle || null,
     ad_referral_match_via: resolveAdProductHandle(adReferral)?.via || null,
     ab_variant: abVariant(phone),
+    // "consulta" | "link" | "otro" — como llego el lead (ver classifyEntry).
+    entry_type: adReferral?.entryType || "otro",
   };
 }
 
 // Asignacion A/B deterministica por telefono (hash FNV-1a mod 2): reparto
 // ~50/50 uniforme y estable — el mismo cliente cae SIEMPRE en la misma
 // variante, y create-shopify-order puede recalcularla solo con el telefono.
-// A = presentacion completa de una (control). B = gancho + pregunta primero.
+//
+// A = control: presentacion completa y cierra pidiendo ubicacion (Lima/provincia).
+// C = cierra invitando la duda del cliente en vez de pedirle logistica.
+//
+// La variante B (precio + cantidad en el mismo turno) se retiro el 2026-08-25:
+// con 5.406 leads en dos semanas quedo en 3,14% contra 4,05% del control, un
+// 22% PEOR (z~1,8, p~0,07). No concluyente al 95%, pero sin ninguna señal a
+// favor, asi que no valia seguir gastandole la mitad del trafico.
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return "A";
@@ -387,7 +398,31 @@ function abVariant(phone) {
     h ^= digits.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  return (h >>> 0) % 2 === 0 ? "A" : "B";
+  return (h >>> 0) % 2 === 0 ? "A" : "C";
+}
+
+// De que forma entro el lead, leido del PRIMER mensaje del cliente:
+//   "consulta" -> trae el texto del boton de WhatsApp de Shopify ("Tengo una
+//                 consulta"): el cliente llego con una PREGUNTA concreta.
+//   "link"     -> solo pego un link de producto, sin texto.
+//   "otro"     -> saludo suelto, texto libre, o entro por anuncio.
+// Es el 48% y el 48% del trafico respectivamente (medido el 2026-08-25 sobre
+// las conversaciones recientes), y hasta ahora el bot trataba a los tres igual.
+const CONSULTA_MARKERS = ["tengo una consulta", "tengo una pregunta", "quisiera consultar"];
+
+function classifyEntry(firstInboundText) {
+  const raw = String(firstInboundText || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+  if (!raw.trim()) return "otro";
+  for (const marker of CONSULTA_MARKERS) {
+    if (raw.includes(marker)) return "consulta";
+  }
+  // Link de producto sin nada mas alrededor.
+  const withoutLinks = raw.replace(/https?:\/\/\S+/g, "").trim();
+  if (raw.includes("kenku.pe/products") && withoutLinks.length < 12) return "link";
+  return "otro";
 }
 
 // Registra el lead A/B una sola vez por conversacion (clave idempotente por
@@ -398,17 +433,19 @@ function limaDayNow() {
   return new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function logAbLead(env, conversationId, variant) {
+async function logAbLead(env, conversationId, variant, entryType = "otro") {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv || !conversationId || !variant) return;
-    // La fecha (dia Lima) y la variante van EN EL NOMBRE de la clave: asi el
-    // reporte cuenta listando y no necesita un kv.get por clave (con miles de
-    // leads eso tumbaba al worker). El valor queda por si hace falta depurar.
+    // La fecha (dia Lima), la variante y el tipo de entrada van EN EL NOMBRE de
+    // la clave: asi el reporte cuenta listando y no necesita un kv.get por clave
+    // (con miles de leads eso tumbaba al worker). El valor queda para depurar.
+    // El tipo de entrada va 4to a proposito: el reporte lee dia y variante por
+    // posicion (partes 1 y 2) y los segmentos extra no lo afectan.
     const day = limaDayNow();
-    const key = `abx_lead:${day}:${variant}:${conversationId}`;
+    const key = `abx_lead:${day}:${variant}:${entryType}:${conversationId}`;
     if (await kv.get(key)) return;
-    await kv.put(key, JSON.stringify({ variant, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    await kv.put(key, JSON.stringify({ variant, entryType, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
   } catch {
     // best effort
   }
@@ -438,7 +475,17 @@ async function fetchAdReferral(env, payload) {
     const response = await fetch(url, { headers: { "X-API-Key": apiKey } });
     if (!response.ok) return null;
     const data = await response.json();
-    for (const message of data?.data || []) {
+    const messages = data?.data || [];
+    // El endpoint devuelve del mas nuevo al mas viejo: el PRIMER mensaje del
+    // cliente es el ultimo entrante de la lista.
+    let firstInbound = null;
+    for (const message of messages) {
+      if (message?.kapso?.direction === "inbound") firstInbound = message;
+    }
+    const entryType = classifyEntry(
+      firstInbound?.kapso?.content || firstInbound?.text?.body || ""
+    );
+    for (const message of messages) {
       const ref = message?.referral;
       if (!ref) continue;
       return {
@@ -448,8 +495,12 @@ async function fetchAdReferral(env, payload) {
         headline: ref.headline || null,
         body: ref.body ? String(ref.body).slice(0, 500) : null,
         mediaType: ref.media_type || null,
+        entryType,
       };
     }
+    // Sin referral igual devolvemos el tipo de entrada: es el dato que usa la
+    // variante C para decidir como cerrar la presentacion.
+    if (entryType !== "otro") return { entryType };
   } catch {
     // El referral es informativo: si falla, el lookup sigue sin el.
   }

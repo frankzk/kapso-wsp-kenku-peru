@@ -1082,7 +1082,9 @@ function abVariant(phone) {
     h ^= digits.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  return (h >>> 0) % 2 === 0 ? "A" : "B";
+  // Ver customer-lookup: la variante B se retiro el 2026-08-25 (22% peor que el
+  // control) y su mitad del trafico pasa a C.
+  return (h >>> 0) % 2 === 0 ? "A" : "C";
 }
 
 // Ventana del candado anti-duplicado por numero (segundos). Un pedido IDENTICO
@@ -1136,8 +1138,12 @@ async function logAbOrder(env, orderName, variant, conversationId) {
     if (!kv || !orderName || !variant) return;
     // Fecha (dia Lima) y variante EN EL NOMBRE de la clave: el reporte cuenta
     // listando, sin un kv.get por clave.
+    // El conversationId va EN LA CLAVE (4to segmento) para que el reporte pueda
+    // cruzar cada pedido con su lead — y con el entry_type que este guarda — sin
+    // un kv.get por pedido.
     const day = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    await kv.put(`abx_order:${day}:${variant}:${orderName}`, JSON.stringify({ variant, conversationId: conversationId || null, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    const cid = conversationId || "sin-conv";
+    await kv.put(`abx_order:${day}:${variant}:${cid}:${orderName}`, JSON.stringify({ variant, conversationId: conversationId || null, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
   } catch {
     // best effort
   }

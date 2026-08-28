@@ -67,13 +67,26 @@ async function handleRequest(request, env = globalThis) {
   if (params.only === "ab") {
     const range = resolveRange(params);
     const ab = await fetchAbTest(env, range);
-    const lift = (ab && ab.A && ab.B && ab.A.rate && ab.B.rate) ? round2(ab.B.rate / ab.A.rate - 1) : null;
+    const liftOf = (v) => (ab && ab.A && ab.A.rate && ab[v] && ab[v].rate ? round2(ab[v].rate / ab.A.rate - 1) : null);
+    // La C solo cambia el cierre de los leads que entran con "Tengo una
+    // consulta", asi que el lift que decide es el de esa columna; el global
+    // viene diluido por los leads que reciben exactamente lo mismo que el control.
+    const sub = (v, e) => ab?.byEntryType?.[v]?.[e] || null;
+    const liftConsulta = (sub("A", "consulta")?.rate && sub("C", "consulta")?.rate)
+      ? round2(sub("C", "consulta").rate / sub("A", "consulta").rate - 1)
+      : null;
     return json({
       ok: true,
       range: { since: range.since, until: range.until, days: range.days },
       ab,
-      liftBvsA: lift,
-      note: "A = control (pide ubicacion tras el precio). B = cierre rapido (precio + cantidad juntos).",
+      liftCvsA: liftOf("C"),
+      liftCvsA_soloConsulta: liftConsulta,
+      liftBvsA: liftOf("B"),
+      note: "A = control (cierra pidiendo ubicacion tras el precio)."
+        + " C = a los leads que entran con 'Tengo una consulta' les cierra invitando su duda"
+        + " en vez de pedirles logistica; al resto los trata igual que A, por eso mirar"
+        + " liftCvsA_soloConsulta y no el global."
+        + " B = retirada el 2026-08-25 (precio + cantidad juntos, 22% peor que el control).",
     }, 200);
   }
 
@@ -533,28 +546,76 @@ async function fetchAbTest(env, range) {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv) return { available: false };
-    // Las claves llevan la fecha y la variante en el NOMBRE
-    // (ab_lead:<YYYY-MM-DD>:<A|B>:<id>), asi que basta con listar: un kv.get por
-    // clave tumbaba al worker cuando habia miles de leads acumulados.
-    const tally = { A: { leads: 0, orders: 0 }, B: { leads: 0, orders: 0 } };
-    for (const [prefix, field] of [["abx_lead:", "leads"], ["abx_order:", "orders"]]) {
-      let cursor;
-      for (let page = 0; page < 20; page += 1) {
-        const list = await kv.list({ prefix, cursor, limit: 1000 });
-        for (const entry of list.keys || []) {
-          const parts = String(entry.name || "").split(":");
-          const day = parts[1];
-          const variant = parts[2];
-          if (!day || !tally[variant]) continue;          // formato viejo: se ignora
-          if (day < range.since || day > range.until) continue;
-          tally[variant][field] += 1;
-        }
-        if (list.list_complete || !list.cursor) break;
-        cursor = list.cursor;
+    // Las claves llevan todo en el NOMBRE, asi que basta con listar: un kv.get
+    // por clave tumbaba al worker cuando habia miles de leads acumulados.
+    //   abx_lead:<dia>:<variante>:<entry_type>:<conversationId>
+    //   abx_order:<dia>:<variante>:<conversationId>:<pedido>
+    // El entry_type solo esta en el lead, asi que los pedidos se le cruzan por
+    // conversationId. Claves del formato viejo (sin esos segmentos) siguen
+    // contando en el total y caen en "otro".
+    const blank = () => ({ leads: 0, orders: 0 });
+    const tally = { A: blank(), B: blank(), C: blank() };
+    const byEntry = {};                       // variante -> entry_type -> {leads, orders}
+    const entryOfConv = new Map();            // conversationId -> entry_type
+    const bump = (variant, entry, field) => {
+      byEntry[variant] = byEntry[variant] || {};
+      byEntry[variant][entry] = byEntry[variant][entry] || blank();
+      byEntry[variant][entry][field] += 1;
+    };
+
+    let cursor;
+    for (let page = 0; page < 20; page += 1) {
+      const list = await kv.list({ prefix: "abx_lead:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const parts = String(entry.name || "").split(":");
+        const [, day, variant] = parts;
+        if (!day || !tally[variant]) continue;
+        if (day < range.since || day > range.until) continue;
+        // 5 segmentos = formato nuevo (con entry_type); 4 = formato viejo.
+        const entryType = parts.length >= 5 ? parts[3] : "otro";
+        const convId = parts[parts.length - 1];
+        entryOfConv.set(convId, entryType);
+        tally[variant].leads += 1;
+        bump(variant, entryType, "leads");
       }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
     }
+
+    cursor = undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const list = await kv.list({ prefix: "abx_order:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const parts = String(entry.name || "").split(":");
+        const [, day, variant] = parts;
+        if (!day || !tally[variant]) continue;
+        if (day < range.since || day > range.until) continue;
+        tally[variant].orders += 1;
+        // 5 segmentos = formato nuevo (trae conversationId antes del pedido).
+        const convId = parts.length >= 5 ? parts[3] : null;
+        bump(variant, (convId && entryOfConv.get(convId)) || "otro", "orders");
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+
     const rate = (v) => (v.leads > 0 ? v.orders / v.leads : null);
-    return { available: true, A: { ...tally.A, rate: rate(tally.A) }, B: { ...tally.B, rate: rate(tally.B) } };
+    const withRate = (v) => ({ ...v, rate: rate(v) });
+    const breakdown = {};
+    for (const [variant, entries] of Object.entries(byEntry)) {
+      breakdown[variant] = {};
+      for (const [entryType, v] of Object.entries(entries)) breakdown[variant][entryType] = withRate(v);
+    }
+    return {
+      available: true,
+      A: withRate(tally.A),
+      B: withRate(tally.B),
+      C: withRate(tally.C),
+      // Desglose por como entro el lead: la variante C solo cambia el cierre de
+      // los leads "consulta", asi que la comparacion que importa es esa columna;
+      // el total esta diluido por los leads que no reciben ningun cambio.
+      byEntryType: breakdown,
+    };
   } catch (error) {
     return { available: false, error: safeError(error) };
   }
