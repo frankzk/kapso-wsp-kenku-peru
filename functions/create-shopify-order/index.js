@@ -176,7 +176,12 @@ async function handleRequest(request, env = globalThis) {
     await recordOrderLock(env, phoneKey, orderSig, result.order?.name);
 
     // Registra la conversion A/B (una por pedido) para el reporte por variante.
-    await logAbOrder(env, result.order?.name, abVariant(orderInput.phone || input.phone), input.conversationId || input.conversation_id);
+    const abPhone = orderInput.phone || input.phone;
+    await logAbOrder(env, result.order?.name, abVariant(abPhone), input.conversationId || input.conversation_id, {
+      promo: promoVariant(abPhone),
+      total: Number(result.order?.totalPriceSet?.shopMoney?.amount ?? result.order?.totalPrice ?? NaN),
+      units: orderInput.lineItems.reduce((n, li) => n + (Number(li.quantity) || 0), 0),
+    });
 
     return json({
       ok: true,
@@ -217,6 +222,10 @@ const ORDER_CREATE_MUTATION = `#graphql
         name
         legacyResourceId
         statusPageUrl
+        # El total se usa para medir el ticket por variante en la prueba del 3x2:
+        # sin el solo se podria comparar conversion, y empujar el 3x2 puede bajar
+        # la conversion y aun asi convenir por lo que deja cada pedido.
+        totalPriceSet { shopMoney { amount } }
         customer { id displayName email phone }
       }
     }
@@ -1074,17 +1083,41 @@ function buildCustomAttributes(input, customerLookup) {
 // Asignacion A/B deterministica por telefono (misma logica que customer-lookup:
 // FNV-1a mod 2). Al ser pura funcion del telefono, aqui se recalcula sin
 // arrastrar el dato desde el agente.
+function fnv1a(text) {
+  let h = 2166136261;
+  const t = String(text || "");
+  for (let i = 0; i < t.length; i += 1) {
+    h ^= t.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return null;
-  let h = 2166136261;
-  for (let i = 0; i < digits.length; i += 1) {
-    h ^= digits.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
   // Ver customer-lookup: la variante B se retiro el 2026-08-25 (22% peor que el
   // control) y su mitad del trafico pasa a C.
-  return (h >>> 0) % 2 === 0 ? "A" : "C";
+  return fnv1a(digits) % 2 === 0 ? "A" : "C";
+}
+
+// Segundo eje (empuje al 3x2), independiente del A/C. Misma logica exacta que
+// customer-lookup: el bit bajo de FNV-1a es solo paridad de XOR, asi que sin el
+// mezclador las dos asignaciones quedan perfectamente correlacionadas.
+function mix32(value) {
+  let h = value >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function promoVariant(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
 }
 
 // Ventana del candado anti-duplicado por numero (segundos). Un pedido IDENTICO
@@ -1132,7 +1165,7 @@ async function recordOrderLock(env, phoneKey, signature, orderName) {
 
 // Registra la conversion A/B en KV (una por pedido). campaign-report cruza
 // ab_lead:* (leads) con ab_order:* (pedidos) para la tasa por variante.
-async function logAbOrder(env, orderName, variant, conversationId) {
+async function logAbOrder(env, orderName, variant, conversationId, extra = {}) {
   try {
     const kv = env?.KV || globalThis.KV;
     if (!kv || !orderName || !variant) return;
@@ -1143,7 +1176,23 @@ async function logAbOrder(env, orderName, variant, conversationId) {
     // un kv.get por pedido.
     const day = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const cid = conversationId || "sin-conv";
-    await kv.put(`abx_order:${day}:${variant}:${cid}:${orderName}`, JSON.stringify({ variant, conversationId: conversationId || null, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    // El total y las unidades van en el VALOR, no en la clave: son pocos pedidos
+    // (~200 cada dos semanas), asi que el reporte puede hacer un kv.get por
+    // pedido sin riesgo — lo que tumbaba al worker eran los miles de leads.
+    // Sin esto solo se podria medir conversion, y el 3x2 puede bajar la
+    // conversion y aun asi convenir por ticket.
+    await kv.put(
+      `abx_order:${day}:${variant}:${cid}:${orderName}`,
+      JSON.stringify({
+        variant,
+        promo: extra.promo || null,
+        total: Number.isFinite(extra.total) ? extra.total : null,
+        units: Number.isFinite(extra.units) ? extra.units : null,
+        conversationId: conversationId || null,
+        at: new Date().toISOString(),
+      }),
+      { expirationTtl: 90 * 24 * 3600 },
+    );
   } catch {
     // best effort
   }

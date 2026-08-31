@@ -561,6 +561,15 @@ async function fetchAbTest(env, range) {
     const tally = { A: blank(), B: blank(), C: blank() };
     const byEntry = {};                       // variante -> entry_type -> {leads, orders}
     const entryOfConv = new Map();            // conversationId -> entry_type
+    // Segundo eje, independiente del A/C: prueba del empuje al 3x2.
+    // Se mide por conversion Y por ticket: empujar el 3x2 puede convertir menos
+    // y aun asi dejar mas, porque el envio se paga una sola vez por pedido.
+    const promoTally = {};                    // P1|P2 -> {leads, orders, revenue, units}
+    const promoOfConv = new Map();            // conversationId -> P1|P2
+    const bumpPromo = (p, field, n) => {
+      promoTally[p] = promoTally[p] || { leads: 0, orders: 0, revenue: 0, units: 0 };
+      promoTally[p][field] += n;
+    };
     const bump = (variant, entry, field) => {
       byEntry[variant] = byEntry[variant] || {};
       byEntry[variant][entry] = byEntry[variant][entry] || blank();
@@ -575,12 +584,15 @@ async function fetchAbTest(env, range) {
         const [, day, variant] = parts;
         if (!day || !tally[variant]) continue;
         if (day < range.since || day > range.until) continue;
-        // 5 segmentos = formato nuevo (con entry_type); 4 = formato viejo.
+        // 5 segmentos = con entry_type; 6 = ademas con el eje de promo; 4 = viejo.
         const entryType = parts.length >= 5 ? parts[3] : "otro";
+        const promo = parts.length >= 6 ? parts[4] : "?";
         const convId = parts[parts.length - 1];
         entryOfConv.set(convId, entryType);
+        promoOfConv.set(convId, promo);
         tally[variant].leads += 1;
         bump(variant, entryType, "leads");
+        bumpPromo(promo, "leads", 1);
       }
       if (list.list_complete || !list.cursor) break;
       cursor = list.cursor;
@@ -590,7 +602,8 @@ async function fetchAbTest(env, range) {
     for (let page = 0; page < 20; page += 1) {
       const list = await kv.list({ prefix: "abx_order:", cursor, limit: 1000 });
       for (const entry of list.keys || []) {
-        const parts = String(entry.name || "").split(":");
+        const name = String(entry.name || "");
+        const parts = name.split(":");
         const [, day, variant] = parts;
         if (!day || !tally[variant]) continue;
         if (day < range.since || day > range.until) continue;
@@ -598,6 +611,25 @@ async function fetchAbTest(env, range) {
         // 5 segmentos = formato nuevo (trae conversationId antes del pedido).
         const convId = parts.length >= 5 ? parts[3] : null;
         bump(variant, (convId && entryOfConv.get(convId)) || "otro", "orders");
+        // Un kv.get POR PEDIDO es asumible (son ~200 cada dos semanas); lo que
+        // tumbaba al worker eran los miles de leads. Se necesita para el ticket:
+        // el eje del 3x2 no se puede juzgar solo por conversion.
+        let promo = (convId && promoOfConv.get(convId)) || null;
+        let total = null, units = null;
+        try {
+          const raw = await kv.get(name);
+          if (raw) {
+            const v = JSON.parse(raw) || {};
+            promo = v.promo || promo;
+            if (Number.isFinite(v.total)) total = v.total;
+            if (Number.isFinite(v.units)) units = v.units;
+          }
+        } catch {
+          // si el valor no se puede leer, el pedido igual cuenta para conversion
+        }
+        bumpPromo(promo || "?", "orders", 1);
+        if (total != null) bumpPromo(promo || "?", "revenue", total);
+        if (units != null) bumpPromo(promo || "?", "units", units);
       }
       if (list.list_complete || !list.cursor) break;
       cursor = list.cursor;
@@ -619,6 +651,15 @@ async function fetchAbTest(env, range) {
       // los leads "consulta", asi que la comparacion que importa es esa columna;
       // el total esta diluido por los leads que no reciben ningun cambio.
       byEntryType: breakdown,
+      // Eje independiente del 3x2. `aov` y `unitsPerOrder` son el criterio real:
+      // P2 puede tener menos conversion que P1 y aun asi ganar.
+      promoTest: Object.fromEntries(Object.entries(promoTally).map(([k, v]) => [k, {
+        ...v,
+        rate: v.leads > 0 ? v.orders / v.leads : null,
+        aov: v.orders > 0 ? round2(v.revenue / v.orders) : null,
+        unitsPerOrder: v.orders > 0 ? round2(v.units / v.orders) : null,
+        revenuePerLead: v.leads > 0 ? round2(v.revenue / v.leads) : null,
+      }])),
     };
   } catch (error) {
     return { available: false, error: safeError(error) };

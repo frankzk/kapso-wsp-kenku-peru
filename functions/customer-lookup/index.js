@@ -200,7 +200,7 @@ async function handleRequest(request, env = globalThis) {
     ]);
     // El tipo de entrada sale del mismo fetch del referral, asi que el registro
     // A/B va DESPUES y no en paralelo: sin eso no se puede guardar en la clave.
-    await logAbLead(env, conversationId, abVariant(phone), adReferral?.entryType || "otro");
+    await logAbLead(env, conversationId, abVariant(phone), adReferral?.entryType || "otro", promoVariant(phone));
     await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
       return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
@@ -374,6 +374,8 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
     ad_referral_product_handle: resolveAdProductHandle(adReferral)?.handle || null,
     ad_referral_match_via: resolveAdProductHandle(adReferral)?.via || null,
     ab_variant: abVariant(phone),
+    // Segundo eje, independiente: prueba del empuje al 3x2 (ver promoVariant).
+    promo_variant: promoVariant(phone),
     // "consulta" | "link" | "otro" — como llego el lead (ver classifyEntry).
     entry_type: adReferral?.entryType || "otro",
   };
@@ -390,15 +392,58 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
 // con 5.406 leads en dos semanas quedo en 3,14% contra 4,05% del control, un
 // 22% PEOR (z~1,8, p~0,07). No concluyente al 95%, pero sin ninguna señal a
 // favor, asi que no valia seguir gastandole la mitad del trafico.
+function fnv1a(text) {
+  let h = 2166136261;
+  const s = String(text || "");
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return "A";
-  let h = 2166136261;
-  for (let i = 0; i < digits.length; i += 1) {
-    h ^= digits.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0) % 2 === 0 ? "A" : "C";
+  return fnv1a(digits) % 2 === 0 ? "A" : "C";
+}
+
+// SEGUNDO EJE, independiente del A/C: prueba del empuje al 3x2.
+//
+// Va con sal ("promo") para que el reparto sea ortogonal al de abVariant: cada
+// celda (A/P1, A/P2, C/P1, C/P2) recibe ~25% del trafico y cada experimento
+// queda balanceado respecto del otro. Asi se pueden medir los dos a la vez sin
+// que se contaminen, en vez de tener que parar la C —que recien lleva 4 dias—
+// para arrancar este.
+//
+// P1 = control: upsell suave una vez, como hasta ahora.
+// P2 = el 3x2 se presenta como la opcion principal, con el precio por unidad.
+//
+// Por que se prueba: en el peor escenario de costos (envio S/20, 60% de entrega)
+// un 3x2 deja S/117.40 de contribucion contra S/55.60 de una unidad — 2,1x —
+// porque el envio y el riesgo de rechazo se pagan una sola vez. Mover 50 pedidos
+// al mes de 1 unidad a 3x2 son ~S/3.090, sin trafico nuevo.
+// OJO con el hash: el bit bajo de FNV-1a es solo la paridad de los XOR, asi que
+// `fnv1a(x + sal) % 2` queda PERFECTAMENTE correlacionado con `fnv1a(x) % 2` —
+// probado: con sal salian solo las celdas A/P2 y C/P1, 50% cada una, y las otras
+// dos vacias. Por eso este eje pasa el hash por un mezclador (avalancha estilo
+// murmur3) antes de tomar el bit: ahi si los bits altos y bajos se independizan.
+// abVariant queda intacto a proposito: cambiarlo reasignaria de variante a los
+// clientes que ya estan dentro de la prueba A/C.
+function mix32(value) {
+  let h = value >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function promoVariant(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "P1";
+  return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
 }
 
 // De que forma entro el lead, leido del PRIMER mensaje del cliente:
@@ -433,7 +478,7 @@ function limaDayNow() {
   return new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function logAbLead(env, conversationId, variant, entryType = "otro") {
+async function logAbLead(env, conversationId, variant, entryType = "otro", promo = "P1") {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv || !conversationId || !variant) return;
@@ -443,9 +488,11 @@ async function logAbLead(env, conversationId, variant, entryType = "otro") {
     // El tipo de entrada va 4to a proposito: el reporte lee dia y variante por
     // posicion (partes 1 y 2) y los segmentos extra no lo afectan.
     const day = limaDayNow();
-    const key = `abx_lead:${day}:${variant}:${entryType}:${conversationId}`;
+    // El eje de promo va 5to; el conversationId queda SIEMPRE ultimo para que el
+    // reporte lo lea por posicion negativa y los segmentos extra no lo rompan.
+    const key = `abx_lead:${day}:${variant}:${entryType}:${promo}:${conversationId}`;
     if (await kv.get(key)) return;
-    await kv.put(key, JSON.stringify({ variant, entryType, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    await kv.put(key, JSON.stringify({ variant, entryType, promo, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
   } catch {
     // best effort
   }
