@@ -47,6 +47,23 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+## Mapear un anuncio (CTWA) a su producto
+
+- Cuando llega la alerta de Telegram "🔔 ANUNCIO SIN MAPEAR", el adId va al
+  `AD_PRODUCT_MAP` de `functions/customer-lookup/index.js` (adId = `source_id`
+  del referral) apuntando al **handle** de Shopify del producto. Si el titular
+  del anuncio es inequívoco, agregarlo también a `AD_HEADLINE_MAP` para que las
+  variantes futuras del mismo creativo se resuelvan solas.
+- OJO: el código vivo en Kapso puede estar por delante del repo. Antes de editar
+  una función, bajar su código con
+  `GET /platform/v1/functions/{id}` y trabajar sobre esa base; si no, el deploy
+  revierte trabajo que no está en el repo.
+- Para confirmar a qué producto pertenece un adId se puede consultar el creativo
+  en Meta (`ads_get_ad_entities` → `creative_id`, luego `ads_get_creatives`):
+  el `title`/`body` del creativo identifican el producto. Ante cualquier duda,
+  confirmarlo con el dueño antes de mapear: un mapeo equivocado atiende mal al
+  cliente.
+
 ## Secrets de funciones (LECCION IMPORTANTE)
 
 - Las variables de entorno de las funciones se configuran como **Secrets** vía
