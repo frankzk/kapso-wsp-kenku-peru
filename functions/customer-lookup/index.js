@@ -38,6 +38,7 @@ const AD_PRODUCT_MAP = {
   "120248592492790056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120248645582130056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120253351277920120": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas", // Piernas menos pesadas al final del dia (Cayenne Pepper)
+  "120253821227480066": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas", // Piernas menos pesadas al final del dia (variante con titular sin renderizar; su referral trae landing_page_url del producto)
   "120253351779620120": "suplemento-natural-para-higado-y-puede-favorecer-el-drenaje-del", // Drenaje linfatico suave y natural (LINFOVIT - Higado y Drenaje Linfatico)
   "120253351973130120": "suplemento-natural-para-higado-y-puede-favorecer-el-drenaje-del", // Drenaje linfatico suave y natural (variante -> LINFOVIT)
   "120253052315900120": "keratina-romero-ortiga-biotina-champu-nutritivo-y-regenerador-para-cabello-grueso-y-voluminoso-220-ml-tgideas™", // Revive Tu Cabello (Shampoo de Romero - Keratina+Romero+Ortiga+Biotina)
