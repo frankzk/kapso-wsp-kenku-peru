@@ -22,6 +22,7 @@ const AD_PRODUCT_MAP = {
   "120253592159230066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592247790066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120253592159130066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
+  "120254025101090066": "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels", // El poder de la semilla negra (variante -> Black Seed Oil)
   "120250238762300267": "nattokinase-mejora-la-circulacion-arterial-90-capsulas", // Lee esto si tienes la presion alta (Nattokinase)
   "120253556996440120": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml", // Equilibrio de azucar para tu dia a dia (SUGAR CONTROL - Berberina y Curcuma)
   "120253553230980120": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml", // Equilibrio de azucar para tu dia a dia (variante -> SUGAR CONTROL)
