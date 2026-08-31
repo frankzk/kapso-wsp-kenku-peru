@@ -85,25 +85,49 @@ Referencia: los valores actuales están en el proyecto Aurela
    - Crear el secret de repo `CAMPAIGN_DASHBOARD_KEY`.
    - El archivo debe estar en la rama por defecto para que corra el cron.
 
-## ⚠️ El repo está DESFASADO respecto al proyecto Kapso en producción
+## Estado de sincronización con producción
 
-Verificado el 2026-08-31 contra la Platform API del proyecto Kenku. **No correr
-`kapso push` desde este repo sin reconciliar primero** (`kapso pull`): pisaría
-meses de cambios que solo viven en Kapso.
+Reconciliado con `kapso pull` el 2026-08-31 (CLI 0.18.0, auth por `KAPSO_API_KEY`).
+Antes de eso el repo llevaba meses desfasado: faltaban 8 funciones y un workflow
+entero, y `kapso push` habría pisado producción. Ahora `kapso push --dry-run`
+reporta *18 unchanged*.
 
-- **Funciones que existen en producción y NO están en el repo**: `save-order-state`
-  (ahora sí, se agregó con este arreglo), `send-text`, `send-buttons`,
-  `send-payment`, `loop-guard`, `followup-terminal-router`, `lookupshopifycustomer`,
-  `pause`.
-- **Funciones del repo desactualizadas** frente a producción: `notify-team`
-  (producción ya titula la alerta con su `reason`, ej. "🔔 no valid phone"),
-  `customer-lookup`, `check-coverage`, `campaign-report`, `shopify-product-lookup`.
-- **Workflow**: producción tiene 46 nodos (incluye `loop-guard`/`loop-end` y el
-  experimento A/B `ab_variant`) contra 43 del repo, y el system prompt difiere en
-  ~600 líneas. `workflows/kenku-sales-bot/definition.json` y `workflow.js` de este
-  repo son la versión vieja.
-- `create-shopify-order/index.js` sí quedó sincronizado con producción en este
-  cambio (código vivo + el arreglo del teléfono).
+Lo que bajó y no estaba en el repo:
+
+- **Funciones nuevas**: `save-order-state`, `send-text`, `send-buttons`,
+  `send-payment`, `loop-guard`, `followup-terminal-router`,
+  `lookupshopifycustomer`, `pause` (16 funciones en total).
+- **Workflow nuevo**: `kenku-recovery-bot` (campaña de recuperación de pedidos
+  retornados, número Kenku 630).
+- **`kenku-sales-bot`**: 46 nodos / 60 edges (incluye `loop-guard` y el
+  experimento A/B `ab_variant`) contra los 43 que tenía el repo, prompt con ~600
+  líneas de diferencia, y los 4 triggers reales.
+- `functions/**/function.yaml` bajó con los secretos reales: **sigue
+  gitignoreado**, no se commitea.
+- `.kapso/remote-map.json` es estado local del CLI (ids, hashes y lock
+  versions por clon): se agregó al `.gitignore`.
+
+Tres detalles a tener presentes:
+
+- **`kapso pull` justo antes de cada `kapso push`.** El `kenku-sales-bot` está
+  vivo (16.000+ ejecuciones) y su `lock_version` avanza solo con el tráfico: a
+  los pocos minutos de un pull, el push corta con *"Remote workflow changed
+  since the last pull"* aunque el contenido sea idéntico. Un `kapso pull` lo
+  destraba y no cambia ningún archivo.
+- El `definition.json` del repo es la forma **portable**: el CLI reemplaza cada
+  `function_id` (uuid del servidor) por `function_slug` y quita los ids de
+  edges/condiciones. Por eso difiere del GET de la Platform API sin estar
+  desactualizado — y por eso un PATCH por API sí tiene que llevar los
+  `function_id` resueltos (ver `CLAUDE.md`).
+
+- `workflows/kenku-sales-bot/workflow.js` estaba desfasado y `kapso pull` lo
+  **preserva** en vez de regenerarlo ("Preserved authored workflow source"), así
+  que un `kapso build` habría reconstruido `definition.json` con el grafo viejo.
+  Se borró y se volvió a pullear para que lo regenere desde producción.
+- Los tests de `check-coverage` asumían contratos que producción ya cambió y se
+  actualizaron a lo que hoy corre: sin distrito la cobertura devuelve
+  `needs_location` (antes se resolvía con la provincia sola) y el watchdog alerta
+  con >3 min de silencio (antes 15) difundiendo a varios chats de Telegram.
 
 ## Incidentes corregidos
 

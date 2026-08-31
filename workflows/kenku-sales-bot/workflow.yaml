@@ -4,5 +4,14 @@ slug: kenku-sales-bot
 status: active
 triggers:
   - active: true
+    phoneNumberId: "951608524703564"
+    triggerType: inbound_message
+  - active: true
     phoneNumberId: "597907523413541"
+    triggerType: inbound_message
+  - active: true
+    phoneNumberId: "1239315459260256"
+    triggerType: inbound_message
+  - active: true
+    phoneNumberId: "1117623181444547"
     triggerType: inbound_message

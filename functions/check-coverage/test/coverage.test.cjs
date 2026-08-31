@@ -102,7 +102,7 @@ async function coverageMode(input) {
 (async () => {
   const COD_CASES = [
     [{ district: "chiclayo" }, "ciudad suelta como distrito (Chiclayo)"],
-    [{ province: "trujillo" }, "ciudad suelta como provincia (Trujillo)"],
+    [{ district: "trujillo" }, "ciudad suelta como distrito (Trujillo)"],
     [{ district: "arequipa" }, "Arequipa suelto"],
     [{ district: "trujillo", address: "tienes oficina en trujillo?" }, "'oficina' NO fuerza agencia"],
     [{ district: "banos del inca", province: "cajamarca" }, "Cajamarca: Banos del Inca"],
@@ -123,6 +123,16 @@ async function coverageMode(input) {
   ];
   for (const [input, label] of AGENCIA_CASES) {
     check(`agencia: ${label}`, (await coverageMode(input)) === "agencia");
+  }
+
+  // Sin distrito no se decide la ruta: se pide el distrito, NUNCA se manda a
+  // agencia por las dudas (que era el error que motivo estos casos).
+  const SIN_DISTRITO = [
+    [{ province: "trujillo" }, "solo provincia (Trujillo)"],
+    [{ region: "cusco" }, "solo region (Cusco)"],
+  ];
+  for (const [input, label] of SIN_DISTRITO) {
+    check(`pide ubicacion: ${label}`, (await coverageMode(input)) === "needs_location");
   }
 
   // --- Resultado ---------------------------------------------------------------

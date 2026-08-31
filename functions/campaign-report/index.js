@@ -24,9 +24,10 @@ const MAX_ORDER_PAGES = 12; // 12 x 250 = 3000 ordenes por rango
 const MAX_META_PAGES = 20;
 const MAX_CONV_PAGES = 50; // por numero: 50 x 100 = 5000 conversaciones por rango
 const MAX_CONV_DAYS = 16;  // la conversion se calcula para rangos <= 16 dias (evita timeouts del worker)
-// TODO(Kenku): reemplazar por el phoneNumberId real del numero de WhatsApp de
-// Kenku Peru. Override con WHATSAPP_PHONE_NUMBER_IDS si hace falta.
-const DEFAULT_PHONE_NUMBER_IDS = ["597907523413541"];
+// Numeros de produccion de Kenku Peru ("Kenku Peru 981", "Kenku 451" y
+// "Kenku 600", conectados al workflow) mas "Kenku Peru 348" (historico) y sandbox de
+// pruebas. Override con WHATSAPP_PHONE_NUMBER_IDS.
+const DEFAULT_PHONE_NUMBER_IDS = ["1145171692021464", "1239315459260256", "951608524703564", "1117623181444547", "597907523413541"];
 const DEFAULT_DAYS = 30;
 const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000; // America/Lima = UTC-5 (sin DST)
 
@@ -52,11 +53,72 @@ async function handleRequest(request, env = globalThis) {
   // Guarda de acceso: si hay key configurada, exigirla. Si no hay key configurada,
   // bloquear por defecto (no exponer ventas por accidente).
   const provided = params.key || request.headers.get("x-dashboard-key") || "";
-  if (!config.dashboardKey || provided !== config.dashboardKey) {
+  const authorized = (config.dashboardKey && provided === config.dashboardKey)
+    || (config.internalKey && provided === config.internalKey);
+  if (!authorized) {
     const body = wantsJson
       ? json({ error: "unauthorized" }, 401)
       : html(renderUnauthorized(), 401);
     return body;
+  }
+
+  // Modo ligero SOLO prueba A/B. El reporte completo se cae cuando Meta no esta
+  // conectado, asi que la lectura del experimento va aislada aca.
+  if (params.only === "ab") {
+    const range = resolveRange(params);
+    const ab = await fetchAbTest(env, range);
+    const liftOf = (v) => (ab && ab.A && ab.A.rate && ab[v] && ab[v].rate ? round2(ab[v].rate / ab.A.rate - 1) : null);
+    // La C solo cambia el cierre de los leads que entran con "Tengo una
+    // consulta", asi que el lift que decide es el de esa columna; el global
+    // viene diluido por los leads que reciben exactamente lo mismo que el control.
+    const sub = (v, e) => ab?.byEntryType?.[v]?.[e] || null;
+    const liftConsulta = (sub("A", "consulta")?.rate && sub("C", "consulta")?.rate)
+      ? round2(sub("C", "consulta").rate / sub("A", "consulta").rate - 1)
+      : null;
+    return json({
+      ok: true,
+      range: { since: range.since, until: range.until, days: range.days },
+      ab,
+      liftCvsA: liftOf("C"),
+      liftCvsA_soloConsulta: liftConsulta,
+      liftBvsA: liftOf("B"),
+      note: "A = control (cierra pidiendo ubicacion tras el precio)."
+        + " C = a los leads que entran con 'Tengo una consulta' les cierra invitando su duda"
+        + " en vez de pedirles logistica; al resto los trata igual que A, por eso mirar"
+        + " liftCvsA_soloConsulta y no el global."
+        + " B = retirada el 2026-08-25 (precio + cantidad juntos, 22% peor que el control).",
+    }, 200);
+  }
+
+  // Modo ligero SOLO conversion del bot (conversaciones nuevas -> pedidos del bot).
+  // Evita fetchMetaInsights (Meta no esta conectado y tumbaba el reporte). Devuelve
+  // 200 con los numeros y aisla errores por sub-fetch.
+  if (params.only === "conversion") {
+    const range = resolveRange(params);
+    let sales = null, salesErr = null, conv = null, convErr = null;
+    try { sales = await fetchOrderAggregates(config, range); } catch (e) { salesErr = safeError(e); }
+    try { conv = await fetchConversationStats(config, range); } catch (e) { convErr = safeError(e); }
+    const convByDay = conv && conv.byDay instanceof Map ? Object.fromEntries(conv.byDay) : {};
+    const ordByDay = sales && sales.whatsappOrdersByDay instanceof Map ? Object.fromEntries(sales.whatsappOrdersByDay) : {};
+    const days = [...new Set([...Object.keys(convByDay), ...Object.keys(ordByDay)])].sort();
+    const perDay = days.map((d) => {
+      const c = convByDay[d] || 0, o = ordByDay[d] || 0;
+      return { day: d, conversations: c, botOrders: o, rate: c > 0 ? round2(o / c) : null };
+    });
+    const conversations = conv ? conv.total : null;
+    const botOrders = sales ? sales.whatsappOrders : null;
+    const conversionRate = (conversations && botOrders != null) ? round2(botOrders / conversations) : null;
+    // Facturacion y ticket promedio de los pedidos del bot: son la entrada que
+    // decide si conviene un modelo mas caro (ver el analisis de margen).
+    const botRevenue = sales ? round2(sales.whatsappRevenue) : null;
+    const aov = (botOrders && botRevenue != null) ? round2(botRevenue / botOrders) : null;
+    return json({
+      ok: true,
+      range: { since: range.since, until: range.until, days: range.days },
+      conversations, botOrders, conversionRate, botRevenue, aov,
+      perDay,
+      notes: { convTruncated: conv && conv.truncated, convStatsError: conv && conv.error, salesErr, convErr },
+    }, 200);
   }
 
   try {
@@ -65,6 +127,8 @@ async function handleRequest(request, env = globalThis) {
     const meta = await fetchMetaInsights(config, range);
     const conv = await fetchConversationStats(config, range);
     const report = buildReport({ sales, meta, conv, range, config });
+    report.searchMisses = await fetchSearchMisses(env, range);
+    report.abTest = await fetchAbTest(env, range);
 
     // Modo notificacion: empuja un resumen al Telegram del equipo (para el job diario).
     if (params.notify === "telegram") {
@@ -111,6 +175,9 @@ function getConfig(env = globalThis) {
     metaAdAccountId: normalizeAdAccountId(g("META_AD_ACCOUNT_ID", "mETAADACCOUNTID")),
     metaApiVersion: g("META_API_VERSION", "mETAAPIVERSION") || DEFAULT_META_API_VERSION,
     dashboardKey: g("DASHBOARD_ACCESS_KEY", "dASHBOARDACCESSKEY"),
+    // Segunda llave SOLO para reportes internos (no toca la del dashboard ni el
+    // job de Telegram). Permite correr el reporte JSON sin exponer la key publica.
+    internalKey: g("INTERNAL_REPORT_KEY", "iNTERNALREPORTKEY"),
     kapsoApiKey: g("KAPSO_API_KEY", "kAPSOAPIKEY"),
     kapsoApiBase: g("KAPSO_API_BASE", "kAPSOAPIBASE") || "https://api.kapso.ai",
     phoneNumberIds: parsePhoneIds(g("WHATSAPP_PHONE_NUMBER_IDS", "wHATSAPPPHONENUMBERIDS")),
@@ -434,6 +501,171 @@ async function fetchConversationStats(config, range) {
 // Construccion del reporte (puro, testeable)
 // ---------------------------------------------------------------------------
 
+
+// Busquedas de producto que NO encontraron nada en el periodo (las registran
+// shopify-product-lookup y product-media-lookup en KV como search_miss:*).
+// Sirve para detectar errores ortograficos reales y alimentar sinonimos.
+async function fetchSearchMisses(env, range) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    if (!kv) return { available: false, items: [] };
+    const sinceMs = new Date(`${range.since}T00:00:00-05:00`).getTime();
+    const untilMs = new Date(`${range.until}T23:59:59-05:00`).getTime();
+    const counts = new Map();
+    let cursor;
+    for (let page = 0; page < 10; page += 1) {
+      const list = await kv.list({ prefix: "search_miss:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const ts = Number((entry.name.split(":")[1]) || 0);
+        if (ts < sinceMs || ts > untilMs) continue;
+        const raw = await kv.get(entry.name);
+        if (!raw) continue;
+        let record;
+        try { record = JSON.parse(raw); } catch { continue; }
+        const query = String(record.q || "").toLowerCase().trim();
+        if (!query) continue;
+        const item = counts.get(query) || { query, count: 0, reasons: new Set(), lastAt: "" };
+        item.count += 1;
+        if (record.reason) item.reasons.add(record.reason);
+        if (record.at && record.at > item.lastAt) item.lastAt = record.at;
+        counts.set(query, item);
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+    const items = [...counts.values()]
+      .map((item) => ({ query: item.query, count: item.count, reasons: [...item.reasons], lastAt: item.lastAt }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 25);
+    return { available: true, items };
+  } catch (error) {
+    return { available: false, items: [], error: safeError(error) };
+  }
+}
+
+// Prueba A/B del arranque: cruza ab_lead:* (leads asignados por customer-lookup)
+// con ab_order:* (pedidos creados) para medir conversion por variante.
+// A = presentacion completa de una (control); B = gancho + pregunta primero.
+async function fetchAbTest(env, range) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    if (!kv) return { available: false };
+    // Las claves llevan todo en el NOMBRE, asi que basta con listar: un kv.get
+    // por clave tumbaba al worker cuando habia miles de leads acumulados.
+    //   abx_lead:<dia>:<variante>:<entry_type>:<conversationId>
+    //   abx_order:<dia>:<variante>:<conversationId>:<pedido>
+    // El entry_type solo esta en el lead, asi que los pedidos se le cruzan por
+    // conversationId. Claves del formato viejo (sin esos segmentos) siguen
+    // contando en el total y caen en "otro".
+    const blank = () => ({ leads: 0, orders: 0 });
+    const tally = { A: blank(), B: blank(), C: blank() };
+    const byEntry = {};                       // variante -> entry_type -> {leads, orders}
+    const entryOfConv = new Map();            // conversationId -> entry_type
+    // Segundo eje, independiente del A/C: prueba del empuje al 3x2.
+    // Se mide por conversion Y por ticket: empujar el 3x2 puede convertir menos
+    // y aun asi dejar mas, porque el envio se paga una sola vez por pedido.
+    const promoTally = {};                    // P1|P2 -> {leads, orders, revenue, units}
+    const promoOfConv = new Map();            // conversationId -> P1|P2
+    const bumpPromo = (p, field, n) => {
+      promoTally[p] = promoTally[p] || { leads: 0, orders: 0, revenue: 0, units: 0 };
+      promoTally[p][field] += n;
+    };
+    const bump = (variant, entry, field) => {
+      byEntry[variant] = byEntry[variant] || {};
+      byEntry[variant][entry] = byEntry[variant][entry] || blank();
+      byEntry[variant][entry][field] += 1;
+    };
+
+    let cursor;
+    for (let page = 0; page < 20; page += 1) {
+      const list = await kv.list({ prefix: "abx_lead:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const parts = String(entry.name || "").split(":");
+        const [, day, variant] = parts;
+        if (!day || !tally[variant]) continue;
+        if (day < range.since || day > range.until) continue;
+        // 5 segmentos = con entry_type; 6 = ademas con el eje de promo; 4 = viejo.
+        const entryType = parts.length >= 5 ? parts[3] : "otro";
+        const promo = parts.length >= 6 ? parts[4] : "?";
+        const convId = parts[parts.length - 1];
+        entryOfConv.set(convId, entryType);
+        promoOfConv.set(convId, promo);
+        tally[variant].leads += 1;
+        bump(variant, entryType, "leads");
+        bumpPromo(promo, "leads", 1);
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+
+    cursor = undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const list = await kv.list({ prefix: "abx_order:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const name = String(entry.name || "");
+        const parts = name.split(":");
+        const [, day, variant] = parts;
+        if (!day || !tally[variant]) continue;
+        if (day < range.since || day > range.until) continue;
+        tally[variant].orders += 1;
+        // 5 segmentos = formato nuevo (trae conversationId antes del pedido).
+        const convId = parts.length >= 5 ? parts[3] : null;
+        bump(variant, (convId && entryOfConv.get(convId)) || "otro", "orders");
+        // Un kv.get POR PEDIDO es asumible (son ~200 cada dos semanas); lo que
+        // tumbaba al worker eran los miles de leads. Se necesita para el ticket:
+        // el eje del 3x2 no se puede juzgar solo por conversion.
+        let promo = (convId && promoOfConv.get(convId)) || null;
+        let total = null, units = null;
+        try {
+          const raw = await kv.get(name);
+          if (raw) {
+            const v = JSON.parse(raw) || {};
+            promo = v.promo || promo;
+            if (Number.isFinite(v.total)) total = v.total;
+            if (Number.isFinite(v.units)) units = v.units;
+          }
+        } catch {
+          // si el valor no se puede leer, el pedido igual cuenta para conversion
+        }
+        bumpPromo(promo || "?", "orders", 1);
+        if (total != null) bumpPromo(promo || "?", "revenue", total);
+        if (units != null) bumpPromo(promo || "?", "units", units);
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+
+    const rate = (v) => (v.leads > 0 ? v.orders / v.leads : null);
+    const withRate = (v) => ({ ...v, rate: rate(v) });
+    const breakdown = {};
+    for (const [variant, entries] of Object.entries(byEntry)) {
+      breakdown[variant] = {};
+      for (const [entryType, v] of Object.entries(entries)) breakdown[variant][entryType] = withRate(v);
+    }
+    return {
+      available: true,
+      A: withRate(tally.A),
+      B: withRate(tally.B),
+      C: withRate(tally.C),
+      // Desglose por como entro el lead: la variante C solo cambia el cierre de
+      // los leads "consulta", asi que la comparacion que importa es esa columna;
+      // el total esta diluido por los leads que no reciben ningun cambio.
+      byEntryType: breakdown,
+      // Eje independiente del 3x2. `aov` y `unitsPerOrder` son el criterio real:
+      // P2 puede tener menos conversion que P1 y aun asi ganar.
+      promoTest: Object.fromEntries(Object.entries(promoTally).map(([k, v]) => [k, {
+        ...v,
+        rate: v.leads > 0 ? v.orders / v.leads : null,
+        aov: v.orders > 0 ? round2(v.revenue / v.orders) : null,
+        unitsPerOrder: v.orders > 0 ? round2(v.units / v.orders) : null,
+        revenuePerLead: v.leads > 0 ? round2(v.revenue / v.leads) : null,
+      }])),
+    };
+  } catch (error) {
+    return { available: false, error: safeError(error) };
+  }
+}
+
 function buildReport({ sales, meta, conv, range, config }) {
   const adIds = new Set([...sales.byAd.keys(), ...meta.byAd.keys()]);
   const sameCurrency = !meta.accountCurrency || meta.accountCurrency === sales.currency;
@@ -561,6 +793,46 @@ function round2(n) {
 // Render HTML
 // ---------------------------------------------------------------------------
 
+
+function renderAbTest(report) {
+  const ab = report.abTest;
+  if (!ab || !ab.available) return "";
+  const pct = (r) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
+  const row = (name, desc, v) => `
+    <tr><td><b>${name}</b><div class="sub">${desc}</div></td><td class="num">${v.leads}</td><td class="num">${v.orders}</td><td class="num">${pct(v.rate)}</td></tr>`;
+  let winner = "";
+  if (ab.A.rate != null && ab.B.rate != null && (ab.A.leads + ab.B.leads) >= 40) {
+    if (ab.B.rate > ab.A.rate) winner = "🅱️ La variante B (gancho) va ganando.";
+    else if (ab.A.rate > ab.B.rate) winner = "🅰️ La variante A (control) va ganando.";
+    else winner = "Empate por ahora.";
+  } else {
+    winner = "Aún pocos datos — deja correr el experimento unos días antes de decidir.";
+  }
+  return `
+  <h2>Prueba A/B del arranque</h2>
+  <p class="sub">A = presentación completa de una · B = gancho + "¿es para ti o para alguien más?" antes de presentar. ${escapeHtml(winner)}</p>
+  <table>
+    <thead><tr><th>Variante</th><th class="num">Leads</th><th class="num">Pedidos</th><th class="num">Conversión</th></tr></thead>
+    <tbody>${row("A — control", "presenta todo de una", ab.A)}${row("B — gancho", "pregunta primero", ab.B)}</tbody>
+  </table>`;
+}
+
+function renderSearchMisses(report) {
+  const data = report.searchMisses || { available: false, items: [] };
+  if (!data.available) return "";
+  const rows = data.items.length
+    ? data.items.map((m) => `
+      <tr><td>${escapeHtml(m.query)}</td><td class="num">${m.count}</td><td>${escapeHtml((m.reasons || []).join(", "))}</td></tr>`).join("")
+    : `<tr><td colspan="3">Sin búsquedas fallidas en el periodo 🎉</td></tr>`;
+  return `
+  <h2>Búsquedas no encontradas</h2>
+  <p class="sub">Lo que los clientes escribieron y el bot no pudo resolver a un producto — candidatos a sinónimos o alias (tags en Shopify).</p>
+  <table>
+    <thead><tr><th>Consulta del cliente</th><th class="num">Veces</th><th>Motivo</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function renderDashboard(report) {
   const cur = report.currency;
   const t = report.totals;
@@ -656,6 +928,8 @@ function renderDashboard(report) {
         <tbody>${adRows}</tbody>
       </table></div>
     </section>
+    ${renderAbTest(report)}
+    ${renderSearchMisses(report)}
     <footer>Datos: Shopify (ventas atribuidas vía ctwa_ad_id) + Meta Marketing API (gasto). <a href="?key=__KEY__&days=${report.range.days || 30}&format=json">Ver JSON</a></footer>`;
 
   return pageShell(body);
@@ -786,6 +1060,20 @@ function buildTelegramSummary(report) {
   if (!report.metaConfigured) {
     L.push("");
     L.push("<i>Conecta Meta Ads para ver gasto, CPA y ROAS.</i>");
+  }
+  const ab = report.abTest;
+  if (ab && ab.available && (ab.A.leads + ab.B.leads) > 0) {
+    const pct = (r) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
+    L.push("");
+    L.push("🧪 <b>A/B arranque</b> (conversión leads→pedidos):");
+    L.push(`• A control: ${ab.A.orders}/${ab.A.leads} (${pct(ab.A.rate)})`);
+    L.push(`• B gancho: ${ab.B.orders}/${ab.B.leads} (${pct(ab.B.rate)})`);
+  }
+  const misses = report.searchMisses;
+  if (misses && misses.available && misses.items.length) {
+    L.push("");
+    L.push("🔎 <b>Busquedas no encontradas</b> (candidatas a sinonimos):");
+    misses.items.slice(0, 5).forEach((m) => L.push(`• "${escapeHtml(m.query)}" (${m.count}x)`));
   }
   return L.join("\n");
 }
