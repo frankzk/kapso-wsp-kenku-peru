@@ -61,6 +61,21 @@
   campaign-report; Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
 
+## Anuncios sin mapear (alerta de Telegram)
+
+- El mapeo anuncio (CTWA) → producto vive en `functions/customer-lookup/index.js`:
+  `AD_PRODUCT_MAP` (por `adId`, autoritativo) y `AD_HEADLINE_MAP` (respaldo por
+  titular, solo titulares inequívocos). La misma función emite la alerta
+  "ANUNCIO SIN MAPEAR" por Telegram vía notify-team (dedupe 6 h por adId).
+- Cuando el dueño pasa un `adId` + producto: buscar el handle real (invocar
+  `shopify-product-lookup` por API), agregar la entrada a `AD_PRODUCT_MAP`,
+  PATCH del código de la función + `POST .../deploy`, y commit al repo.
+- Al `AD_HEADLINE_MAP` solo se agregan titulares que identifican un único
+  producto. Ante la duda, no agregar: es preferible la alerta.
+- El código en Kapso puede estar POR DELANTE del repo: antes de editar una
+  función, traer su código actual con
+  `GET /platform/v1/functions/{id}` y trabajar sobre ese.
+
 ## Datos del proyecto Kenku
 
 - phoneNumberId actual: `597907523413541` (Sandbox WhatsApp de Kapso, para
