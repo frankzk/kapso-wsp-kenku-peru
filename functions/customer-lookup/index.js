@@ -26,7 +26,12 @@ const AD_PRODUCT_MAP = {
   "120250238762300267": "nattokinase-mejora-la-circulacion-arterial-90-capsulas", // Lee esto si tienes la presion alta (Nattokinase)
   "120253556996440120": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml", // Equilibrio de azucar para tu dia a dia (SUGAR CONTROL - Berberina y Curcuma)
   "120253553230980120": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml", // Equilibrio de azucar para tu dia a dia (variante -> SUGAR CONTROL)
-  "120246240033570250": "feel-virgin-gel-intimo-reafirmante-e-hidratante-con-aloe-vera-y-acido-hialuronico-30-ml", // FEEL VIRGIN – Gel Intimo
+  // OJO: este adId estuvo mapeado a FEEL VIRGIN por el titular del referral,
+  // pero el anuncio real es HGH: el creativo se llama "Activa su Crecimiento",
+  // el video es "SBD_HGH_0604_07.mp4" y su link_url apunta al handle de HGH
+  // (verificado en Meta). Un padre que preguntaba por la estatura de su hijo
+  // terminaba recibiendo un gel intimo.
+  "120246240033570250": "hgh-crecimiento-optimo-y-desarrollo-fisico-120-capsulas", // Activa su Crecimiento (HGH, verificado contra el creativo en Meta)
   "120248517618300056": "kojic-acid-turmeric-cleansing-pads",                        // Ilumina Tu Piel Apagada
   "120248448453350056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (Hair+)
   "120248592918830056": "hair-™-capsulas-para-crecimiento-capilar-con-hierro-hemo-biotina-y-quercetina-para-crecimiento-densidad-y-fuerza-formula-avanzada-natural-120-capsulas-superhuman™", // Recupera Fuerza y Densidad (variante -> Hair+)
