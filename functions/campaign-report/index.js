@@ -108,10 +108,14 @@ async function handleRequest(request, env = globalThis) {
     const conversations = conv ? conv.total : null;
     const botOrders = sales ? sales.whatsappOrders : null;
     const conversionRate = (conversations && botOrders != null) ? round2(botOrders / conversations) : null;
+    // Facturacion y ticket promedio de los pedidos del bot: son la entrada que
+    // decide si conviene un modelo mas caro (ver el analisis de margen).
+    const botRevenue = sales ? round2(sales.whatsappRevenue) : null;
+    const aov = (botOrders && botRevenue != null) ? round2(botRevenue / botOrders) : null;
     return json({
       ok: true,
       range: { since: range.since, until: range.until, days: range.days },
-      conversations, botOrders, conversionRate,
+      conversations, botOrders, conversionRate, botRevenue, aov,
       perDay,
       notes: { convTruncated: conv && conv.truncated, convStatsError: conv && conv.error, salesErr, convErr },
     }, 200);
