@@ -47,6 +47,35 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+## Mapear un anuncio (CTWA) a su producto
+
+- El mapeo anuncio → producto vive en `functions/customer-lookup/index.js`:
+  `AD_PRODUCT_MAP` (por `adId`, autoritativo) y `AD_HEADLINE_MAP` (respaldo por
+  titular). La misma función emite la alerta "🔔 ANUNCIO SIN MAPEAR" por
+  Telegram vía notify-team (dedupe 6 h por adId).
+- Cuando llega la alerta, el adId (= `source_id` del referral) va al
+  `AD_PRODUCT_MAP` apuntando al **handle** de Shopify del producto. Para sacar
+  el handle real, invocar `shopify-product-lookup` por API con el nombre del
+  producto.
+- Si el titular del anuncio es inequívoco, agregarlo también a
+  `AD_HEADLINE_MAP` para que las variantes futuras del mismo creativo se
+  resuelvan solas. SOLO titulares que identifiquen un único producto: el match
+  es por substring, así que una clave corta y genérica engancha anuncios de
+  otros productos. Ante la duda, no agregar: es preferible la alerta.
+- Para aplicarlo: PATCH del código de la función + `POST .../deploy`, y commit
+  al repo.
+- OJO: el código vivo en Kapso puede estar por delante del repo. Antes de editar
+  una función, bajar su código con
+  `GET /platform/v1/functions/{id}` y trabajar sobre esa base; si no, el deploy
+  revierte trabajo que no está en el repo. Si el PATCH devuelve 409, es que otra
+  sesión editó la función: volver a bajar el código, reaplicar el cambio encima
+  y usar el `lock_version` nuevo.
+- Para confirmar a qué producto pertenece un adId se puede consultar el creativo
+  en Meta (`ads_get_ad_entities` → `creative_id`, luego `ads_get_creatives`):
+  el `title`/`body` del creativo identifican el producto. Ante cualquier duda,
+  confirmarlo con el dueño antes de mapear: un mapeo equivocado atiende mal al
+  cliente.
+
 ## Secrets de funciones (LECCION IMPORTANTE)
 
 - Las variables de entorno de las funciones se configuran como **Secrets** vía
@@ -60,21 +89,6 @@
   campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage y
   campaign-report; Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
-
-## Anuncios sin mapear (alerta de Telegram)
-
-- El mapeo anuncio (CTWA) → producto vive en `functions/customer-lookup/index.js`:
-  `AD_PRODUCT_MAP` (por `adId`, autoritativo) y `AD_HEADLINE_MAP` (respaldo por
-  titular, solo titulares inequívocos). La misma función emite la alerta
-  "ANUNCIO SIN MAPEAR" por Telegram vía notify-team (dedupe 6 h por adId).
-- Cuando el dueño pasa un `adId` + producto: buscar el handle real (invocar
-  `shopify-product-lookup` por API), agregar la entrada a `AD_PRODUCT_MAP`,
-  PATCH del código de la función + `POST .../deploy`, y commit al repo.
-- Al `AD_HEADLINE_MAP` solo se agregan titulares que identifican un único
-  producto. Ante la duda, no agregar: es preferible la alerta.
-- El código en Kapso puede estar POR DELANTE del repo: antes de editar una
-  función, traer su código actual con
-  `GET /platform/v1/functions/{id}` y trabajar sobre ese.
 
 ## Datos del proyecto Kenku
 
