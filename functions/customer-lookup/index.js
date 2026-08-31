@@ -38,10 +38,12 @@ const AD_PRODUCT_MAP = {
   "120248592492790056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120248645582130056": "saffron-advanced-capsulas-naturales-para-elevar-el-animo-y-reducir-el-estres-frasco-60-capsulas-superhuman™", // Recupera Tu Equilibrio Diario (variante -> Saffron+ Advanced, confirmado por el dueno)
   "120253351277920120": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas", // Piernas menos pesadas al final del dia (Cayenne Pepper)
+  "120253821227480066": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas", // Piernas menos pesadas al final del dia (variante con titular sin renderizar; su referral trae landing_page_url del producto)
   "120253351779620120": "suplemento-natural-para-higado-y-puede-favorecer-el-drenaje-del", // Drenaje linfatico suave y natural (LINFOVIT - Higado y Drenaje Linfatico)
   "120253351973130120": "suplemento-natural-para-higado-y-puede-favorecer-el-drenaje-del", // Drenaje linfatico suave y natural (variante -> LINFOVIT)
   "120253052315900120": "keratina-romero-ortiga-biotina-champu-nutritivo-y-regenerador-para-cabello-grueso-y-voluminoso-220-ml-tgideas™", // Revive Tu Cabello (Shampoo de Romero - Keratina+Romero+Ortiga+Biotina)
   "120253294318240120": "keratina-romero-ortiga-biotina-champu-nutritivo-y-regenerador-para-cabello-grueso-y-voluminoso-220-ml-tgideas™", // Revive Tu Cabello (variante -> Shampoo de Romero)
+  "120253283957820120": "keratina-romero-ortiga-biotina-champu-nutritivo-y-regenerador-para-cabello-grueso-y-voluminoso-220-ml-tgideas™", // Revive Tu Cabello (variante con titular sin renderizar: llega como plantilla product.name -> Shampoo de Romero, confirmado por el dueno)
   "120253239645720120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+)
   "120253239652220120": "superhuman-focus-nootropico-natural-para-un-maximo-rendimiento-mental-potenciador-de-memoria-y-productividad", // Potencia tu enfoque diario (Focus+, variante)
   "120248370663120056": "prozenith-pro-capsules-capsulas-metabolicas-para-control-de-antojos-y-bienestar-metabolico-60-capsulas-superhuman™", // Controla tus antojos naturalmente (Prozenix Pro)
@@ -92,6 +94,10 @@ const AD_HEADLINE_MAP = {
   // inmunoglobulinas): en el catalogo solo la cumple Vital Moo, asi que las
   // variantes futuras de este creativo se resuelven solas.
   "30 igg": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™",
+  // Titular del otro creativo de Vital Moo (el dueno confirmo que ese
+  // anuncio es solo de Vital Moo). Se guarda la frase larga, no un
+  // "fortalecer defensas" generico, que caeria en cualquier inmunologico.
+  "fortalecer tus defensas naturalmente": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™",
 };
 
 // Normaliza un titular para comparar: sin acentos, sin emojis ni signos, en
