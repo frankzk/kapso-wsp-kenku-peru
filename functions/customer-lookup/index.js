@@ -113,11 +113,43 @@ function normalizeHeadline(value) {
     .trim();
 }
 
-// Resuelve el producto del anuncio: primero por adId (autoritativo, lo confirma
-// el dueno), y si no esta, por titular. Devuelve null si ninguno resuelve.
+// Saca el handle de un link a la ficha del producto ("Pidelo aqui:
+// https://kenku.pe/products/<handle>", que va en el cuerpo de varios creativos).
+// El link viene percent-encoded, asi que hay que decodificarlo para que el ™ del
+// handle coincida con el de Shopify.
+function productHandleFromText(text) {
+  const match = String(text || "").match(
+    /(?:kenku\.pe|kenkuperu\.myshopify\.com)\/products\/([^\s"'<>)\]]+)/i
+  );
+  if (!match) return null;
+  let handle = match[1].split("?")[0].split("#")[0].replace(/[.,;:!)]+$/, "");
+  try {
+    handle = decodeURIComponent(handle);
+  } catch {
+    // Si el link viene mal codificado, se usa tal cual: peor es no resolver nada.
+  }
+  return handle.toLowerCase() || null;
+}
+
+// Resuelve el producto del anuncio, de la senal mas confiable a la menos:
+//   1. adId, autoritativo: lo confirma el dueno y no se lo inventa nadie.
+//   2. Link a la ficha en el CUERPO del anuncio: lo escribiste vos en el
+//      creativo, asi que nombra el producto exacto.
+//   3. Titular, ultimo recurso.
+// El titular quedo al final porque Meta a veces manda uno que NO es el del
+// anuncio: un referral real del adId 120245693398580658 (Vital Moo, confirmado
+// contra el creativo en Meta) llego con el titular de FEEL VIRGIN, y como ese
+// titular si esta en AD_HEADLINE_MAP el lead se resolvia al producto equivocado
+// SIN alertar, porque para el codigo estaba "cubierto por titular".
+// Devuelve null si ninguna de las tres resuelve.
 function resolveAdProductHandle(adReferral) {
   const adId = adReferral && adReferral.adId;
   if (adId && AD_PRODUCT_MAP[adId]) return { handle: AD_PRODUCT_MAP[adId], via: "ad_id" };
+  // productHandle lo precalcula fetchAdReferral sobre el body COMPLETO, antes de
+  // recortarlo; el segundo intento cubre los referrals armados en otro lado.
+  const bodyHandle = (adReferral && adReferral.productHandle)
+    || productHandleFromText(adReferral && adReferral.body);
+  if (bodyHandle) return { handle: bodyHandle, via: "ad_body_url" };
   const headline = normalizeHeadline(adReferral && adReferral.headline);
   if (!headline) return null;
   for (const [key, handle] of Object.entries(AD_HEADLINE_MAP)) {
@@ -370,6 +402,7 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
   // contactarlo fuera del chat ni coordinar la entrega, asi que el bot debe
   // pedir el celular COMO PARTE de los datos de envio (no al final).
   const needsPhone = !isPeruMobile(phone);
+  const adProduct = resolveAdProductHandle(adReferral);
   return {
     needs_phone: needsPhone,
     contact_username: contact.username || null,
@@ -383,10 +416,11 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
     ad_referral_ad_id: adReferral?.adId || null,
     ad_referral_source_url: adReferral?.sourceUrl || null,
     // Handle del producto EXACTO del anuncio: por ad_id si esta mapeado, si no
-    // por titular inequivoco. Si viene, el bot debe presentar ESE producto y no
-    // adivinar. ad_referral_match_via dice cual de los dos lo resolvio.
-    ad_referral_product_handle: resolveAdProductHandle(adReferral)?.handle || null,
-    ad_referral_match_via: resolveAdProductHandle(adReferral)?.via || null,
+    // por el link a la ficha en el cuerpo del anuncio, y como ultimo recurso por
+    // titular inequivoco. Si viene, el bot debe presentar ESE producto y no
+    // adivinar. ad_referral_match_via dice cual de los tres lo resolvio.
+    ad_referral_product_handle: adProduct?.handle || null,
+    ad_referral_match_via: adProduct?.via || null,
     ab_variant: abVariant(phone),
     // Segundo eje, independiente: prueba del empuje al 3x2 (ver promoVariant).
     promo_variant: promoVariant(phone),
@@ -555,6 +589,11 @@ async function fetchAdReferral(env, payload) {
         adId: ref.source_id || null,
         headline: ref.headline || null,
         body: ref.body ? String(ref.body).slice(0, 500) : null,
+        // El link a la ficha va al FINAL del cuerpo (los bodies reales pasan de
+        // 1000 caracteres), asi que se extrae antes del recorte de arriba o se
+        // pierde. source_url casi siempre es un fb.me, pero si trae la ficha
+        // directa tambien sirve.
+        productHandle: productHandleFromText(ref.body) || productHandleFromText(ref.source_url),
         mediaType: ref.media_type || null,
         entryType,
       };
@@ -588,19 +627,22 @@ async function alertUnmappedAd(env, adReferral, phone) {
     }
 
     const headline = String(adReferral.headline || "(sin titular)").slice(0, 120);
-    // Si el respaldo por titular ya lo resolvio, el cliente NO quedo mal
-    // atendido: la alerta es solo para que se fije el adId en el mapa.
+    // Si un respaldo ya lo resolvio, el cliente NO quedo mal atendido: la alerta
+    // es solo para que se fije el adId en el mapa. Se dice CUAL respaldo lo
+    // cubrio, porque el link del cuerpo es confiable y el titular no: Meta a
+    // veces manda el titular de otro anuncio.
     const fallback = resolveAdProductHandle(adReferral);
-    const covered = fallback && fallback.via === "headline";
+    const covered = Boolean(fallback);
+    const viaLabel = fallback && fallback.via === "ad_body_url" ? "el link del cuerpo" : "el titular";
     const note = covered
-      ? `Anuncio "${headline}" (adId ${adId}) sin adId en el mapa, PERO el respaldo por titular lo resolvio a "${fallback.handle}": el cliente si fue atendido con el producto correcto. Agrega el adId al mapa cuando puedas (no es urgente).`
-      : `Anuncio "${headline}" (adId ${adId}) SIN producto asignado y el titular tampoco lo resuelve. El bot NO puede reconocer el producto y el cliente queda mal atendido. Pasale a Claude el adId + producto.`;
+      ? `Anuncio "${headline}" (adId ${adId}) sin adId en el mapa, PERO el respaldo por ${viaLabel} lo resolvio a "${fallback.handle}": el cliente si fue atendido con el producto correcto. Agrega el adId al mapa cuando puedas (no es urgente).`
+      : `Anuncio "${headline}" (adId ${adId}) SIN producto asignado y ni el link del cuerpo ni el titular lo resuelven. El bot NO puede reconocer el producto y el cliente queda mal atendido. Pasale a Claude el adId + producto.`;
     await fetch("https://api.kapso.ai/platform/v1/functions/00dd67bd-df4b-4477-af5c-2530c44a5b60/invoke", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
         input: {
-          reason: covered ? "ANUNCIO SIN MAPEAR (cubierto por titular)" : "ANUNCIO SIN MAPEAR",
+          reason: covered ? `ANUNCIO SIN MAPEAR (cubierto por ${viaLabel})` : "ANUNCIO SIN MAPEAR",
           skipStoreWebhook: true,
           phone: String(phone || ""),
           product: headline,

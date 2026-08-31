@@ -53,6 +53,13 @@
   `AD_PRODUCT_MAP` (por `adId`, autoritativo) y `AD_HEADLINE_MAP` (respaldo por
   titular). La misma función emite la alerta "🔔 ANUNCIO SIN MAPEAR" por
   Telegram vía notify-team (dedupe 6 h por adId).
+- **El titular del referral NO es confiable**: Meta manda a veces el titular de
+  OTRO anuncio (visto: el adId de Vital Moo llegando con el titular de FEEL
+  VIRGIN, que sí está en `AD_HEADLINE_MAP` → producto equivocado y sin alerta).
+  Por eso `resolveAdProductHandle` resuelve en este orden: `adId` → link
+  `kenku.pe/products/<handle>` en el CUERPO del anuncio → titular. Poner ese
+  link en el copy de cada creativo es la forma más barata de que una variante
+  nueva se resuelva sola y bien.
 - Cuando llega la alerta, el adId (= `source_id` del referral) va al
   `AD_PRODUCT_MAP` apuntando al **handle** de Shopify del producto. Para sacar
   el handle real, invocar `shopify-product-lookup` por API con el nombre del
