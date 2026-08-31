@@ -54,6 +54,7 @@ const AD_PRODUCT_MAP = {
   "120253082365500120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (el creativo es el serum de hongos; el titular del enlace es de otro producto)
   "120252904445640120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (4a variante; creativo del serum de hongos, confirmado por el dueno)
   "120249084384400056": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™", // Quieres fortalecer tus defensas naturalmente (Vital Moo - Calostro Bovino, confirmado por el dueno)
+  "120245693398580658": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™", // El Unico con 30% IgG. Defensa Superior (Vital Moo, confirmado por el dueno)
 };
 
 // Respaldo por TITULAR del anuncio. Meta genera variantes del mismo creativo con
@@ -87,6 +88,10 @@ const AD_HEADLINE_MAP = {
   // suplementos masculinos a quien venia por la presion.
   "si tienes la presion alta": "nattokinase-mejora-la-circulacion-arterial-90-capsulas",
   "equilibrio de azucar": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml",
+  // "30 igg" es una especificacion del producto (calostro bovino con 30% de
+  // inmunoglobulinas): en el catalogo solo la cumple Vital Moo, asi que las
+  // variantes futuras de este creativo se resuelven solas.
+  "30 igg": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™",
 };
 
 // Normaliza un titular para comparar: sin acentos, sin emojis ni signos, en
