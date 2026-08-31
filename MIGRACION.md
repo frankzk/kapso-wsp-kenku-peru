@@ -85,6 +85,60 @@ Referencia: los valores actuales están en el proyecto Aurela
    - Crear el secret de repo `CAMPAIGN_DASHBOARD_KEY`.
    - El archivo debe estar en la rama por defecto para que corra el cron.
 
+## ⚠️ El repo está DESFASADO respecto al proyecto Kapso en producción
+
+Verificado el 2026-08-31 contra la Platform API del proyecto Kenku. **No correr
+`kapso push` desde este repo sin reconciliar primero** (`kapso pull`): pisaría
+meses de cambios que solo viven en Kapso.
+
+- **Funciones que existen en producción y NO están en el repo**: `save-order-state`
+  (ahora sí, se agregó con este arreglo), `send-text`, `send-buttons`,
+  `send-payment`, `loop-guard`, `followup-terminal-router`, `lookupshopifycustomer`,
+  `pause`.
+- **Funciones del repo desactualizadas** frente a producción: `notify-team`
+  (producción ya titula la alerta con su `reason`, ej. "🔔 no valid phone"),
+  `customer-lookup`, `check-coverage`, `campaign-report`, `shopify-product-lookup`.
+- **Workflow**: producción tiene 46 nodos (incluye `loop-guard`/`loop-end` y el
+  experimento A/B `ab_variant`) contra 43 del repo, y el system prompt difiere en
+  ~600 líneas. `workflows/kenku-sales-bot/definition.json` y `workflow.js` de este
+  repo son la versión vieja.
+- `create-shopify-order/index.js` sí quedó sincronizado con producción en este
+  cambio (código vivo + el arreglo del teléfono).
+
+## Incidentes corregidos
+
+- **2026-08-31 — el bot rechazó tres veces un celular válido** (Javier Zanabria,
+  Huancan/Huancayo, *Nails Repairing*, conversación `33d9f4f1`): el cliente
+  escribió `940823875` — un celular peruano válido, y además el número de su
+  propio chat — y el bot respondió "El número que me diste parece incompleto o no
+  es un celular válido" tres veces seguidas ("Estoy que le repito", contestó él).
+  Terminó en alerta al equipo ("no valid phone"), la conversación cortada por
+  `loop-guard` (`stage=loop_detectado`) y el pedido cerrado a mano.
+
+  Causa raíz: `phone` está en los campos requeridos de `save-order-state`, pero
+  **nadie sembraba el número del chat**. El estado salía con `missing=["phone"]`
+  aunque `needs_phone` fuera `false` y el `wa_id` estuviera a la vista, así que el
+  agente lo pedía y leía cada respuesta como dato faltante. Arreglado en dos
+  capas (aplicado a Kapso por Platform API):
+  1. **`save-order-state`**: siembra `phone` con el número del chat
+     (`execution_context.context.phone_number` / `contact.wa_id` /
+     `whatsapp_context`) cuando es un celular peruano; si el agente manda otro
+     número que no valida, se conserva el del chat y la respuesta le dice
+     explícitamente que NO le diga al cliente que su número es inválido. Además
+     acepta el teléfono bajo cualquier alias razonable (`customer_phone`,
+     `phone_number`, `numero_celular`, …), que antes se descartaba en silencio.
+     Regresión: `functions/save-order-state/test/phone.test.cjs`.
+  2. **`create-shopify-order`**: `applyContactPhoneFallback` usa el número del
+     chat cuando el `phone` que llega no es celular peruano (un fijo, dígitos
+     sueltos, "por coordinar") y anota el que dio el cliente en la nota de la
+     orden. La puerta `phone_missing` **sigue igual** para los leads que entran
+     por username de WhatsApp: si el chat no expone número, el celular sigue
+     siendo obligatorio. Regresión:
+     `functions/create-shopify-order/test/phone.test.cjs`.
+  3. **Prompt del workflow en producción**: si el chat expone el número
+     (`needs_phone=false`), no se pide ni se pone en duda; si el cliente repite el
+     mismo número, se acepta.
+
 ## Para revisar (decisiones de negocio heredadas de Aurela)
 
 - **Yape / razón social** en `functions/check-coverage/index.js` (envíos Shalom):
