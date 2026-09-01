@@ -90,6 +90,24 @@ async function handleRequest(request, env = globalThis) {
     }, 200);
   }
 
+  // Modo ligero SOLO ventas por anuncio (sin Meta, que tumba el reporte completo
+  // cuando la cuenta no esta conectada). Sirve para ver que anuncios trajeron los
+  // pedidos en un rango, que es lo que explica los saltos de conversion diaria.
+  if (params.only === "ads") {
+    const range = resolveRange(params);
+    const sales = await fetchOrderAggregates(config, range);
+    const ads = [...sales.byAd.values()]
+      .map((a) => ({ ...a, revenue: round2(a.revenue), aov: a.orders > 0 ? round2(a.revenue / a.orders) : null }))
+      .sort((x, y) => y.orders - x.orders);
+    return json({
+      ok: true,
+      range: { since: range.since, until: range.until, days: range.days },
+      botOrders: sales.whatsappOrders,
+      attributedOrders: sales.attributedOrders,
+      ads,
+    }, 200);
+  }
+
   // Modo ligero SOLO conversion del bot (conversaciones nuevas -> pedidos del bot).
   // Evita fetchMetaInsights (Meta no esta conectado y tumbaba el reporte). Devuelve
   // 200 con los numeros y aisla errores por sub-fetch.

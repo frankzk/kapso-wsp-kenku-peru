@@ -15,6 +15,19 @@ POST /platform/v1/functions/e7c39748-c57c-4322-b532-a31d9ac5949b/invoke
 El `/invoke` de Kapso a veces corre codigo viejo y devuelve `{"error":"Internal
 server error"}` o ceros: hay que reintentar hasta que responda `ok: true`.
 
+**MIRAR SIEMPRE `notes.convTruncated`.** `fetchConversationStats` corta en
+MAX_CONV_PAGES (50 paginas x 100 por numero), asi que un rango de ~14 dias con
+este volumen trunca el conteo de CONVERSACIONES pero no el de PEDIDOS: los dias
+del principio quedan con el denominador chico y la tasa sale inflada. Pasó de
+verdad el 2026-08-31: un rango de 18-31 ago daba 22 ago = 140 conversaciones y
+9,29%, cuando el dia real fue 658 conversaciones y 1,98%. Sobre ese numero falso
+se construyo toda una hipotesis de "la calidad del trafico varia muchisimo entre
+dias" que era pura ilusion.
+
+Regla practica: **pedir la conversion en rangos de 7 dias o menos**, y si
+`convTruncated` viene `true`, partir el rango y volver a preguntar. Los tres
+tramos de la linea base de abajo estan verificados con `convTruncated: false`.
+
 ---
 
 ## 1. Modelo del sales-agent — gpt-4.1 por una semana
