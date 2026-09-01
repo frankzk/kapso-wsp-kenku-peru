@@ -28,6 +28,7 @@ const CASH_ON_DELIVERY = {
   // Solo Cusco ciudad (distrito cusco / provincia cusco). Otros distritos de la
   // region (Wanchaq, San Sebastian, etc.) requieren validacion antes de agregarse.
   cusco: ["cusco"],
+  apurimac: ["abancay"],
 };
 
 // Distritos no ambiguos donde podemos inferir provincia/region si el agente
@@ -50,6 +51,16 @@ const SAFE_DISTRICT_LOCATION_INFERENCE = {
   lambayeque: { province: "lambayeque", region: "lambayeque" },
   pimentel: { province: "chiclayo", region: "lambayeque" },
   juliaca: { province: "san roman", region: "puno" },
+  tarapoto: { province: "san martin", region: "san martin" },
+  huancayo: { province: "huancayo", region: "junin" },
+  ayacucho: { province: "huamanga", region: "ayacucho" },
+  "jesus nazareno": { province: "huamanga", region: "ayacucho" },
+  iquitos: { province: "maynas", region: "loreto" },
+  viru: { province: "viru", region: "la libertad" },
+  chao: { province: "viru", region: "la libertad" },
+  tacna: { province: "tacna", region: "tacna" },
+  pucallpa: { province: "coronel portillo", region: "ucayali" },
+  abancay: { province: "abancay", region: "apurimac" },
   piura: { province: "piura", region: "piura" },
   castilla: { province: "piura", region: "piura" },
   catacaos: { province: "piura", region: "piura" },
@@ -182,6 +193,7 @@ const DISTRICT_LOCATION_HINTS = {
   lambayeque: { province: "lambayeque", region: "lambayeque" },
   pimentel: { province: "chiclayo", region: "lambayeque" },
   juliaca: { province: "san roman", region: "puno" },
+  abancay: { province: "abancay", region: "apurimac" },
   piura: { province: "piura", region: "piura" },
   castilla: { province: "piura", region: "piura" },
   catacaos: { province: "piura", region: "piura" },
@@ -200,7 +212,7 @@ async function handleRequest(request, env = globalThis) {
   const payload = await readJson(request);
 
   // Debug/mantenimiento del watchdog (invocacion directa con X-API-Key).
-  if (payload.watchdogDebug || payload.watchdogSeed || payload.forceSweep) {
+  if (payload.watchdogDebug || payload.watchdogSeed || payload.forceSweep || payload.forceLeakSweep || payload.leakTestAlert) {
     return watchdogAdmin(payload, env);
   }
 
@@ -210,23 +222,33 @@ async function handleRequest(request, env = globalThis) {
   if (Array.isArray(payload.available_edges)) {
     // El ladder invoca esto constantemente: aprovechamos para correr el watchdog
     // de clientes sin respuesta (compuerta KV: max 1 barrido cada 10 min).
-    const routed = routeFollowup(payload);
+    const routed = await routeFollowup(payload, env);
     try { await maybeRunWatchdog(env); } catch { /* nunca romper el ruteo */ }
+    try { await maybeRunLeakDetector(env); } catch { /* nunca romper el ruteo */ }
     return routed;
   }
 
   const input = unwrapInput(payload);
   let region = normalizePlace(input.region || input.departamento || input.department);
-  let province = normalizePlace(input.province || input.provincia || input.city);
-  const district = normalizePlace(input.district || input.distrito || input.zone);
+  let province = normalizePlace(input.province || input.provincia);
+  let district = normalizePlace(input.district || input.distrito || input.zone);
+  // En conversacion el cliente suele dar una "ciudad" aunque logisticamente
+  // corresponda a un distrito (Juliaca, Tarapoto, Huancayo, etc.). La tratamos
+  // primero como localidad/distrito para aprovechar la inferencia segura. Si el
+  // agente ya envio district, ese valor siempre tiene prioridad.
+  const singlePlace = normalizePlace(input.city || input.ciudad || input.place || input.ubicacion);
+  if (!district && singlePlace) district = singlePlace;
   const address = normalizePlace(input.address || input.direccion || "");
-  const shalomAgency = String(input.shalomAgency || input.agenciaShalom || input.shalom_agency || "").trim();
+  const shalomAgencyRaw = String(input.shalomAgency || input.agenciaShalom || input.shalom_agency || "").trim();
 
   const inferredLocation = inferLocationFromDistrict({ region, province, district });
   if (inferredLocation) {
     region = region || inferredLocation.region;
     province = province || inferredLocation.province;
   }
+  const shalomAgency = isSpecificShalomAgency(shalomAgencyRaw, { district, province, region })
+    ? shalomAgencyRaw
+    : "";
 
   const shippingText = [address, input.shippingMethod, input.metodoEnvio, input.courier, input.agency, shalomAgency].join(" ");
   const selectedCourier = detectCourier(shippingText);
@@ -246,6 +268,27 @@ async function handleRequest(request, env = globalThis) {
     });
   }
 
+  // Nunca asumir envio por agencia solo porque la ubicacion esta incompleta.
+  // Devolvemos exactamente los campos faltantes para que el agente pregunte
+  // una sola vez y conserve todo lo que ya normalizo la herramienta.
+  const missingLocationFields = [];
+  if (!district) missingLocationFields.push("district");
+  if (district && !province && !region) missingLocationFields.push("province");
+  if (missingLocationFields.length > 0) {
+    const districtLabel = district ? titleCasePlace(district) : "";
+    const message = !district
+      ? "Para confirmar la entrega, solo falta el distrito o ciudad de destino."
+      : `Ya registre ${districtLabel}. Solo falta la provincia o departamento para confirmar la entrega.`;
+    return json({
+      cashOnDelivery: false,
+      shippingMode: "needs_location",
+      locationComplete: false,
+      missingLocationFields,
+      normalized: { district, province, region },
+      message,
+    });
+  }
+
   const cod = hasCashOnDelivery({ region, province, district });
 
   if (cod && !selectedCourier) {
@@ -260,7 +303,8 @@ async function handleRequest(request, env = globalThis) {
       couriers: [],
       normalized: { district, province, region },
       sameDayUrgent: isLimaMetro ? sameDayUrgentInfo() : null,
-      message: "Zona con pago contraentrega. Puede pagar al recibir en efectivo o Yape.",
+      paymentMethods: ["efectivo", "tarjeta de credito/debito", "Yape", "Plin", "transferencia bancaria"],
+      message: "Zona con pago contraentrega. Puede pagar al recibir en efectivo, tarjeta (credito/debito), Yape, Plin o transferencia bancaria (lo mas comun: efectivo y Yape).",
     });
   }
 
@@ -278,11 +322,12 @@ async function handleRequest(request, env = globalThis) {
       balancePayment: "pickup",
       requiresShalomAgency: true,
       shalomAgency: shalomAgency || "",
+      agencySpecific: Boolean(shalomAgency),
       requiresVoucherBeforeConfirmation: true,
       shouldCreateOrder: false,
       normalized: { district, province, region },
       message: shalomAgency
-        ? `Listo, lo enviamos a la agencia Shalom: ${shalomAgency}.\nPara separar tu pedido solo se hace un adelanto de S/30 que *va a cuenta del total* (el saldo lo pagas al recoger).\nYape: Grupo GF SAC (razón social de Kenku)\n📱 930 555 309\nTambién necesito el DNI del titular que recogerá.\nApenas me envíes el voucher, te confirmo el despacho con tu código de seguimiento Shalom ✅`
+        ? `Listo, lo enviamos a la agencia Shalom: ${shalomAgency}.\nPara separar tu pedido solo se hace un adelanto de S/30 que *va a cuenta del total* (el saldo lo pagas al recoger).\nYape: Grupo GF SAC (razón social de Kenku)\n📱 930 555 309\nEnvíame el voucher o captura y te confirmo la recepción ✅`
         : "Perfecto 🙌\nSí podemos enviarlo por Shalom. Para dejarlo encaminado, dime a qué agencia/oficina de Shalom deseas que llegue.\nSolo se separa con un adelanto de S/30 que *va a cuenta del total* (el saldo lo pagas al recoger) y con el voucher te confirmo el despacho ✅",
     });
   }
@@ -344,7 +389,7 @@ const FOLLOWUP_TERMINAL_MARKERS = [
   "cancel",
 ];
 
-function routeFollowup(payload) {
+async function routeFollowup(payload, env) {
   try {
     const edges = payload.available_edges;
     const ctx = isPlainObject(payload.execution_context) ? payload.execution_context : {};
@@ -354,14 +399,38 @@ function routeFollowup(payload) {
       ? payload.whatsapp_context.messages
       : [];
 
+    // Una ejecucion vieja de seguimiento no debe seguir enviando mensajes si
+    // otra ejecucion ya atendio un inbound mas reciente. La mandamos por la
+    // ruta respondio; loop-guard compara la generacion y la termina en silencio.
+    if (edges.includes("respondio") && await hasNewerFollowupGeneration(payload, vars, env)) {
+      // fu-terminal (respondio+seguir+terminar): termina la ejecucion stale por
+      // "terminar" (-> fu-end) en vez de "respondio", que en fu-terminal vuelve
+      // al agente y hace loop hasta el tope de pasos por tick (email "Failed").
+      // Los decides de resume (respondio+timeout, sin "terminar") no cambian.
+      if (edges.includes("terminar")) {
+        return json({ next_edge: "terminar", reason: "stale_followup_generation" });
+      }
+      return json({ next_edge: "respondio", reason: "stale_followup_generation" });
+    }
+
     if (edges.includes("timeout") && edges.includes("respondio")) {
+      // El motivo de reanudacion incluido por Kapso puede llegar desfasado si
+      // el cliente escribe durante la transicion al wait. El historial vivo es
+      // la fuente de verdad: si el inbound es mas reciente, siempre se atiende.
+      if (await hasLiveUnansweredInbound(payload, env)) {
+        return json({ next_edge: "respondio", reason: "live_unanswered_inbound_before_timeout" });
+      }
       return json({ next_edge: resolveResume(system, messages) });
     }
 
     if (edges.includes("terminar")) {
       const stage = String(vars.stage || "").toLowerCase();
       const isTerminal = FOLLOWUP_TERMINAL_MARKERS.some((marker) => stage.includes(marker));
-      return json({ next_edge: isTerminal ? "terminar" : "seguir" });
+      if (isTerminal) return json({ next_edge: "terminar" });
+      if (edges.includes("respondio") && await hasLiveUnansweredInbound(payload, env)) {
+        return json({ next_edge: "respondio", reason: "live_unanswered_inbound" });
+      }
+      return json({ next_edge: "seguir" });
     }
 
     if (edges.includes("esperar")) {
@@ -372,6 +441,58 @@ function routeFollowup(payload) {
   } catch (error) {
     return json({ next_edge: "respondio", error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+async function hasNewerFollowupGeneration(payload, vars, env) {
+  if (!env?.KV) return false;
+  const { conversationId } = conversationContext(payload);
+  const executionGeneration = String(vars.followup_generation || "");
+  if (!conversationId) return false;
+  try {
+    const latest = String(await env.KV.get(`followup_generation:${conversationId}`) || "");
+    if (!latest) return false;
+    // Compatibilidad con ejecuciones creadas antes del versionado: si no traen
+    // generacion pero ya existe una nueva en KV, son heredadas y deben morir.
+    // Las ejecuciones nuevas siempre reciben followup_generation desde loop-guard.
+    if (!executionGeneration) return true;
+    return latest !== executionGeneration;
+  } catch {
+    return false;
+  }
+}
+
+async function hasLiveUnansweredInbound(payload, env) {
+  const { conversationId, phoneNumberId } = conversationContext(payload);
+  const cfg = await watchdogConfig(env);
+  if (!conversationId || !phoneNumberId || !cfg.kapsoApiKey) return false;
+  try {
+    const url = `${cfg.kapsoApiBase}/meta/whatsapp/v24.0/${encodeURIComponent(phoneNumberId)}/messages`
+      + `?conversation_id=${encodeURIComponent(conversationId)}&limit=20`;
+    const response = await fetch(url, { headers: { "X-API-Key": cfg.kapsoApiKey } });
+    if (!response.ok) return false;
+    const body = await response.json();
+    let lastInbound = 0;
+    let lastOutbound = 0;
+    for (const message of body?.data || []) {
+      const timestamp = Number(message?.timestamp || 0);
+      if (message?.kapso?.direction === "inbound") lastInbound = Math.max(lastInbound, timestamp);
+      if (message?.kapso?.direction === "outbound") lastOutbound = Math.max(lastOutbound, timestamp);
+    }
+    return lastInbound > lastOutbound;
+  } catch {
+    return false;
+  }
+}
+
+function conversationContext(payload) {
+  const conversation = payload.whatsapp_context?.conversation || {};
+  return {
+    conversationId: conversation.id || payload.execution_context?.context?.conversation_id || "",
+    phoneNumberId: conversation.phone_number_id
+      || payload.execution_context?.system?.whatsapp_config?.phone_number_id
+      || payload.execution_context?.context?.phone_number_id
+      || "",
+  };
 }
 
 function resolveResume(system, messages) {
@@ -454,6 +575,12 @@ function hasCashOnDelivery({ region, province, district }) {
 
 function inferLocationFromDistrict({ region, province, district }) {
   if (!district || (region && province)) return null;
+  if (isLimaMetroDistrict(district)) {
+    return { region: region || "lima", province: province || "lima" };
+  }
+  if (isCallaoDistrict(district)) {
+    return { region: region || "callao", province: province || "callao" };
+  }
   const hint = SAFE_DISTRICT_LOCATION_INFERENCE[district];
   if (!hint) return null;
   return {
@@ -587,6 +714,25 @@ function detectCourier(value) {
   return "";
 }
 
+function isSpecificShalomAgency(value, location = {}) {
+  const text = normalizePlace(value);
+  if (!text) return false;
+  const generic = new Set([
+    "shalom", "agencia", "agencia shalom", "oficina", "oficina shalom",
+    "si", "esa", "esa agencia", "la agencia", "terminal", "por shalom",
+  ]);
+  if (generic.has(text)) return false;
+  const knownPlace = SAFE_DISTRICT_LOCATION_INFERENCE[text]
+    || text === normalizePlace(location.district)
+    || text === normalizePlace(location.province)
+    || text === normalizePlace(location.region);
+  if (knownPlace) return false;
+  // Una oficina concreta suele incluir sede, avenida, terminal, distrito o un
+  // nombre propio adicional. Exigimos al menos dos tokens informativos.
+  const tokens = text.split(/\s+/).filter((token) => !["shalom", "agencia", "oficina", "de", "la", "el"].includes(token));
+  return tokens.length >= 2 || (tokens.length === 1 && tokens[0].length >= 5);
+}
+
 function detectLocationInconsistency({ region, province, district }) {
   if (!district || !province) return null;
 
@@ -644,20 +790,19 @@ function json(body, status = 200) {
 
 // ============================================================================
 // Watchdog de clientes sin respuesta
-// Detecta conversaciones donde el CLIENTE hablo ultimo y el bot lleva >15 min
+// Detecta conversaciones donde el CLIENTE hablo ultimo y el bot lleva >3 min
 // en silencio (agente colgado, error, etc.) y alerta al equipo por Telegram.
 // Se dispara aprovechando que el ladder de seguimientos invoca esta funcion
-// constantemente; una compuerta en KV limita el barrido a 1 vez cada 10 min.
+// constantemente; una compuerta en KV limita el barrido a 1 vez cada 2 min.
 // Credenciales: env/globalThis (runtime_config) con fallback a KV del proyecto.
 // ============================================================================
 
-const WATCHDOG_SWEEP_INTERVAL_MS = 10 * 60 * 1000;   // min entre barridos
-const WATCHDOG_MIN_SILENCE_MS = 15 * 60 * 1000;      // cliente esperando >15 min
+const WATCHDOG_SWEEP_INTERVAL_MS = 2 * 60 * 1000;    // max un barrido cada 2 min
+const WATCHDOG_MIN_SILENCE_MS = 3 * 60 * 1000;       // cliente esperando >3 min
 const WATCHDOG_MAX_SILENCE_MS = 6 * 60 * 60 * 1000;  // ignorar silencios >6h (viejos)
 const WATCHDOG_ALERT_TTL_S = 6 * 60 * 60;            // no re-alertar la misma conversacion por 6h
-// TODO(Kenku): reemplazar por el/los phoneNumberId reales del proyecto Kenku Peru.
-const WATCHDOG_PHONE_IDS = ["597907523413541"];
-const WATCHDOG_MAX_ALERTS = 6;
+const WATCHDOG_PHONE_IDS = ["1239315459260256", "951608524703564", "1117623181444547", "597907523413541"];
+const WATCHDOG_MAX_ALERTS = 10;
 
 // Mensajes de cierre triviales del cliente que NO requieren respuesta del bot:
 // si TODAS las palabras del mensaje estan en esta lista, no se alerta
@@ -687,6 +832,12 @@ async function watchdogConfig(env) {
     kapsoApiBase: g("KAPSO_API_BASE", "kAPSOAPIBASE") || "https://api.kapso.ai",
     telegramToken: g("TELEGRAM_BOT_TOKEN", "tELEGRAMBOTTOKEN"),
     telegramChatId: g("TELEGRAM_CHAT_ID", "tELEGRAMCHATID"),
+    // Destinatarios extra (coma/espacio/;) para difundir la alerta a mas chats.
+    telegramChatIdsExtra: g("TELEGRAM_CHAT_IDS", "tELEGRAMCHATIDS"),
+    // Webhook del dashboard externo (cola "Atender ahora"). Mismo contrato que
+    // el postStoreHandoff de notify-team. Requiere estos secrets en ESTA funcion.
+    storeWebhookUrl: g("STORE_WEBHOOK_URL", "sTOREWEBHOOKURL"),
+    storeWebhookSecret: g("STORE_WEBHOOK_SECRET", "sTOREWEBHOOKSECRET"),
   };
   // Fallback a KV del proyecto (mismo patron que create-shopify-order).
   if (env?.KV && (!cfg.kapsoApiKey || !cfg.telegramToken || !cfg.telegramChatId)) {
@@ -701,7 +852,202 @@ async function watchdogConfig(env) {
       cfg.telegramChatId = cfg.telegramChatId || c;
     } catch { /* sin KV: seguimos con lo que haya */ }
   }
+  // Lista final de chats (principal + extras del secret + fijos), deduplicada.
+  // Los IDs fijos se embeben porque la inyeccion del secret TELEGRAM_CHAT_IDS
+  // resulto poco confiable en el runtime. 8844863582 = Daphne Zuniga.
+  cfg.telegramChatIds = parseChatIds(cfg.telegramChatId, cfg.telegramChatIdsExtra, "8844863582");
   return cfg;
+}
+
+function parseChatIds(...values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (!value) continue;
+    for (const part of String(value).split(/[\s,;]+/)) {
+      const id = part.trim();
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+  }
+  return out;
+}
+
+// ============================================================================
+// DETECTOR DE NARRACION FILTRADA
+// El agente corre con message_delivery_mode="tool_only": no tiene canal de texto
+// libre, asi que todo lo que "dice" sale por una herramienta de envio. Un modelo
+// chico mete ahi su razonamiento y el cliente lee "Ambos valores existen, asi que
+// procedo con el product_media_lookup" o "Ahora completo la tarea".
+// send-text lo bloquea por codigo, pero Kapso OBLIGA a mantener habilitada
+// send_notification_to_user (es el canal de entrega del modo tool_only), asi que
+// queda un bypass. Este barrido detecta lo que se escape y avisa por Telegram.
+// ============================================================================
+
+const LEAK_SWEEP_INTERVAL_MS = 5 * 60 * 1000;   // max un barrido cada 5 min
+const LEAK_LOOKBACK_MS = 20 * 60 * 1000;        // ventana inicial si no hay barrido previo
+const LEAK_ALERT_TTL_S = 24 * 60 * 60;          // no repetir el mismo mensaje en 24h
+const LEAK_MAX_CONVOS = 25;                     // tope de conversaciones por barrido
+const LEAK_MAX_ALERTS = 5;                      // tope de avisos por barrido
+
+// Nombres de herramientas internas: jamas aparecen en un mensaje legitimo.
+const LEAK_TOOL_NAMES = [
+  "complete_task", "handoff_to_human", "save_variable", "get_variable",
+  "enter_waiting", "send_media", "send_notification_to_user", "send_text",
+  "get_whatsapp_context", "get_current_datetime", "get_execution_metadata",
+  "product_media_lookup", "shopify_product_lookup", "check_coverage",
+  "create_shopify_order", "customer_lookup", "send_buttons", "send_payment",
+  "quote_order", "notify_team", "loop_guard",
+];
+
+// Frases de proceso. Ancladas para no pisar texto legitimo ("te paso el precio",
+// "te vamos a llamar a tu numero", "paso a paso" NO deben caer aca).
+const LEAK_PATTERNS = [
+  /\bprocedo\s+con\b/i,
+  /\bahora\s+(procedo|llamo|completo|envio|uso)\b/i,
+  /\bvoy\s+a\s+(llamar|usar|ejecutar|invocar)\b/i,
+  /\bprimero\s+(llamo|voy\s+a\s+llamar)\b/i,
+  /\bpaso\s+\d+\s*:/i,
+  /\bel\s+resultado\s+(muestra|devolvio|indica)\b/i,
+  /\bambos\s+valores\s+existen\b/i,
+  /\bla\s+herramienta\s+(devolvio|indica|dice)\b/i,
+  /\b(el\s+)?lookup\s+(devolvio|muestra)\b/i,
+  /\bcompleto\s+la\s+tarea\b/i,
+  /\bsegun\s+(las\s+)?instrucciones\b/i,
+  /\bdebo\s+(llamar|usar|ejecutar|invocar|enviar)\b/i,
+  /\bno\s+fue\s+encontrado\s+en\s+la\s+busqueda\b/i,
+  /\bbusqueda\s+de\s+medios\b/i,
+  /\bno\s+(devolvio|arrojo)\s+(resultados|nada|datos)\b/i,
+  /\b(la\s+)?(busqueda|consulta)\s+no\s+(devolvio|arrojo|encontro)\b/i,
+];
+
+function textLeaksReasoning(text) {
+  // Sin acentos: los patrones se escriben sin tilde y cubren las dos formas.
+  const value = String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!value.trim()) return false;
+  const lower = value.toLowerCase();
+  for (const tool of LEAK_TOOL_NAMES) {
+    if (lower.includes(tool)) return true;
+  }
+  for (const re of LEAK_PATTERNS) {
+    if (re.test(value)) return true;
+  }
+  return false;
+}
+
+async function maybeRunLeakDetector(env, { force = false, sinceMs, maxConvos } = {}) {
+  if (!env?.KV) return { ran: false, reason: "no_kv" };
+  const now = Date.now();
+  const last = Number(await env.KV.get("leakdetect:last_sweep") || 0);
+  if (!force && now - last < LEAK_SWEEP_INTERVAL_MS) return { ran: false, reason: "gated" };
+  await env.KV.put("leakdetect:last_sweep", String(now), { expirationTtl: 3600 });
+
+  const cfg = await watchdogConfig(env);
+  if (!cfg.kapsoApiKey || !cfg.telegramToken || !cfg.telegramChatId) {
+    return { ran: false, reason: "missing_credentials" };
+  }
+  const since = Number.isFinite(sinceMs)
+    ? sinceMs
+    : (last ? last - 60 * 1000 : now - LEAK_LOOKBACK_MS); // 1 min de solape
+  return leakSweep(cfg, env, now, since, maxConvos || LEAK_MAX_CONVOS);
+}
+
+async function leakSweep(cfg, env, now, since, maxConvos = LEAK_MAX_CONVOS) {
+  const found = [];
+  let inspected = 0;
+
+  for (const phoneId of WATCHDOG_PHONE_IDS) {
+    if (inspected >= maxConvos) break;
+    let convos = [];
+    try {
+      const url = `${cfg.kapsoApiBase}/platform/v1/whatsapp/conversations`
+        + `?phone_number_id=${encodeURIComponent(phoneId)}&limit=100`;
+      const res = await fetch(url, { headers: { "X-API-Key": cfg.kapsoApiKey } });
+      if (!res.ok) continue;
+      convos = (await res.json())?.data || [];
+    } catch { continue; }
+
+    // La lista viene ordenada por recencia y el filtro last_active_after de la API
+    // NO filtra (devuelve siempre el limite), asi que acotamos por fecha aca y
+    // cortamos apenas salimos de la ventana.
+    for (const convo of convos) {
+      if (inspected >= maxConvos) break;
+      const active = Date.parse(convo.last_active_at || convo.updated_at || "");
+      if (!Number.isFinite(active)) continue;
+      if (active < since) break;
+      inspected += 1;
+
+      let messages = [];
+      try {
+        const mUrl = `${cfg.kapsoApiBase}/meta/whatsapp/v24.0/${encodeURIComponent(phoneId)}`
+          + `/messages?conversation_id=${encodeURIComponent(convo.id)}&limit=25`;
+        const mRes = await fetch(mUrl, { headers: { "X-API-Key": cfg.kapsoApiKey } });
+        if (!mRes.ok) continue;
+        const body = await mRes.json();
+        messages = body?.data || body?.messages || [];
+      } catch { continue; }
+
+      for (const msg of messages) {
+        const meta = msg.kapso || {};
+        if (meta.direction !== "outbound") continue;
+        const text = (msg.text && msg.text.body) || "";
+        if (!textLeaksReasoning(text)) continue;
+
+        const stamp = Number(meta.timestamp || msg.timestamp || 0) * 1000;
+        if (Number.isFinite(stamp) && stamp > 0 && stamp < since) continue; // viejo
+        found.push({
+          id: msg.id || meta.last_message_id || `${convo.id}:${text.slice(0, 24)}`,
+          name: convo.contact_name || convo.phone_number || convo.username || "?",
+          conversationId: convo.id,
+          text: text.slice(0, 180),
+        });
+      }
+    }
+  }
+
+  // Dedupe: cada mensaje filtrado se avisa una sola vez.
+  const fresh = [];
+  for (const item of found) {
+    const key = `leakdetect:alerted:${item.id}`;
+    if (await env.KV.get(key)) continue;
+    await env.KV.put(key, "1", { expirationTtl: LEAK_ALERT_TTL_S });
+    fresh.push(item);
+    if (fresh.length >= LEAK_MAX_ALERTS) break;
+  }
+
+  if (!fresh.length) return { ran: true, inspected, found: found.length, alerted: 0 };
+
+  await sendLeakAlert(cfg, fresh);
+  return { ran: true, inspected, found: found.length, alerted: fresh.length };
+}
+
+// Envia el aviso de narracion filtrada a todos los chats de Telegram del equipo.
+// Un chat que falle no corta el envio a los demas.
+async function sendLeakAlert(cfg, items, { test = false } = {}) {
+  const lines = items.map((f) => `• *${f.name}*\n  _"${f.text}"_`);
+  const head = test
+    ? "🧪 *PRUEBA del detector de narracion* (ignorar)"
+    : "🐛 *El bot filtro su razonamiento al cliente*";
+  const foot = test
+    ? "Si lees esto, el aviso funciona: un caso real llegara igual."
+    : "Salio por send_notification_to_user (send_text si lo bloquea). Revisa la conversacion en Kapso.";
+  const text = `${head}\n\n${lines.join("\n")}\n\n${foot}`;
+  const chats = cfg.telegramChatIds && cfg.telegramChatIds.length ? cfg.telegramChatIds : [cfg.telegramChatId];
+  let sent = 0;
+  for (const chatId of chats) {
+    if (!chatId) continue;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+      });
+      if (res.ok) sent += 1;
+    } catch { /* un chat caido no corta los demas */ }
+  }
+  return sent;
 }
 
 async function maybeRunWatchdog(env, { force = false } = {}) {
@@ -779,17 +1125,66 @@ async function watchdogSweep(cfg, env, now) {
 
   if (fresh.length === 0) return { ran: true, candidates: candidates.length, alerted: 0 };
 
+  // Aviso al dashboard: un POST best-effort por cada cliente esperando, para que
+  // caiga en la cola "Atender ahora". Independiente del envio a Telegram.
+  try { await postWaitingToStore(cfg, fresh); } catch { /* nunca romper el watchdog */ }
+
   const lines = fresh.map((c) => `• *${c.name}* (+${c.phone}) — ${c.minutes} min esperando\n  _"${c.text}"_`);
-  const text = `⚠️ *Clientes esperando respuesta* (bot en silencio >15 min)\n\n${lines.join("\n")}\n\nEntra a Kapso para atenderlos.`;
-  try {
-    await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: cfg.telegramChatId, text, parse_mode: "Markdown" }),
-    });
-  } catch { /* Telegram caido: el dedupe TTL hara que se reintente luego */ }
+  const text = `⚠️ *Clientes esperando respuesta* (bot en silencio >3 min)\n\n${lines.join("\n")}\n\nEntra a Kapso para atenderlos.`;
+  // Difunde a todos los chats (principal + extras). Un chat que falle (ej. no
+  // inicio el bot con /start) no corta el envio a los demas; el dedupe TTL ya
+  // marco a los clientes como alertados.
+  const chats = cfg.telegramChatIds && cfg.telegramChatIds.length ? cfg.telegramChatIds : [cfg.telegramChatId];
+  for (const chatId of chats) {
+    if (!chatId) continue;
+    try {
+      await fetch(`https://api.telegram.org/bot${cfg.telegramToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+      });
+    } catch { /* Telegram caido para este chat: seguimos con los demas */ }
+  }
 
   return { ran: true, candidates: candidates.length, alerted: fresh.length };
+}
+
+// POST best-effort al webhook del dashboard: uno por cada cliente esperando.
+// Mismo contrato que postStoreHandoff de notify-team (event workflow.execution.handoff).
+// El dashboard deduplica por telefono, asi que reportar el mismo cliente en
+// barridos consecutivos es inocuo. Nunca rompe el watchdog ni el envio a Telegram.
+async function postWaitingToStore(cfg, fresh) {
+  if (!cfg.storeWebhookUrl) return;
+  for (const c of fresh) {
+    try {
+      const body = JSON.stringify({
+        event: "workflow.execution.handoff",
+        phone_number: String(c.phone || "").replace(/[^\d]/g, ""),
+        conversation_id: c.id || "",
+        reason: "esperando respuesta",
+        context_summary: String(c.text || "").replace(/\s+/g, " ").trim(),
+      });
+      const headers = { "Content-Type": "application/json" };
+      if (cfg.storeWebhookSecret) {
+        headers["X-Webhook-Secret"] = cfg.storeWebhookSecret;
+        const sig = await hmacHex(cfg.storeWebhookSecret, body);
+        if (sig) headers["X-Kapso-Signature"] = sig;
+      }
+      await fetch(cfg.storeWebhookUrl, { method: "POST", headers, body });
+    } catch { /* best-effort por cliente: seguimos con los demas */ }
+  }
+}
+
+// Firma HMAC-SHA256 (hex) del cuerpo con el secret. Best-effort ("" si falla).
+async function hmacHex(secret, body) {
+  try {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const sig = await crypto.subtle.sign("HMAC", key, enc.encode(body));
+    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "";
+  }
 }
 
 // Administracion por invocacion directa (privada, requiere X-API-Key de Kapso):
@@ -814,6 +1209,26 @@ async function watchdogAdmin(payload, env) {
     const result = await maybeRunWatchdog(env, { force: true });
     return json({ ok: true, ...result });
   }
+  // Prueba del canal de aviso: manda una alerta de ejemplo por el mismo camino
+  // que usaria un leak real (misma config, mismo formato). Solo para verificar.
+  if (payload.leakTestAlert) {
+    const cfg = await watchdogConfig(env);
+    if (!cfg.telegramToken || !cfg.telegramChatId) return json({ ok: false, reason: "missing_credentials" });
+    const sample = [{ name: "PRUEBA (no es un caso real)", text: "Ambos valores existen, asi que procedo con el product_media_lookup" }];
+    const sent = await sendLeakAlert(cfg, sample, { test: true });
+    return json({ ok: true, testAlertSent: sent });
+  }
+  if (payload.forceLeakSweep) {
+    // leakSweepMinutes: ventana hacia atras solo para pruebas manuales.
+    const minutes = Number(payload.leakSweepMinutes);
+    const maxConvos = Number(payload.leakMaxConvos);
+    const result = await maybeRunLeakDetector(env, {
+      force: true,
+      sinceMs: Number.isFinite(minutes) && minutes > 0 ? Date.now() - minutes * 60 * 1000 : undefined,
+      maxConvos: Number.isFinite(maxConvos) && maxConvos > 0 ? maxConvos : undefined,
+    });
+    return json({ ok: true, ...result });
+  }
   const cfg = await watchdogConfig(env);
   return json({
     ok: true,
@@ -829,8 +1244,13 @@ globalThis.__kenkuCheckCoverage = {
   maybeRunWatchdog,
   watchdogSweep,
   watchdogConfig,
+  maybeRunLeakDetector,
+  leakSweep,
+  sendLeakAlert,
+  textLeaksReasoning,
   cleanDistrictText,
   detectCourier,
+  isSpecificShalomAgency,
   detectLocationInconsistency,
   handleRequest,
   handler,
@@ -840,4 +1260,6 @@ globalThis.__kenkuCheckCoverage = {
   isLimaMetroDistrict,
   levenshtein,
   normalizePlace,
+  routeFollowup,
+  hasLiveUnansweredInbound,
 };
