@@ -345,7 +345,13 @@ async function handleRequest(request, env = globalThis) {
       }
     }
 
-    if (!product && queryText && config.token) {
+    // Fallback amplio contra el Admin API. NO corre si el catalogo ya dijo
+    // "ambiguo": esa ambiguedad es informacion, no ausencia de informacion, y
+    // agarrar products[0] a ciegas la pisaba. Asi se cotizo el molinillo
+    // "Cofee Grindr" (S/80) a un cliente que estaba viendo el Iced Coffee
+    // (S/149): el catalogo habia detectado bien que "cafe" era ambiguo y este
+    // fallback resolvio igual, por el primero de la lista.
+    if (!product && queryText && config.token && !catalogSearch?.ambiguous) {
       const products = await searchProducts(config, queryText, handles);
       product = products[0] || null;
       // fallback amplio: reliableMatch queda en false a proposito.
@@ -464,8 +470,16 @@ async function handleRequest(request, env = globalThis) {
       // true = el catalogo publico lo daba por agotado pero la Admin confirmo
       // stock real. Sirve para detectar desfases del feed publico.
       stockRescued,
+      // false = el producto NO salio de una coincidencia firme sino del fallback
+      // amplio (primer resultado del Admin API). El precio puede ser de otro
+      // producto, asi que el agente tiene que confirmar el titulo antes de
+      // cotizar en vez de leer el numero directo.
+      reliableMatch,
+      ...(reliableMatch ? {} : {
+        priceWarning: `Coincidencia DEBIL: no estoy seguro de que "${queryText}" sea *${normalizedProduct.title}*. NO des este precio todavia. Confirma primero con el cliente que es ese producto (o pedile el link), y recien entonces cotiza.`,
+      }),
       customerMessage: buildProductFoundMessage(normalizedProduct),
-      nextAction: "ask_quantity",
+      nextAction: reliableMatch ? "ask_quantity" : "confirm_product",
     });
   } catch (error) {
     return json({
@@ -718,7 +732,19 @@ function searchCatalogProducts(catalog, text, handles = []) {
     }
   }
 
-  const singleStrongMatch = query.tokens.length === 1 && best.score >= 12 && (!second || best.score >= second.score + 5);
+  // Una consulta de UNA sola palabra solo resuelve sola si esa palabra es
+  // DISTINTIVA (aparece en un unico producto del catalogo). Sin esa condicion,
+  // 12 puntos y 5 de ventaja alcanzaban para devolver un producto con precio:
+  // "cafe" devolvia el molinillo "Cofee Grindr" a S/80 y el bot le cotizo ese
+  // precio a un cliente que estaba viendo el Iced Coffee, que vale S/149 (las
+  // promos salieron consistentes con la base falsa: 3x2 en S/160, 5x3 en S/240).
+  // Si la palabra esta en varios productos ahora cae en `ambiguous` y el agente
+  // tiene que desambiguar en vez de cotizar a ciegas.
+  const singleTokenDf = query.tokens.length === 1 ? (df.get(query.tokens[0]) || 0) : 0;
+  const singleStrongMatch = query.tokens.length === 1
+    && best.score >= 12
+    && singleTokenDf <= 1
+    && (!second || best.score >= second.score + 5);
   const distinctiveMatch = hasDistinctiveProductToken(best.product, query)
     && best.score >= 20
     && (!second || best.score >= second.score + 5);
