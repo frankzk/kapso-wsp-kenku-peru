@@ -117,14 +117,21 @@ function resultadoHerramienta(caso, nombre, argumentos) {
 // Todo lo que el modelo le manda al CLIENTE: el texto suelto mas los argumentos
 // de las herramientas de envio. Es lo que se evalua, porque es lo unico que el
 // cliente llega a leer.
-function textoAlCliente(pasos) {
+// `turnosCliente` son los textos que escribio el cliente en el caso. Los modelos
+// a veces los repiten literalmente antes de responder ("El café" aparecia dos y
+// tres veces en la corrida del 2026-09-06), y ese eco contaminaba el texto
+// evaluado: una regla `prohibido_texto` podia dar falso negativo solo porque el
+// cliente uso esa palabra.
+function textoAlCliente(pasos, turnosCliente = []) {
+  const ecos = new Set(turnosCliente.map((t) => String(t || "").trim().toLowerCase()));
+  const esEco = (t) => ecos.has(String(t || "").trim().toLowerCase());
   const partes = [];
   for (const p of pasos) {
-    if (p.tipo === "texto" && p.texto) partes.push(p.texto);
+    if (p.tipo === "texto" && p.texto && !esEco(p.texto)) partes.push(p.texto);
     if (p.tipo === "tool") {
       const a = p.argumentos || {};
       for (const campo of ["text", "bodyText", "body_text", "caption", "message"]) {
-        if (typeof a[campo] === "string" && a[campo].trim()) partes.push(a[campo]);
+        if (typeof a[campo] === "string" && a[campo].trim() && !esEco(a[campo])) partes.push(a[campo]);
       }
     }
   }
@@ -178,7 +185,7 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
     if (llamadas.includes("complete_task")) break;
   }
 
-  const textoCliente = textoAlCliente(pasos);
+  const textoCliente = textoAlCliente(pasos, caso.turnos.filter((t) => t.rol === "cliente").map((t) => t.texto));
   const nota = evaluarCaso(caso, { textoCliente, herramientasLlamadas: llamadas });
   return { ...nota, modelo, textoCliente, herramientasLlamadas: llamadas, uso, pasos };
 }
