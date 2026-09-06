@@ -91,12 +91,26 @@ mover la conversión, porque comprar depende de cosas que el laboratorio no
 captura. Sirve para **descartar** candidatos malos barato y para detectar
 regresiones; la prueba en producción sigue siendo la única que decide.
 
-**Lo que cuesta.** Medido en la primera corrida real: **~120.000 tokens por caso
+**Lo que cuesta.** Medido en la primera corrida real: **~132.000 tokens por caso
 y por modelo**, porque el prompt de 48.000 caracteres se reenvia en cada
-iteracion. La corrida completa (8 casos x 6 modelos) son ~5,8 millones de tokens:
-segun la mezcla de modelos, entre **10 y 25 dolares**. Sigue siendo mucho menos
-que los ~S/1.900 por semana de una prueba en produccion, pero no son "unos pocos
-dolares" como estimé antes de medirlo.
+iteracion.
+
+| | 4 casos | 5 casos | 8 casos |
+|---|---|---|---|
+| openai/gpt-4.1 | $0,76 | $0,95 | $1,51 |
+| openai/gpt-4.1-mini | $0,18 | $0,22 | $0,35 |
+| anthropic/claude-haiku-4.5 | $0,53 | $0,67 | $1,06 |
+| anthropic/claude-sonnet-4.5 | $1,17 | $1,46 | $2,33 |
+| google/gemini-3.7-flash | $0,17 | $0,22 | $0,35 |
+| x-ai/grok-4.1-fast | $0,17 | $0,22 | $0,35 |
+| **los 6 juntos** | **$2,98** | **$3,72** | **$5,95** |
+
+Sonnet 4.5 solo se lleva el 39% del total: sacarlo baja la corrida completa a
+$3,62. Los precios de haiku, gemini y grok son estimados; los de la familia GPT
+son los efectivos publicados por OpenRouter.
+
+El runner imprime el acumulado de tokens entre modelo y modelo, para poder cortar
+si el credito esta ajustado.
 
 Para gastar menos mientras iteras, usa `--caso` y `--modelos` para acotar.
 

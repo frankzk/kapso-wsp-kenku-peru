@@ -43,7 +43,8 @@ function args() {
   };
   return {
     modelos: (get("--modelos") || MODELOS_DEFAULT.join(",")).split(",").map((s) => s.trim()).filter(Boolean),
-    caso: get("--caso"),
+    // acepta uno o varios: --caso a,b,c
+    caso: (get("--caso") || "").split(",").map((x) => x.trim()).filter(Boolean),
     verbose: a.includes("--verbose"),
     maxIter: Number(get("--max-iter") || 14),
   };
@@ -197,15 +198,16 @@ async function main() {
     console.error("Falta OPENROUTER_API_KEY.\n  OPENROUTER_API_KEY=sk-or-... node evals/runner.js");
     process.exit(1);
   }
-  const casos = filtro ? CASOS.filter((c) => c.id === filtro) : CASOS;
+  const casos = filtro.length ? CASOS.filter((c) => filtro.includes(c.id)) : CASOS;
   if (!casos.length) {
-    console.error(`No hay ningun caso con id ${filtro}. Disponibles: ${CASOS.map((c) => c.id).join(", ")}`);
+    console.error(`No hay ningun caso con id ${filtro.join(", ")}. Disponibles: ${CASOS.map((c) => c.id).join(", ")}`);
     process.exit(1);
   }
   const tools = herramientas();
   console.log(`Prompt: ${AGENTE.system_prompt.length} chars | ${tools.length} herramientas | ${casos.length} casos | ${modelos.length} modelos\n`);
 
   const tabla = [];
+  let gastados = 0;
   for (const modelo of modelos) {
     const filas = [];
     for (const caso of casos) {
@@ -228,7 +230,11 @@ async function main() {
     const casosOk = filas.filter((f) => f.ok).length;
     const tokens = filas.reduce((n, f) => n + (f.uso?.prompt_tokens || 0) + (f.uso?.completion_tokens || 0), 0);
     tabla.push({ modelo, reglas: `${pas}/${tot}`, pct: tot ? (100 * pas) / tot : 0, casosOk: `${casosOk}/${filas.length}`, tokens, filas });
-    console.log("");
+    gastados += tokens;
+    // Con credito ajustado conviene ver el acumulado entre modelo y modelo para
+    // poder cortar a tiempo. El costo real depende del precio de cada uno; el
+    // token total es el mejor proxy disponible sin consultar precios en vivo.
+    console.log(`  subtotal acumulado: ${(gastados / 1000).toFixed(0)}k tokens en ${tabla.length} modelo(s)\n`);
   }
 
   tabla.sort((a, b) => b.pct - a.pct || Number(b.casosOk.split("/")[0]) - Number(a.casosOk.split("/")[0]));
