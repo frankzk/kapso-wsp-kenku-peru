@@ -148,6 +148,9 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
   const llamadas = [];
   let uso = { prompt_tokens: 0, completion_tokens: 0 };
   let empujones = 0;
+  // Por que se termino el caso. Distingue "cotizo mal" de "nunca llego a
+  // cotizar", que son fallas muy distintas y el puntaje solo las muestra igual.
+  let corte = "max_iter";
 
   for (let i = 0; i < maxIter; i += 1) {
     const { msg, uso: u } = await llamarModelo(modelo, mensajes, tools, key);
@@ -162,12 +165,19 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
     // del agente NO se entrega, y Kapso lo obliga a usar la herramienta de
     // envio. Sin emular eso, el modelo contestaba con texto plano y el arnes
     // frenaba en el saludo, sin llegar nunca a la parte que se quiere medir.
+    //
+    // El empujon NO nombra la herramienta por su nombre literal a proposito. La
+    // regla `sin_narracion` marca como falla que el texto al cliente contenga el
+    // nombre de una herramienta, y los modelos tienden a repetir el empujon: si
+    // el empujon dice "send_text", el modelo que lo eco queda marcado por una
+    // palabra que le pusimos nosotros en la boca. El nombre igual esta en la
+    // lista de tools, asi que el modelo lo tiene disponible sin que se lo dicten.
     if (!calls.length) {
-      if (empujones >= 2) break;
+      if (empujones >= 2) { corte = "empujones"; break; }
       empujones += 1;
       mensajes.push({
         role: "user",
-        content: "[sistema] Tu texto suelto NO se entrega al cliente. Para escribirle usa la herramienta send_text. Continua desde donde quedaste.",
+        content: "[sistema] Tu texto suelto NO se entrega al cliente: este canal solo entrega lo que mandas con las herramientas de envio de tu lista. Usalas y continua desde donde quedaste.",
       });
       continue;
     }
@@ -183,12 +193,12 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
         content: JSON.stringify(resultadoHerramienta(caso, c.function.name, argumentos)),
       });
     }
-    if (llamadas.includes("complete_task")) break;
+    if (llamadas.includes("complete_task")) { corte = "complete_task"; break; }
   }
 
   const textoCliente = textoAlCliente(pasos, caso.turnos.filter((t) => t.rol === "cliente").map((t) => t.texto));
   const nota = evaluarCaso(caso, { textoCliente, herramientasLlamadas: llamadas });
-  return { ...nota, modelo, textoCliente, herramientasLlamadas: llamadas, uso, pasos };
+  return { ...nota, modelo, textoCliente, herramientasLlamadas: llamadas, uso, pasos, corte, empujones };
 }
 
 async function main() {
@@ -218,6 +228,14 @@ async function main() {
         console.log(`  ${marca} ${modelo.padEnd(30)} ${caso.id.padEnd(24)} ${r.pasadas}/${r.total}`);
         for (const x of r.resultados.filter((y) => !y.ok)) {
           console.log(`        - ${x.regla}: ${x.detalle}${x.porque ? `  (${x.porque})` : ""}`);
+        }
+        // Sin esto, "se nego a usar herramientas" y "cotizo un precio inventado"
+        // se leen igual en la tabla, y son fallas de naturaleza distinta.
+        if (r.corte === "empujones") {
+          console.log(`        ! nunca uso una herramienta de envio: contesto texto suelto y agoto los ${r.empujones} empujones.`);
+          console.log(`          En produccion (tool_only) eso es un cliente que no recibe NADA.`);
+        } else if (r.corte === "max_iter") {
+          console.log(`        ! se quedo sin iteraciones (${maxIter}) sin cerrar con complete_task.`);
         }
         if (verbose) console.log(`        texto> ${r.textoCliente.replace(/\s+/g, " ").slice(0, 240)}`);
       } catch (e) {

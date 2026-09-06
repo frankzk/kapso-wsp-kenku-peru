@@ -72,10 +72,17 @@ prompt, la corrida avisa si volvimos a romper algo viejo.
 (el anterior, marca el piso), `anthropic/claude-haiku-4.5`,
 `anthropic/claude-sonnet-4.5`, `google/gemini-3.7-flash`, `x-ai/grok-4.3`.
 
-**Los ids del catalogo de Kapso pueden estar desactualizados.** `x-ai/grok-4.1-fast`
-figura ahi como `active` pero xAI lo deprecó: OpenRouter devuelve 404 pidiendo
-usar `grok-4.3`. Si un modelo da 404 en toda la corrida, revisar el id contra
-OpenRouter antes que contra Kapso.
+**Verificar el id contra openrouter.ai/models antes de correr.** Un id malo
+devuelve 404 en todos los casos y no cuesta nada, pero desperdicia la corrida.
+Ya pasó dos veces: `x-ai/grok-4.1-fast` figura como `active` en el catalogo de
+Kapso pero xAI lo deprecó (OpenRouter pide `grok-4.3`), y `qwen/qwen-turbo`
+directamente no existe ahi. Si un modelo da 404 en toda la corrida, el problema
+es el id, no el modelo.
+
+**Ids verificados** (respondieron al menos una vez): `openai/gpt-4.1`,
+`openai/gpt-4.1-mini`, `anthropic/claude-haiku-4.5`, `google/gemini-3.7-flash`,
+`google/gemini-2.5-flash`, `moonshotai/kimi-k2`, `z-ai/glm-4.6`,
+`minimax/minimax-m2`, `deepseek/deepseek-chat`.
 
 Los dos de Anthropic entran por un motivo concreto además de la calidad: son los
 únicos del catálogo de Kapso que exponen **caché de prompt de 1 hora**. Con
@@ -101,12 +108,47 @@ Cuidados al agregar otros:
 
 Gemini Flash gano en calidad y en tokens a la vez (34% menos que gpt-4.1).
 
-**Cuidado al leer el puntaje de haiku.** Sus fallas fueron "no llego a cotizar" y
-"narro (send_text)", y las dos son compatibles con un artefacto del arnes: cuando
-un modelo responde sin llamar herramientas, el runner lo empuja con un mensaje
-que menciona `send_text` por su nombre. Si el modelo lo repite, la regla
-`sin_narracion` lo marca. Antes de concluir que haiku es peor hay que mirar el
-detalle del caso con `--verbose`.
+## Segunda corrida (2026-09-06, sonda de 1 caso: `iced-coffee-precio`)
+
+Seis candidatos baratos, un solo caso, para descartar sin gastar.
+
+| Modelo | Reglas | Tokens |
+|---|---|---|
+| moonshotai/kimi-k2 | 3/3 | 262.358 |
+| minimax/minimax-m2 | 3/3 | 207.585 |
+| z-ai/glm-4.6 | 3/3 | 164.049 |
+| google/gemini-2.5-flash | 2/3 | 91.957 |
+| deepseek/deepseek-chat | 2/3 | 75.710 |
+| qwen/qwen-turbo | — | 404, id inexistente |
+
+**Los tokens explican la falla.** Los dos que reprobaron gastaron la mitad que
+los que pasaron. No cotizaron mal: **nunca llegaron a cotizar**. Contestaron con
+texto suelto, agotaron los dos empujones y salieron del loop.
+
+## "No llego a cotizar" es una falla real, no ruido del arnes
+
+Es el mismo modo de falla que se le vio a `claude-haiku-4.5` en la primera
+corrida, y conviene tenerlo claro porque se presta a dos lecturas opuestas:
+
+- **No es un artefacto.** El nodo corre en `message_delivery_mode: tool_only`.
+  Un modelo que contesta con texto suelto y no llama la herramienta de envio no
+  le manda **nada** al cliente. En produccion eso es una conversacion muerta, que
+  es peor que un precio equivocado.
+- **Pero el puntaje solo no alcanza para verlo.** `precio_valido` lo reporta
+  como "no llego a cotizar ningun precio", que se lee como un problema de
+  precios. Por eso el runner ahora imprime el **motivo de corte** (`empujones`,
+  `max_iter`, `complete_task`) y lo guarda en el JSON. Si dice `empujones`, la
+  falla es de obediencia a las herramientas, no de criterio comercial.
+
+**Lo que si era artefacto, y ya esta corregido:** el mensaje de empujon nombraba
+`send_text` textualmente. Como `sin_narracion` marca como falla que el texto al
+cliente contenga el nombre de una herramienta, un modelo que repetia el empujon
+quedaba castigado por una palabra que le habiamos puesto nosotros en la boca. El
+empujon ya no nombra ninguna herramienta; el nombre sigue estando en la lista de
+`tools`, que es de donde el modelo lo tiene que sacar.
+
+Por eso **el 17/23 de haiku de la primera corrida no es comparable** con los
+puntajes de aca en adelante: se midio con el empujon viejo.
 
 ## La limitación honesta
 
