@@ -32,7 +32,7 @@ const MODELOS_DEFAULT = [
   "anthropic/claude-haiku-4.5",
   "anthropic/claude-sonnet-4.5",
   "google/gemini-3.7-flash",
-  "x-ai/grok-4.1-fast",
+  "x-ai/grok-4.3",             // 4.1-fast quedo deprecado: xAI devuelve 404 y recomienda 4.3
 ];
 
 function args() {

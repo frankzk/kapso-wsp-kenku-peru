@@ -70,7 +70,12 @@ prompt, la corrida avisa si volvimos a romper algo viejo.
 
 `openai/gpt-4.1` (el de producción, es la línea base), `openai/gpt-4.1-mini`
 (el anterior, marca el piso), `anthropic/claude-haiku-4.5`,
-`anthropic/claude-sonnet-4.5`, `google/gemini-3.7-flash`, `x-ai/grok-4.1-fast`.
+`anthropic/claude-sonnet-4.5`, `google/gemini-3.7-flash`, `x-ai/grok-4.3`.
+
+**Los ids del catalogo de Kapso pueden estar desactualizados.** `x-ai/grok-4.1-fast`
+figura ahi como `active` pero xAI lo deprecó: OpenRouter devuelve 404 pidiendo
+usar `grok-4.3`. Si un modelo da 404 en toda la corrida, revisar el id contra
+OpenRouter antes que contra Kapso.
 
 Los dos de Anthropic entran por un motivo concreto además de la calidad: son los
 únicos del catálogo de Kapso que exponen **caché de prompt de 1 hora**. Con
@@ -83,6 +88,25 @@ Cuidados al agregar otros:
   No está verificado que el nodo de Kapso la maneje igual.
 - `claude-sonnet-4-6` tiene `supports_custom_sampling: false` y es razonador:
   habría que sacarle la `temperature: 0.2` y puede agregar latencia.
+
+## Primera corrida (2026-09-06, 8 casos)
+
+| Modelo | Reglas | Casos | Tokens |
+|---|---|---|---|
+| google/gemini-3.7-flash | 23/23 (100%) | 8/8 | 899.779 |
+| openai/gpt-4.1 | 22/23 (95,7%) | 7/8 | 1.367.986 |
+| openai/gpt-4.1-mini | 20/23 (87,0%) | 5/8 | 1.303.246 |
+| anthropic/claude-haiku-4.5 | 17/23 (73,9%) | 3/8 | 1.100.747 |
+| x-ai/grok-4.1-fast | — | — | 404, id deprecado |
+
+Gemini Flash gano en calidad y en tokens a la vez (34% menos que gpt-4.1).
+
+**Cuidado al leer el puntaje de haiku.** Sus fallas fueron "no llego a cotizar" y
+"narro (send_text)", y las dos son compatibles con un artefacto del arnes: cuando
+un modelo responde sin llamar herramientas, el runner lo empuja con un mensaje
+que menciona `send_text` por su nombre. Si el modelo lo repite, la regla
+`sin_narracion` lo marca. Antes de concluir que haiku es peor hay que mirar el
+detalle del caso con `--verbose`.
 
 ## La limitación honesta
 
