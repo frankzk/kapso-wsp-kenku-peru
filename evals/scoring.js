@@ -78,9 +78,14 @@ const REGLAS = {
   },
 
   // La falla mas cara: cotizar un monto que no existe en el catalogo.
+  //
+  // Si el caso pide `precio_valido`, NO cotizar tambien reprueba. Antes devolvia
+  // ok cuando no habia precios, y eso daba un falso aprobado: un modelo que se
+  // queda en el saludo y nunca llega a cotizar pasaba el caso del precio sin
+  // haber sido evaluado. Es exactamente el fallo que hay que detectar.
   precio_valido(regla, ctx) {
     const dichos = preciosMencionados(ctx.textoCliente);
-    if (!dichos.length) return { ok: true, detalle: "no menciono precios" };
+    if (!dichos.length) return { ok: false, detalle: "no llego a cotizar ningun precio" };
     const validos = new Set((regla.valor || []).map(Number));
     // Tolerancia de 1 sol: los modelos a veces redondean el precio por unidad.
     const malos = dichos.filter((d) => ![...validos].some((v) => Math.abs(v - d) <= 1));

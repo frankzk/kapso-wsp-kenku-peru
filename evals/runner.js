@@ -45,7 +45,7 @@ function args() {
     modelos: (get("--modelos") || MODELOS_DEFAULT.join(",")).split(",").map((s) => s.trim()).filter(Boolean),
     caso: get("--caso"),
     verbose: a.includes("--verbose"),
-    maxIter: Number(get("--max-iter") || 8),
+    maxIter: Number(get("--max-iter") || 14),
   };
 }
 
@@ -139,6 +139,7 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
   const pasos = [];
   const llamadas = [];
   let uso = { prompt_tokens: 0, completion_tokens: 0 };
+  let empujones = 0;
 
   for (let i = 0; i < maxIter; i += 1) {
     const { msg, uso: u } = await llamarModelo(modelo, mensajes, tools, key);
@@ -149,7 +150,19 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
     if (msg.content && msg.content.trim()) pasos.push({ tipo: "texto", texto: msg.content });
 
     const calls = msg.tool_calls || [];
-    if (!calls.length) break;
+    // El nodo real corre con message_delivery_mode="tool_only": el texto suelto
+    // del agente NO se entrega, y Kapso lo obliga a usar la herramienta de
+    // envio. Sin emular eso, el modelo contestaba con texto plano y el arnes
+    // frenaba en el saludo, sin llegar nunca a la parte que se quiere medir.
+    if (!calls.length) {
+      if (empujones >= 2) break;
+      empujones += 1;
+      mensajes.push({
+        role: "user",
+        content: "[sistema] Tu texto suelto NO se entrega al cliente. Para escribirle usa la herramienta send_text. Continua desde donde quedaste.",
+      });
+      continue;
+    }
 
     for (const c of calls) {
       let argumentos = {};

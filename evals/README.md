@@ -91,8 +91,14 @@ mover la conversión, porque comprar depende de cosas que el laboratorio no
 captura. Sirve para **descartar** candidatos malos barato y para detectar
 regresiones; la prueba en producción sigue siendo la única que decide.
 
-Referencia de lo que cuesta cada opción: una corrida completa son unos pocos
-dólares de tokens, contra ~S/1.900 por semana de una prueba en producción.
+**Lo que cuesta.** Medido en la primera corrida real: **~120.000 tokens por caso
+y por modelo**, porque el prompt de 48.000 caracteres se reenvia en cada
+iteracion. La corrida completa (8 casos x 6 modelos) son ~5,8 millones de tokens:
+segun la mezcla de modelos, entre **10 y 25 dolares**. Sigue siendo mucho menos
+que los ~S/1.900 por semana de una prueba en produccion, pero no son "unos pocos
+dolares" como estimé antes de medirlo.
+
+Para gastar menos mientras iteras, usa `--caso` y `--modelos` para acotar.
 
 ## Mantenimiento
 
