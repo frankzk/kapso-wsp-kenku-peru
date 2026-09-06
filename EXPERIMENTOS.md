@@ -15,6 +15,24 @@ POST /platform/v1/functions/e7c39748-c57c-4322-b532-a31d9ac5949b/invoke
 El `/invoke` de Kapso a veces corre codigo viejo y devuelve `{"error":"Internal
 server error"}` o ceros: hay que reintentar hasta que responda `ok: true`.
 
+**La trampa del borde (corregida el 2026-09-06).** El reporte PEDIA los datos en
+UTC (`${until}T23:59:59Z`) pero los agrupa por dia de LIMA. Como el dia de Lima X
+va de X 05:00Z a X+1 04:59Z, al ultimo dia del rango se le perdian las ultimas 5
+horas (19:00 a 23:59 de Lima) y al principio se colaban 5 horas del dia anterior
+como un dia parcial fantasma.
+
+Lo grave no era el faltante sino su sesgo: sobre el 4 de septiembre daba 499
+conversaciones y 8 pedidos contra 607 y 13 reales — **18% menos conversaciones
+pero 38% menos pedidos**, porque la noche convierte mejor que el promedio. El dia
+del borde no salia incompleto, salia con la tasa hundida. Eso hizo parecer al
+lunes el peor dia de la semana (1,93%) cuando en realidad es 2,38%: los cuatro
+lunes de agosto caian justo en el borde de los tramos consultados.
+
+Ya esta corregido en `resolveRange` (funcion `limaWindowIso`), asi que cualquier
+rango devuelve los mismos numeros por dia. Si en el futuro un dia da distinto
+segun el rango que lo pida, ese es el sintoma de que la ventana volvio a estar
+mal.
+
 **MIRAR SIEMPRE `notes.convTruncated`.** `fetchConversationStats` corta en
 MAX_CONV_PAGES (50 paginas x 100 por numero), asi que un rango de ~14 dias con
 este volumen trunca el conteo de CONVERSACIONES pero no el de PEDIDOS: los dias
@@ -41,6 +59,36 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 | **Revertir** | `provider_model_name: "gpt-4.1-mini"`, `provider_model_id: "6172658f-422b-4224-8df3-d7795fbc5cc3"` |
 
 **Linea base (gpt-4.1-mini, 10-31 ago): 12.203 conversaciones, 260 pedidos, 2,13%.**
+
+**Marcha del experimento** (dias completos, ya con la ventana corregida):
+
+| Dia | Convs | Pedidos | Tasa |
+|---|---|---|---|
+| 1 sep | 579 | 20 | 3,45% |
+| 2 sep | 539 | 18 | 3,34% |
+| 3 sep | 648 | 6 | 0,93% |
+| 4 sep | 607 | 13 | 2,14% |
+| 5 sep | 572 | 10 | 1,75% |
+
+Acumulado al 5 de septiembre: **2.945 conversaciones, 67 pedidos, 2,28%** contra
+2,13% de base. z = 0,58: sin señal. Para pagarse necesita ~3,4% (el sobrecosto es
+S/7.555/mes contra S/38-97 de contribucion por pedido), asi que lo mas probable
+es revertir a mini.
+
+El 0,93% del 3 de septiembre asusta pero no es anomalo: es el segundo dia mas
+bajo de 32, y el peor fue el 14 de agosto con 0,79%, con mini. Dias cerca del 1%
+pasaron cuatro veces en agosto. Verificado que el bot no fallo ese dia: 70,5% de
+las conversaciones vio precio (rango normal 63-78%), cero mensajes de ambiguedad
+al cliente y una sola ejecucion fallida.
+
+**Conversion por dia de la semana** (agosto-septiembre, ventana corregida), util
+para leer cualquier dia suelto antes de alarmarse:
+
+| | dom | mar | lun | mie | jue | vie | sab |
+|---|---|---|---|---|---|---|---|
+| tasa | 2,91% | 2,46% | 2,38% | 2,17% | 2,02% | 1,97% | 1,76% |
+
+Los domingos convierten 65% mejor que los sabados.
 
 | Semana | Convs | Pedidos | Tasa | AOV |
 |---|---|---|---|---|

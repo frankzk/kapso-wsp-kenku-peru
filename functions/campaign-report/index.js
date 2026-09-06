@@ -241,7 +241,8 @@ function resolveRange(params) {
     const ref = new Date(nowLima);
     if (params.period === "yesterday") ref.setUTCDate(ref.getUTCDate() - 1);
     const day = toDateStr(ref);
-    return { since: day, until: day, days: 1, sinceIso: `${day}T00:00:00Z`, untilIso: `${day}T23:59:59Z` };
+    // Misma correccion de ventana que abajo: "ayer" y "hoy" son dias de LIMA.
+    return { since: day, until: day, days: 1, ...limaWindowIso(day, day) };
   }
 
   const until = isValidDate(params.until) ? params.until : toDateStr(nowLima);
@@ -261,8 +262,29 @@ function resolveRange(params) {
     since,
     until,
     days,
-    sinceIso: `${since}T00:00:00Z`,
-    untilIso: `${until}T23:59:59Z`,
+    ...limaWindowIso(since, until),
+  };
+}
+
+// Los datos se PIDEN en UTC pero se agrupan por dia de LIMA (ver limaDay), asi
+// que la ventana UTC tiene que cubrir exactamente los dias de Lima pedidos:
+// el dia de Lima X va de X 05:00Z hasta X+1 04:59Z (Peru es UTC-5 fijo, sin DST).
+//
+// Antes se pedia `${since}T00:00:00Z` .. `${until}T23:59:59Z`, y eso rompia los
+// DOS extremos:
+//   - al final se perdian las 5 ultimas horas del dia `until` (19:00 a 23:59 de
+//     Lima). Medido el 2026-09-06 sobre el 4 de septiembre: 499 conversaciones y
+//     8 pedidos contra 607 y 13 reales. Se perdia 18% de las conversaciones pero
+//     38% de los pedidos, porque la noche convierte mejor que el promedio: el
+//     dia del borde no salia solo incompleto, salia con la tasa hundida. Por eso
+//     los cuatro lunes de agosto (que caian en el borde de los tramos) hacian
+//     parecer al lunes el peor dia de la semana con 1,93% cuando es 2,38%.
+//   - al principio se colaban 5 horas del dia ANTERIOR a `since`, que limaDay
+//     bucketeaba como un dia parcial extra con conteos ridiculos.
+function limaWindowIso(since, until) {
+  return {
+    sinceIso: `${since}T05:00:00Z`,
+    untilIso: `${addDayStr(until)}T04:59:59Z`,
   };
 }
 
