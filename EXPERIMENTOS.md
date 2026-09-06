@@ -10,6 +10,7 @@ Como leer cualquiera de los tres:
 POST /platform/v1/functions/e7c39748-c57c-4322-b532-a31d9ac5949b/invoke
 {"input": {"only": "ab",         "key": "<INTERNAL_REPORT_KEY>", "since": "...", "until": "..."}}
 {"input": {"only": "conversion", "key": "<INTERNAL_REPORT_KEY>", "since": "...", "until": "..."}}
+{"input": {"only": "orders",     "key": "<INTERNAL_REPORT_KEY>", "since": "...", "until": "..."}}
 ```
 
 El `/invoke` de Kapso a veces corre codigo viejo y devuelve `{"error":"Internal
@@ -91,11 +92,20 @@ conversaciones que llegan hasta el final y no terminan en pedido: el peor lugar
 para perderlas.
 
 **b) Precios de los pedidos creados.** Es la falla mas cara y la razon por la que
-se eligio el modelo. Mirar el AOV del dia contra el rango historico (S/118 a
-S/153) y, sobre todo, que cada total caiga en la escalera valida del catalogo:
-unidad, 3x2 (paga 2) o 5x3 (paga 3). Un total que no corresponde a ninguna
-combinacion valida es un precio inventado. Precedente real: el pedido #KP131702,
+se eligio el modelo. **Usar `only=orders`**, que lista cada pedido con su codigo,
+su total, sus unidades y el precio de lista de cada linea:
+
+```
+{"input": {"only": "orders", "key": "<INTERNAL_REPORT_KEY>", "since": "...", "until": "..."}}
+```
+
+Dos verificaciones por pedido: que el total sea el precio de lista (unidad), o
+2 de 3 (3x2), o 3 de 5 (5x3); y que **`perUnit` nunca supere el precio de lista**
+—asi se ve una cotizacion inventada—. Precedente real: el pedido #KP131702,
 cotizado al cliente a S/80 y creado a S/149.
+
+**No usar el AOV para esto.** Sube igual si el bot vende bundles o si infla
+precios; sirve de alarma, no de veredicto.
 
 **c) Ejecuciones falladas.** Contar las que terminaron en error o `handoff` y
 compararlas contra un dia normal. Un salto en `create-shopify-order` o
@@ -109,19 +119,21 @@ preguntar primero.
 
 - **a) Cantidad: bien.** 333 conversaciones, 11 pedidos, 3,30%. Por encima del
   ritmo diario normal, no por debajo.
-- **b) Precios: bien, despues de un susto.** El AOV del dia daba S/234,18, un 52%
-  arriba del rango historico (S/118-153). No era un precio inventado sino el
-  3x2: en P2 los pedidos traen **2,63 unidades** (contra 1,67 en P1), y el
-  ingreso sobre unidades da **S/105,43 por unidad**, que cae dentro de la
-  escalera valida (3x2 de un producto de S/149 = S/99,33 por unidad). Ningun
-  precio por unidad supera el precio de lista, que es como se veria una
-  cotizacion inventada.
+- **b) Precios: bien, y auditado uno por uno.** El AOV del dia daba S/234,18, un
+  52% arriba del rango historico (S/118-153), que es justo como se veria un
+  precio inventado. No lo era. Con `only=orders`: 11 pedidos, S/2.576, 26
+  unidades, **S/99,08 por unidad**. Los once cuadran, cada descuento es
+  exactamente un 3x2 y **ningun `perUnit` supera el precio de lista**.
+  El unico que a simple vista no cuadraba era #KP132767 (S/725 sobre S/864 de
+  lista): el 3x2 se aplico a los 3 Focus Plus, que son el mismo producto, y no a
+  los 3 cafes, que son dos productos distintos (2 Mushroom + 1 Iced). Correcto
+  para un 3x2 por producto.
 - **c) Ejecuciones falladas: cero** desde el cambio.
 
-**La leccion de (b): un AOV alto no alcanza para decidir nada.** Sube igual si el
-bot vende bundles (lo que queremos) o si inventa precios (lo que mas nos cuesta).
-Lo que separa las dos hipotesis es **`unitsPerOrder` y el ingreso dividido por
-unidades**, que ya vienen en `only=ab` -> `promoTest`. Mirar eso, no el AOV solo.
+**La leccion de (b), que es la que hay que recordar: un AOV alto no decide
+nada.** Sube igual si el bot vende bundles (lo que queremos) o si inventa
+precios (lo que mas nos cuesta). Sirve de alarma; el veredicto sale de
+`only=orders`, mirando total contra unidades pedido por pedido.
 
 ---
 
