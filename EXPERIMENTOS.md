@@ -74,6 +74,37 @@ base de 2,13%.
 septiembre queda mezclada entre los dos modelos. Es despreciable, pero por eso el
 primer dia limpio de gemini es el 6 y el cierre de gpt-4.1 se lee sobre 1-5 sep.
 
+### Chequeo de salud del primer dia — correr despues de CUALQUIER cambio de modelo
+
+La conversion tarda una semana en decir algo, pero un modelo nuevo puede romper
+la toma de pedidos **el primer dia y en silencio**: las conversaciones siguen
+pareciendo normales y lo que falla esta al final del embudo. Esto es exactamente
+lo que `evals/` NO puede medir —el laboratorio corre con resultados de
+herramienta grabados, asi que nunca ve un `create_shopify_order` de verdad.
+
+Sobre el primer dia completo, tres cosas:
+
+**a) Cantidad de pedidos.** Rango normal diario: ~6 a 20. Cero o muy pocos con
+un volumen de conversaciones normal significa que el agente dejo de llamar
+`create_shopify_order`, o le manda argumentos que la funcion rechaza. Son
+conversaciones que llegan hasta el final y no terminan en pedido: el peor lugar
+para perderlas.
+
+**b) Precios de los pedidos creados.** Es la falla mas cara y la razon por la que
+se eligio el modelo. Mirar el AOV del dia contra el rango historico (S/118 a
+S/153) y, sobre todo, que cada total caiga en la escalera valida del catalogo:
+unidad, 3x2 (paga 2) o 5x3 (paga 3). Un total que no corresponde a ninguna
+combinacion valida es un precio inventado. Precedente real: el pedido #KP131702,
+cotizado al cliente a S/80 y creado a S/149.
+
+**c) Ejecuciones falladas.** Contar las que terminaron en error o `handoff` y
+compararlas contra un dia normal. Un salto en `create-shopify-order` o
+`quote-order` es el modelo mandando argumentos que antes mandaba bien.
+
+**Si a, b o c salen mal, revertir sin esperar confirmacion.** Un pedido mal
+cotizado cuesta plata de verdad y esperar no lo mejora. Si el dato es dudoso,
+preguntar primero.
+
 ---
 
 ### 1.b Lo que dejo el experimento de gpt-4.1 (cerrado el 2026-09-05)

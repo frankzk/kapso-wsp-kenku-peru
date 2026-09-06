@@ -182,6 +182,14 @@ mover la conversión, porque comprar depende de cosas que el laboratorio no
 captura. Sirve para **descartar** candidatos malos barato y para detectar
 regresiones; la prueba en producción sigue siendo la única que decide.
 
+**Y no mide la toma de pedidos.** Lo que hace la corrida determinista —devolver
+resultados de herramienta grabados— es tambien su punto ciego: el modelo nunca
+ejecuta un `create_shopify_order` de verdad, asi que un candidato puede sacar
+23/23 acá y aun asi mandarle argumentos que la funcion rechaza. Por eso, despues
+de poner un modelo nuevo en produccion, hay que correr el **chequeo de salud del
+primer dia** de `EXPERIMENTOS.md`: cantidad de pedidos, que los totales caigan en
+la escalera de precios valida, y ejecuciones falladas.
+
 **Lo que cuesta.** Medido en la primera corrida real: **~132.000 tokens por caso
 y por modelo**, porque el prompt de 48.000 caracteres se reenvia en cada
 iteracion.
