@@ -105,6 +105,24 @@ compararlas contra un dia normal. Un salto en `create-shopify-order` o
 cotizado cuesta plata de verdad y esperar no lo mejora. Si el dato es dudoso,
 preguntar primero.
 
+**Resultado del chequeo sobre gemini** (6 sep, primeras ~9 horas, parcial):
+
+- **a) Cantidad: bien.** 333 conversaciones, 11 pedidos, 3,30%. Por encima del
+  ritmo diario normal, no por debajo.
+- **b) Precios: bien, despues de un susto.** El AOV del dia daba S/234,18, un 52%
+  arriba del rango historico (S/118-153). No era un precio inventado sino el
+  3x2: en P2 los pedidos traen **2,63 unidades** (contra 1,67 en P1), y el
+  ingreso sobre unidades da **S/105,43 por unidad**, que cae dentro de la
+  escalera valida (3x2 de un producto de S/149 = S/99,33 por unidad). Ningun
+  precio por unidad supera el precio de lista, que es como se veria una
+  cotizacion inventada.
+- **c) Ejecuciones falladas: cero** desde el cambio.
+
+**La leccion de (b): un AOV alto no alcanza para decidir nada.** Sube igual si el
+bot vende bundles (lo que queremos) o si inventa precios (lo que mas nos cuesta).
+Lo que separa las dos hipotesis es **`unitsPerOrder` y el ingreso dividido por
+unidades**, que ya vienen en `only=ab` -> `promoTest`. Mirar eso, no el AOV solo.
+
 ---
 
 ### 1.b Lo que dejo el experimento de gpt-4.1 (cerrado el 2026-09-05)
@@ -125,16 +143,18 @@ preguntar primero.
 | 2 sep | 539 | 18 | 3,34% |
 | 3 sep | 648 | 6 | 0,93% |
 | 4 sep | 607 | 13 | 2,14% |
-| 5 sep | 572 | 10 | 1,75% |
+| 5 sep | 633 | 14 | 2,21% |
 
-**Ojo con la fila del 5 de septiembre: se leyo a las ~22:55 de Lima, con el dia
-todavia sin terminar.** Le falta la ultima hora, que ademas es de las que mejor
-convierten. Al releerla para el cierre va a dar un poco mas alta.
+**CIERRE: 3.006 conversaciones, 71 pedidos, 2,36%** contra 2,13% de base.
+z = 0,88, con umbrales en 2,66% (2 sigmas) y 2,92% (3 sigmas): **sin señal**.
+gpt-4.1 no movio la conversion de forma detectable y costaba S/7.555/mes de mas;
+para pagarse necesitaba ~3,4%. Verificado con `convTruncated: false`.
 
-Acumulado al 5 de septiembre: **2.945 conversaciones, 67 pedidos, 2,28%** contra
-2,13% de base. z = 0,58: sin señal. Para pagarse necesitaba ~3,4% (el sobrecosto
-era S/7.555/mes contra S/38-97 de contribucion por pedido). El cierre definitivo
-sobre 1-5 sep queda para el 7 de septiembre, con el dia 5 ya completo.
+La fila del 5 se habia leido antes a las 22:55 de Lima, con el dia sin terminar:
+daba 572 conversaciones y 10 pedidos (1,75%). Completa da 633 y 14 (2,21%). Ese
+es el tamaño del error de leer un dia en curso, y es del mismo signo que la
+trampa del borde: la noche convierte mejor, asi que el dia parcial siempre sale
+con la tasa hundida.
 
 El 0,93% del 3 de septiembre asusta pero no es anomalo: es el segundo dia mas
 bajo de 32, y el peor fue el 14 de agosto con 0,79%, con mini. Dias cerca del 1%
