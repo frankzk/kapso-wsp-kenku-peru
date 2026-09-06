@@ -219,7 +219,11 @@ async function main() {
   }
 
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  const out = path.join(BASE, "resultados", `${stamp}.json`);
+  // git no versiona carpetas vacias, asi que en una copia recien clonada
+  // `resultados/` no existe y el write fallaria DESPUES de gastar los tokens.
+  const dir = path.join(BASE, "resultados");
+  fs.mkdirSync(dir, { recursive: true });
+  const out = path.join(dir, `${stamp}.json`);
   fs.writeFileSync(out, JSON.stringify({ fecha: new Date().toISOString(), promptChars: AGENTE.system_prompt.length, tabla }, null, 1));
   console.log(`\nGuardado en ${path.relative(process.cwd(), out)}`);
 }
