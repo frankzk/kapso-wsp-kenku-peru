@@ -48,15 +48,41 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 
 ---
 
-## 1. Modelo del sales-agent — gpt-4.1 por una semana
+## 1. Modelo del sales-agent
+
+**Estado: corriendo `google/gemini-3.7-flash` desde el 2026-09-05 ~22:55 (Lima).**
 
 | | |
 |---|---|
-| **Arranco** | 2026-08-31 ~13:55 (hora Lima) |
-| **Termina** | 2026-09-07 |
-| **Que cambio** | `sales-agent`: gpt-4.1-mini -> gpt-4.1 (nodo `sales-agent`, `provider_model_id` `de8992a1-6f21-4a30-9d37-f8645f66e14e`) |
-| **Como se mide** | `only=conversion`, antes/contra-despues. NO es A/B: el modelo se configura por nodo, no por conversacion. |
-| **Revertir** | `provider_model_name: "gpt-4.1-mini"`, `provider_model_id: "6172658f-422b-4224-8df3-d7795fbc5cc3"` |
+| **Modelo actual** | `google/gemini-3.7-flash`, `provider_model_id` `a88e0501-2f81-4e01-831f-0fed220cc0bc` (OpenRouter) |
+| **Puesto** | 2026-09-05 ~22:55 hora Lima, por PATCH del definition (lock_version 18784 -> 18785) |
+| **Primer dia completo** | 2026-09-06 |
+| **Leer** | 2026-09-13 (una semana), con el mismo criterio que se leyo gpt-4.1 |
+| **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
+
+**Por que este y no mini.** El laboratorio de `evals/` lo midio sobre ocho
+conversaciones reales: 23/23 reglas y 8/8 casos, repetido en **dos corridas
+independientes** y con 41% menos tokens que gpt-4.1. Ningun otro candidato de
+los nueve probados le empato; mini saco 20/23. Detalle en `evals/README.md`.
+
+**Lo que eso NO dice.** El laboratorio mide calidad de respuesta, no ventas. Que
+gemini gane ahi no garantiza que mueva la conversion: hay que medirlo en
+produccion con la misma vara con la que se midio gpt-4.1, contra la misma linea
+base de 2,13%.
+
+**El cambio se hizo a las 22:55 de Lima**, asi que la ultima hora del 5 de
+septiembre queda mezclada entre los dos modelos. Es despreciable, pero por eso el
+primer dia limpio de gemini es el 6 y el cierre de gpt-4.1 se lee sobre 1-5 sep.
+
+---
+
+### 1.b Lo que dejo el experimento de gpt-4.1 (cerrado el 2026-09-05)
+
+| | |
+|---|---|
+| **Corrio** | 2026-08-31 ~13:55 a 2026-09-05 ~22:55 (hora Lima) |
+| **Que cambio** | `sales-agent`: gpt-4.1-mini -> gpt-4.1 (`de8992a1-6f21-4a30-9d37-f8645f66e14e`) |
+| **Como se midio** | `only=conversion`, antes/contra-despues. NO es A/B: el modelo se configura por nodo, no por conversacion. |
 
 **Linea base (gpt-4.1-mini, 10-31 ago): 12.203 conversaciones, 260 pedidos, 2,13%.**
 
@@ -70,10 +96,14 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 | 4 sep | 607 | 13 | 2,14% |
 | 5 sep | 572 | 10 | 1,75% |
 
+**Ojo con la fila del 5 de septiembre: se leyo a las ~22:55 de Lima, con el dia
+todavia sin terminar.** Le falta la ultima hora, que ademas es de las que mejor
+convierten. Al releerla para el cierre va a dar un poco mas alta.
+
 Acumulado al 5 de septiembre: **2.945 conversaciones, 67 pedidos, 2,28%** contra
-2,13% de base. z = 0,58: sin señal. Para pagarse necesita ~3,4% (el sobrecosto es
-S/7.555/mes contra S/38-97 de contribucion por pedido), asi que lo mas probable
-es revertir a mini.
+2,13% de base. z = 0,58: sin señal. Para pagarse necesitaba ~3,4% (el sobrecosto
+era S/7.555/mes contra S/38-97 de contribucion por pedido). El cierre definitivo
+sobre 1-5 sep queda para el 7 de septiembre, con el dia 5 ya completo.
 
 El 0,93% del 3 de septiembre asusta pero no es anomalo: es el segundo dia mas
 bajo de 32, y el peor fue el 14 de agosto con 0,79%, con mini. Dias cerca del 1%
@@ -101,26 +131,15 @@ es 0,235 puntos:
 
 - **> 2,84%** (3 sigmas): efecto real y grande. El modelo era la palanca.
 - **2,60% - 2,84%** (2 sigmas): señal, pero no concluyente. Extender otra semana.
-- **< 2,60%**: sin efecto detectable. Volver a mini.
+- **< 2,60%**: sin efecto detectable. Sacar gpt-4.1.
+
+Estos mismos tres umbrales sirven para leer a gemini el 13 de septiembre: la
+linea base y el volumen semanal no cambiaron.
 
 **Por que solo una semana.** Cuesta ~S/1.900 y alcanza para responder la pregunta
 que importa. Un efecto chico (2,2% -> 2,6%) no se paga solo de todas formas: el
 sobrecosto de gpt-4.1 es S/7.555/mes y en el peor escenario de costos (envio
 S/20, 60% de entrega, contribucion S/38,39 por pedido) recien se paga a 3,41%.
-
-**Al revertir, el destino ya no es mini.** El laboratorio de `evals/` midio seis
-modelos sobre ocho conversaciones reales y `google/gemini-3.7-flash` saco 23/23
-**dos veces**, en corridas independientes, con 41% menos tokens que gpt-4.1.
-Ningun otro candidato le empato. Esta en el catalogo de Kapso como
-`a88e0501-2f81-4e01-831f-0fed220cc0bc` y acepta la `temperature: 0.2` del nodo.
-
-Es decir: la eleccion del 7 de septiembre no es "gpt-4.1 o volver a mini", es
-**gpt-4.1 (caro, sin señal) / mini (el piso, 20/23) / gemini-3.7-flash (mejor
-puntaje y mas barato que los dos)**. Ver `evals/README.md` para el detalle.
-
-Con la salvedad de siempre: el laboratorio mide **calidad de respuesta, no
-ventas**. Que gemini gane ahi no garantiza que mueva la conversion; si se pone,
-hay que medirlo en produccion igual que se midio gpt-4.1.
 
 **Que NO prueba.** La caida de julio esta confundida con el crecimiento del
 trafico: de 7,61% a 3,65% paso *antes* del cambio de modelo, con gpt-4.1 puesto,
@@ -184,7 +203,15 @@ promo pasa el hash por un mezclador de avalancha antes de tomar el bit.
 El cambio de modelo (1) afecta por igual a todos los brazos de (2) y (3), asi que
 sus comparaciones internas siguen siendo validas. Lo que si se mueve es su linea
 base a mitad de camino: **leer (2) y (3) sobre el periodo con un solo modelo**,
-no a caballo de los dos.
+no a caballo de dos.
+
+Ya van **dos** cortes de modelo: mini -> gpt-4.1 el 31 de agosto ~13:55, y
+gpt-4.1 -> gemini-3.7-flash el 5 de septiembre ~22:55 (ambos hora Lima). El 3x2
+(P1/P2) arranco el 31 de agosto y se lee el 10 de septiembre, asi que su ventana
+cae a caballo de los dos cortes; la variante C arranco el 28 de agosto y cruza
+los tres modelos. En los dos casos la comparacion **entre brazos** sigue siendo
+limpia —los brazos comparten modelo en todo momento—, pero la tasa absoluta de
+cualquiera de los brazos no se puede comparar contra la de agosto.
 
 ## Lo que falta y ordena todo lo demas
 
