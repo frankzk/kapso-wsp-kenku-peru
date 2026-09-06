@@ -5,3 +5,8 @@ functions/**/function.yaml
 # Resultados de corridas del eval: se generan localmente y se commitean a mano
 # solo los que valga la pena conservar como referencia.
 evals/resultados/*.json
+
+# Token de admin de Shopify obtenido por scripts/get-shopify-token.mjs.
+# Estaba sin ignorar: no llego a commitearse, pero un `git add -A` lo habria
+# subido a GitHub. Nunca commitear.
+shopify-token.json
