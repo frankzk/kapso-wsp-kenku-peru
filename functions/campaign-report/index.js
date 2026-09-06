@@ -108,6 +108,24 @@ async function handleRequest(request, env = globalThis) {
     }, 200);
   }
 
+  // Modo auditoria: lista los pedidos del bot uno por uno, con su codigo, su
+  // total y sus unidades. Existe porque el AOV agregado NO alcanza para saber si
+  // el bot esta cotizando bien: un ticket alto sube igual si vende bundles (lo
+  // que queremos) o si inventa precios (lo que nos cuesta). La unica forma de
+  // separarlo es mirar total contra unidades pedido por pedido.
+  if (params.only === "orders") {
+    const range = resolveRange(params);
+    const orders = await fetchBotOrders(config, range);
+    return json({
+      ok: true,
+      range: { since: range.since, until: range.until, days: range.days },
+      botOrders: orders.length,
+      revenue: round2(orders.reduce((n, o) => n + o.total, 0)),
+      units: orders.reduce((n, o) => n + o.units, 0),
+      orders,
+    }, 200);
+  }
+
   // Modo ligero SOLO conversion del bot (conversaciones nuevas -> pedidos del bot).
   // Evita fetchMetaInsights (Meta no esta conectado y tumbaba el reporte). Devuelve
   // 200 con los numeros y aisla errores por sub-fetch.
@@ -395,6 +413,59 @@ async function fetchOrderAggregates(config, range) {
     whatsappOrdersByDay,
     truncated,
   };
+}
+
+// Los pedidos del bot del rango, en detalle. Comparte la consulta y el filtro
+// de fetchOrderAggregates (customAttributes.source === "whatsapp-bot") pero
+// ademas trae las lineas, porque sin unidades el total no se puede auditar:
+// S/298 esta bien si son 3 unidades de un producto de S/149 y esta mal si es 1.
+async function fetchBotOrders(config, range) {
+  const out = [];
+  let cursor = null;
+  const queryString = `created_at:>='${range.sinceIso}' created_at:<='${range.untilIso}'`;
+  const gql = `#graphql
+    query BotOrders($q: String!, $cursor: String) {
+      orders(first: 250, query: $q, after: $cursor, sortKey: CREATED_AT) {
+        nodes {
+          name
+          createdAt
+          currentTotalPriceSet { shopMoney { amount } }
+          customAttributes { key value }
+          lineItems(first: 25) { nodes { title quantity originalUnitPriceSet { shopMoney { amount } } } }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`;
+
+  for (let page = 0; page < MAX_ORDER_PAGES; page += 1) {
+    const data = await shopifyGraphql(config, gql, { q: queryString, cursor });
+    for (const order of data.orders?.nodes || []) {
+      const attrs = attributesToMap(order.customAttributes);
+      if (attrs.source !== "whatsapp-bot") continue;
+      const items = (order.lineItems?.nodes || []).map((li) => ({
+        title: li.title,
+        quantity: li.quantity,
+        unitPrice: round2(Number(li.originalUnitPriceSet?.shopMoney?.amount || 0)),
+      }));
+      const total = Number(order.currentTotalPriceSet?.shopMoney?.amount || 0);
+      const units = items.reduce((n, li) => n + (li.quantity || 0), 0);
+      out.push({
+        name: order.name,
+        day: limaDay(order.createdAt),
+        createdAt: order.createdAt,
+        total: round2(total),
+        units,
+        // El dato que decide si el precio es sano: ningun pedido puede quedar
+        // por encima del precio de lista por unidad.
+        perUnit: units > 0 ? round2(total / units) : null,
+        items,
+      });
+    }
+    const pageInfo = data.orders?.pageInfo;
+    if (!pageInfo?.hasNextPage) break;
+    cursor = pageInfo.endCursor;
+  }
+  return out;
 }
 
 function attributesToMap(customAttributes) {
