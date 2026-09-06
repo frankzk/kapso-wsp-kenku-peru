@@ -108,6 +108,20 @@ que importa. Un efecto chico (2,2% -> 2,6%) no se paga solo de todas formas: el
 sobrecosto de gpt-4.1 es S/7.555/mes y en el peor escenario de costos (envio
 S/20, 60% de entrega, contribucion S/38,39 por pedido) recien se paga a 3,41%.
 
+**Al revertir, el destino ya no es mini.** El laboratorio de `evals/` midio seis
+modelos sobre ocho conversaciones reales y `google/gemini-3.7-flash` saco 23/23
+**dos veces**, en corridas independientes, con 41% menos tokens que gpt-4.1.
+Ningun otro candidato le empato. Esta en el catalogo de Kapso como
+`a88e0501-2f81-4e01-831f-0fed220cc0bc` y acepta la `temperature: 0.2` del nodo.
+
+Es decir: la eleccion del 7 de septiembre no es "gpt-4.1 o volver a mini", es
+**gpt-4.1 (caro, sin señal) / mini (el piso, 20/23) / gemini-3.7-flash (mejor
+puntaje y mas barato que los dos)**. Ver `evals/README.md` para el detalle.
+
+Con la salvedad de siempre: el laboratorio mide **calidad de respuesta, no
+ventas**. Que gemini gane ahi no garantiza que mueva la conversion; si se pone,
+hay que medirlo en produccion igual que se midio gpt-4.1.
+
 **Que NO prueba.** La caida de julio esta confundida con el crecimiento del
 trafico: de 7,61% a 3,65% paso *antes* del cambio de modelo, con gpt-4.1 puesto,
 mientras el trafico se triplicaba. Este test mide el efecto del modelo HOY, no

@@ -125,6 +125,31 @@ Seis candidatos baratos, un solo caso, para descartar sin gastar.
 los que pasaron. No cotizaron mal: **nunca llegaron a cotizar**. Contestaron con
 texto suelto, agotaron los dos empujones y salieron del loop.
 
+## Tercera corrida (2026-09-06, 8 casos, arnes corregido)
+
+Los tres que pasaron la sonda, mas una **recorrida de gemini** para ver si su
+23/23 se repetia o habia sido una muestra afortunada.
+
+| Modelo | Reglas | Casos | Tokens |
+|---|---|---|---|
+| **google/gemini-3.7-flash** | **23/23 (100%)** | **8/8** | **803.531** |
+| z-ai/glm-4.6 | 22/23 (95,7%) | 7/8 | 909.226 |
+| minimax/minimax-m2 | 20/23 (87,0%) | 5/8 | 1.166.107 |
+
+**Gemini repitio el 23/23**, en una corrida independiente y con el empujon ya
+corregido. Gana en calidad y en tokens contra todo lo medido hasta ahora: 41%
+menos tokens que gpt-4.1, que ademas cuesta bastante mas por token.
+
+Los dos retadores fallaron `pulsera-unidad` con la misma palabra —"par"— que es
+justo la falla real que le dio origen al caso. glm-4.6 ademas se quedo sin
+iteraciones en `direccion-ya-conocida` (paso las reglas igual, pero no cerro).
+
+**Aplicable en Kapso sin tocar nada mas:** `google/gemini-3.7-flash` esta en el
+catalogo como `a88e0501-2f81-4e01-831f-0fed220cc0bc` (proveedor OpenRouter) y
+tiene `supports_custom_sampling: true`, asi que acepta la `temperature: 0.2` del
+nodo. No expone cache de prompt (`supported_prompt_cache_ttls: []`), igual que
+los de OpenAI que usamos hoy.
+
 ## "No llego a cotizar" es una falla real, no ruido del arnes
 
 Es el mismo modo de falla que se le vio a `claude-haiku-4.5` en la primera
