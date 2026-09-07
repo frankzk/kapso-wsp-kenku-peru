@@ -57,8 +57,22 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 |---|---|
 | **Modelo actual** | `google/gemini-3.7-flash`, `provider_model_id` `a88e0501-2f81-4e01-831f-0fed220cc0bc` (OpenRouter) |
 | **Puesto** | 2026-09-05 ~22:55 hora Lima, por PATCH del definition (lock_version 18784 -> 18785) |
-| **Primer dia completo** | 2026-09-06 |
+| **Primer dia completo** | 2026-09-06: 696 conversaciones, 24 pedidos, **3,45%** |
 | **Leer** | 2026-09-13 (una semana), con el mismo criterio que se leyo gpt-4.1 |
+
+**El primer dia NO es evidencia, por dos razones que conviene tener juntas.**
+z = 2,41 contra la base y p = 1,6%, lo que suena a señal. Pero:
+
+1. **gpt-4.1 arranco igual o mejor y termino en nada.** Sus dos primeros dias
+   fueron 3,45% y 3,34%; la semana cerro en 2,36% con z = 0,88. Un dia bueno al
+   principio no predijo nada la vez anterior.
+2. **El 6 fue domingo**, el mejor dia de la semana (2,91% historico). Ajustado
+   por dia, gemini rindio **1,19x su propio dia**, contra 1,40x y 1,54x de los
+   dos primeros dias de gpt-4.1. Es una sobreperformance *menor* que la que ya
+   se demostro que era ruido.
+
+Lo unico que el dia 1 sostiene es que **no se rompio nada**, que era la pregunta
+del chequeo de salud. El veredicto es el 13 de septiembre.
 | **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
 
 **Por que este y no mini.** El laboratorio de `evals/` lo midio sobre ocho
@@ -117,8 +131,8 @@ preguntar primero.
 
 **Resultado del chequeo sobre gemini** (6 sep, primeras ~9 horas, parcial):
 
-- **a) Cantidad: bien.** 333 conversaciones, 11 pedidos, 3,30%. Por encima del
-  ritmo diario normal, no por debajo.
+- **a) Cantidad: bien.** 333 conversaciones y 11 pedidos a las 9 horas; el dia
+  completo cerro en 696 y 24. Por encima del ritmo normal, no por debajo.
 - **b) Precios: bien, y auditado uno por uno.** El AOV del dia daba S/234,18, un
   52% arriba del rango historico (S/118-153), que es justo como se veria un
   precio inventado. No lo era. Con `only=orders`: 11 pedidos, S/2.576, 26
