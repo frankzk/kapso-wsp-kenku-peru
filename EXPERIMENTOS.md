@@ -57,12 +57,12 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 |---|---|
 | **Modelo actual** | `google/gemini-3.7-flash`, `provider_model_id` `a88e0501-2f81-4e01-831f-0fed220cc0bc` (OpenRouter) |
 | **Puesto** | 2026-09-05 ~22:55 hora Lima, por PATCH del definition (lock_version 18784 -> 18785) |
-| **Primer dia completo** | 2026-09-06: 696 conversaciones, 24 pedidos, **3,45%** |
+| **Primer dia completo** | 2026-09-06: 703 conversaciones, 24 pedidos, **3,41%** (22 vivos, 2 cancelados) |
 | **Leer** | 2026-09-13 (una semana), con el mismo criterio que se leyo gpt-4.1 |
 | **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
 
 **El primer dia NO es evidencia, por dos razones que conviene tener juntas.**
-z = 2,41 contra la base y p = 1,6%, lo que suena a señal. Pero:
+z = 2,36 contra la base y p ~ 2%, lo que suena a señal. Pero:
 
 1. **gpt-4.1 arranco igual o mejor y termino en nada.** Sus dos primeros dias
    fueron 3,45% y 3,34%; la semana cerro en 2,36% con z = 0,88. Un dia bueno al
