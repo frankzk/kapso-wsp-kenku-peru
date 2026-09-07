@@ -113,13 +113,32 @@ su total, sus unidades y el precio de lista de cada linea:
 {"input": {"only": "orders", "key": "<INTERNAL_REPORT_KEY>", "since": "...", "until": "..."}}
 ```
 
-Dos verificaciones por pedido: que el total sea el precio de lista (unidad), o
-2 de 3 (3x2), o 3 de 5 (5x3); y que **`perUnit` nunca supere el precio de lista**
-—asi se ve una cotizacion inventada—. Precedente real: el pedido #KP131702,
-cotizado al cliente a S/80 y creado a S/149.
+**Mirar solo `priceIssues`**, que ya viene calculado: lista los pedidos cuya
+mercaderia no cuadra con precio de lista, 3x2 (1 gratis por cada 3 del mismo
+producto) ni 5x3 (2 gratis por cada 5). Si viene vacio, no hubo precios
+inventados. Precedente real: el pedido #KP131702, cotizado al cliente a S/80 y
+creado a S/149.
+
+**Dos trampas que ya dieron falsos positivos** (2026-09-07, auditando a mano
+antes de que la funcion lo calculara sola):
+
+- **El envio no esta en `lineItems`.** Tres pedidos sanos aparecieron cobrados
+  S/10 por encima del precio de lista; ese S/10 era el delivery. Por eso la
+  escalera se compara contra `subtotal` (= `originalTotal` - `shipping`), nunca
+  contra el total.
+- **Olvidar el 5x3.** #KP132119 llevaba 5 unidades a S/89 cobradas S/267, que es
+  exactamente 3 x 89. Una regla que solo conoce el 3x2 lo marca como inventado.
+
+Las dos juntas hicieron que gpt-4.1 pareciera tener 4 pedidos mal cotizados
+contra 0 de gemini. Con la regla corregida los dos tienen **cero**. Es el tipo de
+error que hay que cuidar especialmente: confirmaba la decision que ya estaba
+tomada.
 
 **No usar el AOV para esto.** Sube igual si el bot vende bundles o si infla
 precios; sirve de alarma, no de veredicto.
+
+**Los cancelados quedan en `total: 0`** pero conservan `originalTotal`. Auditar
+siempre `originalTotal`: si no, un pedido cancelado parece cotizado a cero.
 
 **c) Ejecuciones falladas.** Contar las que terminaron en error o `handoff` y
 compararlas contra un dia normal. Un salto en `create-shopify-order` o

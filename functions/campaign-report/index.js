@@ -120,8 +120,13 @@ async function handleRequest(request, env = globalThis) {
       ok: true,
       range: { since: range.since, until: range.until, days: range.days },
       botOrders: orders.length,
-      revenue: round2(orders.reduce((n, o) => n + o.total, 0)),
+      cancelled: orders.filter((o) => o.cancelled).length,
+      // Lo facturado de verdad: sin los cancelados, que quedan en S/0.
+      revenue: round2(orders.filter((o) => !o.cancelled).reduce((n, o) => n + o.originalTotal, 0)),
       units: orders.reduce((n, o) => n + o.units, 0),
+      // Los que NO cuadran con la escalera. Si viene vacio, no hubo precios
+      // inventados en el rango; es la unica linea que hay que mirar.
+      priceIssues: orders.filter((o) => !o.priceOk).map((o) => o.name),
       orders,
     }, 200);
   }
@@ -429,7 +434,18 @@ async function fetchBotOrders(config, range) {
         nodes {
           name
           createdAt
+          # currentTotal es el total DE HOY: un pedido cancelado o reembolsado da
+          # 0 aunque se haya creado bien. Sin originalTotal + cancelledAt no se
+          # puede distinguir "se cancelo" de "el bot lo creo a precio cero", que
+          # son diagnosticos opuestos.
           currentTotalPriceSet { shopMoney { amount } }
+          totalPriceSet { shopMoney { amount } }
+          # Sin el envio, un pedido de S/20 + S/10 de delivery parece cobrado
+          # S/10 por encima del precio de lista. Marco tres pedidos sanos como
+          # sospechosos antes de que se agregara este campo.
+          totalShippingPriceSet { shopMoney { amount } }
+          cancelledAt
+          displayFinancialStatus
           customAttributes { key value }
           lineItems(first: 25) { nodes { title quantity originalUnitPriceSet { shopMoney { amount } } } }
         }
@@ -448,16 +464,38 @@ async function fetchBotOrders(config, range) {
         unitPrice: round2(Number(li.originalUnitPriceSet?.shopMoney?.amount || 0)),
       }));
       const total = Number(order.currentTotalPriceSet?.shopMoney?.amount || 0);
+      const originalTotal = Number(order.totalPriceSet?.shopMoney?.amount || 0);
+      const shipping = Number(order.totalShippingPriceSet?.shopMoney?.amount || 0);
+      const subtotal = originalTotal - shipping;
       const units = items.reduce((n, li) => n + (li.quantity || 0), 0);
+      // La escalera del catalogo se audita contra la MERCADERIA, no contra el
+      // total: unidad, 3x2 (1 gratis por cada 3 del mismo producto) o 5x3
+      // (2 gratis por cada 5). Ambas promos aplican por producto.
+      const lista = items.reduce((n, li) => n + li.unitPrice * li.quantity, 0);
+      const esperado3x2 = items.reduce((n, li) => n + li.unitPrice * (li.quantity - Math.floor(li.quantity / 3)), 0);
+      const esperado5x3 = items.reduce((n, li) => n + li.unitPrice * (li.quantity - 2 * Math.floor(li.quantity / 5)), 0);
+      const enEscalera = [lista, esperado3x2, esperado5x3].some((v) => Math.abs(subtotal - v) < 1);
       out.push({
         name: order.name,
         day: limaDay(order.createdAt),
         createdAt: order.createdAt,
         total: round2(total),
+        // Lo que se cobro al crearlo. Para auditar precios hay que mirar ESTE,
+        // no `total`, que ya viene neteado de cancelaciones y reembolsos.
+        originalTotal: round2(originalTotal),
+        cancelled: !!order.cancelledAt,
+        cancelledAt: order.cancelledAt || null,
+        financialStatus: order.displayFinancialStatus || null,
         units,
         // El dato que decide si el precio es sano: ningun pedido puede quedar
         // por encima del precio de lista por unidad.
-        perUnit: units > 0 ? round2(total / units) : null,
+        shipping: round2(shipping),
+        subtotal: round2(subtotal),
+        listPrice: round2(lista),
+        // true = la mercaderia cuadra con precio de lista, 3x2 o 5x3.
+        // false = mirarlo a mano: es candidato a precio inventado.
+        priceOk: enEscalera,
+        perUnit: units > 0 ? round2(subtotal / units) : null,
         items,
       });
     }
