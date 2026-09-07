@@ -59,6 +59,7 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 | **Puesto** | 2026-09-05 ~22:55 hora Lima, por PATCH del definition (lock_version 18784 -> 18785) |
 | **Primer dia completo** | 2026-09-06: 696 conversaciones, 24 pedidos, **3,45%** |
 | **Leer** | 2026-09-13 (una semana), con el mismo criterio que se leyo gpt-4.1 |
+| **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
 
 **El primer dia NO es evidencia, por dos razones que conviene tener juntas.**
 z = 2,41 contra la base y p = 1,6%, lo que suena a señal. Pero:
@@ -73,7 +74,6 @@ z = 2,41 contra la base y p = 1,6%, lo que suena a señal. Pero:
 
 Lo unico que el dia 1 sostiene es que **no se rompio nada**, que era la pregunta
 del chequeo de salud. El veredicto es el 13 de septiembre.
-| **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
 
 **Por que este y no mini.** El laboratorio de `evals/` lo midio sobre ocho
 conversaciones reales: 23/23 reglas y 8/8 casos, repetido en **dos corridas
