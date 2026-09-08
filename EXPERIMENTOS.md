@@ -57,23 +57,29 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 |---|---|
 | **Modelo actual** | `google/gemini-3.7-flash`, `provider_model_id` `a88e0501-2f81-4e01-831f-0fed220cc0bc` (OpenRouter) |
 | **Puesto** | 2026-09-05 ~22:55 hora Lima, por PATCH del definition (lock_version 18784 -> 18785) |
-| **Primer dia completo** | 2026-09-06: 703 conversaciones, 24 pedidos, **3,41%** (22 vivos, 2 cancelados) |
+| **Marcha** | 6 sep: 703 convs, 24 ped, 3,41% · 7 sep: 654, 22, 3,36% · **acumulado 1.357 / 46 / 3,39%, z = 3,21** |
 | **Leer** | 2026-09-13 (una semana), con el mismo criterio que se leyo gpt-4.1 |
 | **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
 
-**El primer dia NO es evidencia, por dos razones que conviene tener juntas.**
-z = 2,36 contra la base y p ~ 2%, lo que suena a señal. Pero:
+**Los dos primeros dias NO son evidencia, y hay una razon concreta y medida
+para decirlo:** gpt-4.1 arranco con el mismo numero y termino en nada.
 
-1. **gpt-4.1 arranco igual o mejor y termino en nada.** Sus dos primeros dias
-   fueron 3,45% y 3,34%; la semana cerro en 2,36% con z = 0,88. Un dia bueno al
-   principio no predijo nada la vez anterior.
-2. **El 6 fue domingo**, el mejor dia de la semana (2,91% historico). Ajustado
-   por dia, gemini rindio **1,19x su propio dia**, contra 1,40x y 1,54x de los
-   dos primeros dias de gpt-4.1. Es una sobreperformance *menor* que la que ya
-   se demostro que era ruido.
+| Primeros 2 dias | Convs | Pedidos | Tasa | z |
+|---|---|---|---|---|
+| gpt-4.1 | 1.118 | 38 | 3,40% | 2,94 |
+| gemini | 1.357 | 46 | 3,39% | 3,21 |
+| *gpt-4.1, semana completa* | *3.006* | *71* | *2,36%* | *0,88* |
 
-Lo unico que el dia 1 sostiene es que **no se rompio nada**, que era la pregunta
-del chequeo de salud. El veredicto es el 13 de septiembre.
+Ajustado por dia de la semana el arranque de gemini es incluso **mas flojo**:
+1,17x (domingo) y 1,41x (lunes) sobre el promedio de cada dia, contra 1,40x y
+1,54x de los dos primeros dias de gpt-4.1.
+
+Dos dias es exactamente el tamaño de muestra que ya engaño una vez, en este
+mismo experimento y con una semana de diferencia. Lo unico que sostienen es que
+**no se rompio nada**, que era la pregunta del chequeo de salud.
+
+El veredicto es el 13 de septiembre: con ~4.700 conversaciones el umbral de 3
+sigmas queda cerca de 2,76%.
 
 **Por que este y no mini.** El laboratorio de `evals/` lo midio sobre ocho
 conversaciones reales: 23/23 reglas y 8/8 casos, repetido en **dos corridas
