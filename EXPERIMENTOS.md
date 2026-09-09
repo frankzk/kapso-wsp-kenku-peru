@@ -70,6 +70,8 @@ para decirlo:** gpt-4.1 arranco con el mismo numero y termino en nada.
 | gemini | 1.357 | 46 | 3,39% | 3,21 |
 | *gpt-4.1, semana completa* | *3.006* | *71* | *2,36%* | *0,88* |
 
+(z binomiales, sin corregir. Corregidas por sobredispersion: 1,95, 2,12 y 0,58.)
+
 Ajustado por dia de la semana el arranque de gemini es incluso **mas flojo**:
 1,17x (domingo) y 1,41x (lunes) sobre el promedio de cada dia, contra 1,40x y
 1,54x de los dos primeros dias de gpt-4.1.
@@ -78,8 +80,10 @@ Dos dias es exactamente el tamaño de muestra que ya engaño una vez, en este
 mismo experimento y con una semana de diferencia. Lo unico que sostienen es que
 **no se rompio nada**, que era la pregunta del chequeo de salud.
 
-El veredicto es el 13 de septiembre: con ~4.700 conversaciones el umbral de 3
-sigmas queda cerca de 2,76%.
+El veredicto es el 13 de septiembre. Con ~4.700 conversaciones el umbral de 3
+sigmas **corregido por sobredispersion** queda en **3,08%** (no en 2,76%, que es
+el binomial crudo y esta mal). gemini va en 3,39%: lo pasaria, pero con mucho
+menos margen del que sugiere la z sin corregir.
 
 **Por que este y no mini.** El laboratorio de `evals/` lo midio sobre ocho
 conversaciones reales: 23/23 reglas y 8/8 casos, repetido en **dos corridas
@@ -231,12 +235,45 @@ Los domingos convierten 65% mejor que los sabados.
 **Umbral de lectura.** Con ~3.780 conversaciones en la semana, el error estandar
 es 0,235 puntos:
 
-- **> 2,84%** (3 sigmas): efecto real y grande. El modelo era la palanca.
-- **2,60% - 2,84%** (2 sigmas): señal, pero no concluyente. Extender otra semana.
-- **< 2,60%**: sin efecto detectable. Sacar gpt-4.1.
+**Estos umbrales estaban mal: eran demasiado BAJOS.** Ver abajo.
 
-Estos mismos tres umbrales sirven para leer a gemini el 13 de septiembre: la
-linea base y el volumen semanal no cambiaron.
+- ~~> 2,84% (3 sigmas)~~ -> el umbral real es **> 3,19%**
+- ~~2,60% - 2,84% (2 sigmas)~~ -> el rango real es **2,84% - 3,19%**
+- ~~< 2,60%~~ -> sin efecto detectable es **< 2,84%**
+
+## La sobredispersion: por que las z de este proyecto vienen infladas
+
+La z se calcula suponiendo que cada conversacion es una moneda con la misma
+probabilidad y que lo unico que varia es la suerte. **En Kenku eso es falso.**
+
+Medido sobre los 7 dias completos de septiembre (chi2 de Pearson contra el
+modelo binomial): chi2 = 13,7 con 6 grados de libertad, cuando el azar puro
+daria ~6. **Sobredispersion 2,28x**, o sea el ruido real entre dias es
+**1,5 veces mas ancho** que el binomial.
+
+Tiene una explicacion concreta y no es un defecto de la medicion: la tasa real
+*si* cambia dia a dia segun que anuncios corrieron, que dia de la semana es y
+que productos entraron. No es suerte, es estructura — pero al comparar dos
+ventanas cualesquiera se comporta como ruido extra.
+
+**Regla: dividir toda z binomial por ~1,5, y multiplicar todo umbral por 1,51.**
+
+| | binomial | corregido |
+|---|---|---|
+| Umbral 2 sigmas, semana de ~4.700 convs | 2,55% | **2,77%** |
+| Umbral 3 sigmas, semana de ~4.700 convs | 2,76% | **3,08%** |
+| gemini a 2 dias (3,39%) | z = 3,21 | **z = 2,12** |
+| gpt-4.1 a 2 dias (3,40%) | z = 2,94 | **z = 1,95** |
+| gpt-4.1, semana completa (2,36%) | z = 0,88 | **z = 0,58** |
+
+La ultima fila explica algo que parecia mala suerte: cuando gpt-4.1 mostro
+z = 2,94 a dos dias, **su z corregida era 1,95 — nunca fue señal**. Que despues
+se desinflara no fue casualidad; no habia evidencia, habia un numero mal
+calibrado.
+
+La estimacion de 2,28x sale de solo 7 dias (p ~ 0,03), asi que es aproximada.
+Recalcularla cuando haya mas dias, pero **nunca volver a leer una z binomial
+cruda en este proyecto**.
 
 **Por que solo una semana.** Cuesta ~S/1.900 y alcanza para responder la pregunta
 que importa. Un efecto chico (2,2% -> 2,6%) no se paga solo de todas formas: el
