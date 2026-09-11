@@ -7,6 +7,7 @@ const DEFAULT_API_VERSION = "2026-04";
 // generico de suplementos), asi que fijamos el producto por el ad_id.
 // Para agregar un anuncio nuevo: pon su Source ID (ad_id) -> handle del producto.
 const AD_PRODUCT_MAP = {
+  "120249262670440056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (confirmado por el dueno, SKU 456153444)
   "120248448610150056": "true-beauty-aceite-post-afeitado-donut-glaseado",           // Adios Irritacion Post-Afeitado
   "120249183604400267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies
   "120249183576750267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies (variante)
