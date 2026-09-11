@@ -24,6 +24,10 @@ const STOPWORDS = new Set([
   "pasame",
   "producto",
   "quiero",
+  "resena",
+  "resenas",
+  "testimonio",
+  "testimonios",
   "tienes",
   "ver",
   "video",
@@ -33,6 +37,13 @@ const STOPWORDS = new Set([
 // Synonyms so customer terms match catalog wording (e.g. "medias" == "calcetines" in Peru).
 const SYNONYM_GROUPS = [
   ["medias", "media", "calcetines", "calcetin", "calceta", "calcetas", "soquetes", "soquete"],
+  ["nattokinase", "natokinase", "nattokinasa", "natokinasa", "nattoquinasa", "natoquinasa", "natto"],
+  ["shampoo", "shampu", "champu", "champoo", "sampoo", "shanpu"],
+  ["shilajit", "silajit", "chilajit", "shilayit", "shilagit"],
+  // El anuncio "Elimina Hongos en Pies" vende la marca Terbifin; en la tienda
+  // el producto equivalente es el serum Nails Repairing. Mapear hasta que el
+  // producto tenga el tag "terbifin" en Shopify (los tags son buscables).
+  ["terbifin", "terbinafina", "nails repairing"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
@@ -56,7 +67,88 @@ function tokenVariants(token) {
 }
 
 function searchableHasToken(searchable, token) {
-  return tokenVariants(token).some((variant) => variant && searchable.includes(variant));
+  const variants = tokenVariants(token);
+  if (variants.some((variant) => variant && searchable.includes(variant))) return true;
+  // Fallback fonetico para errores tipicos de escritura (solo tokens largos).
+  if (token.length >= 5) return fuzzyIncludes(searchable, variants);
+  return false;
+}
+
+// Empareja tolerando errores tipicos de escritura, en tres niveles de
+// fallback (solo tokens de 5+ letras, cuando no hubo match exacto):
+// 1) fold fonetico en ambos lados (b/v, s/z, k/qu->c, sh->s, ch->c, ph->f,
+//    w->u, y->i, h muda, letras dobles, -a por -e final);
+// 2) fold sin espacios (ej. "vitalmoo" vs "vital moo");
+// 3) distancia de edicion sobre palabras (typos de teclado: 1 letra en
+//    palabras de 6+, 2 letras en palabras de 9+).
+function fuzzyIncludes(text, variants) {
+  const folded = phoneticFold(text);
+  const foldedNoSpace = folded.replace(/ /g, "");
+  let words = null;
+  return variants.some((variant) => {
+    if (!variant || variant.length < 5) return false;
+    const foldedVariant = phoneticFold(variant);
+    if (folded.includes(foldedVariant)) return true;
+    const trimmed = foldedVariant.replace(/[aeiou]$/, "");
+    if (trimmed.length >= 5 && trimmed !== foldedVariant && folded.includes(trimmed)) return true;
+    if (foldedVariant.length >= 5 && foldedNoSpace.includes(foldedVariant.replace(/ /g, ""))) return true;
+    if (variant.length >= 6) {
+      const maxDistance = variant.length >= 9 ? 2 : 1;
+      if (words === null) words = String(text || "").split(" ").filter((w) => w.length >= 4);
+      return words.some((word) =>
+        Math.abs(word.length - variant.length) <= maxDistance && editDistance(variant, word, maxDistance) <= maxDistance);
+    }
+    return false;
+  });
+}
+
+// Levenshtein acotado con salida temprana: devuelve maxDistance+1 apenas la
+// distancia minima posible supera el limite.
+function editDistance(a, b, maxDistance) {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(prev[j] + 1, current[j - 1] + 1, prev[j - 1] + cost);
+      if (current[j] < rowMin) rowMin = current[j];
+    }
+    if (rowMin > maxDistance) return maxDistance + 1;
+    prev = current;
+  }
+  return prev[b.length];
+}
+
+function phoneticFold(text) {
+  return String(text || "")
+    .replace(/sh/g, "s")
+    .replace(/ch/g, "c")
+    .replace(/ph/g, "f")
+    .replace(/qu|k/g, "c")
+    .replace(/w/g, "u")
+    .replace(/v/g, "b")
+    .replace(/z/g, "s")
+    .replace(/y/g, "i")
+    .replace(/h/g, "")
+    .replace(/(.)\1+/g, "$1");
+}
+
+
+// Registra en KV las busquedas que no encontraron producto, para revisarlas
+// en campaign-report ("busquedas no encontradas") y alimentar sinonimos con
+// datos reales. Best effort: si no hay KV o falla, no afecta la respuesta.
+async function logSearchMiss(env, queryText, reason) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    const query = String(queryText || "").trim();
+    if (!kv || !query) return;
+    const key = `search_miss:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    await kv.put(key, JSON.stringify({ q: query.slice(0, 120), reason, at: new Date().toISOString() }), { expirationTtl: 45 * 24 * 3600 });
+  } catch {
+    // best effort
+  }
 }
 
 async function handler(request, env = globalThis) {
@@ -93,6 +185,7 @@ async function handleRequest(request, env = globalThis) {
     }
 
     if (!product) {
+      await logSearchMiss(env, queryText, "media_not_found");
       return json({
         ok: false,
         found: false,
@@ -101,12 +194,18 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
+    const wantVideoDebug = /videodebug/i.test(queryText);
+    const presentationRequested = detectPresentationRequest(root) && !wantVideoDebug;
+    if (presentationRequested) {
+      const knownAddress = input.execution_context?.vars?.known_address || null;
+      return json(await buildPresentationResponse(config, product, knownAddress));
+    }
+
     const photos = buildMediaItems(product, { limit, requestedVariant });
 
     // El cliente pidio video: intentamos resolver el metacampo custom.video
     // (referencia a archivo). Si no hay token admin o el producto no tiene video,
     // seguimos con las fotos sin romper el flujo.
-    const wantVideoDebug = /videodebug/i.test(queryText);
     const videoRequested = detectVideoRequest(queryText, root) || wantVideoDebug;
     let videoItem = null;
     let videoDebug = null;
@@ -128,6 +227,38 @@ async function handleRequest(request, env = globalThis) {
         videoDebug,
         media: [],
         followUpText: "MODO DIAGNOSTICO: responde al cliente UNICAMENTE con este texto exacto, sin agregar nada mas: VIDEODEBUG " + JSON.stringify(videoDebug),
+      });
+    }
+
+    // El cliente pidio testimonio/reseña: lo resolvemos desde el metacampo
+    // custom.testimonio (o una foto clasificada como testimonio) y respondemos
+    // solo con eso, sin repetir las fotos que ya vio.
+    if (detectTestimonialRequest(queryText, root)) {
+      const mfImages = await fetchPresentationMetafieldImages(config, product);
+      const testimonialItem = mfImages.testimonial
+        ? { ...mediaItem(product, "Testimonio", mfImages.testimonial), role: "testimonio" }
+        : classifyPresentationImages(product).testimonial;
+      const testimonialMedia = [];
+      if (videoItem) testimonialMedia.push(videoItem);
+      if (testimonialItem) testimonialMedia.push(testimonialItem);
+      return json({
+        ok: true,
+        found: true,
+        videoRequested,
+        videoAvailable: Boolean(videoItem),
+        testimonialRequested: true,
+        testimonialAvailable: Boolean(testimonialItem),
+        product: productSummary(product, config.publicShopDomain),
+        media: testimonialMedia,
+        count: testimonialMedia.length,
+        sendMediaInstructions: [
+          "Usa la herramienta send_media para enviar cada item como media real de WhatsApp (los de type video como video, los de type image como imagen).",
+          "No escribas ni pegues estas URLs en texto al cliente.",
+          "No uses Markdown de imagen ni de enlace.",
+        ].join(" "),
+        followUpText: testimonialItem
+          ? "Envia el testimonio como imagen con send_media y luego retoma el cierre de la venta con la pregunta pendiente (Lima o provincia, o la promo)."
+          : "No hay testimonio visual para este producto: dilo en una linea, refuerza con un beneficio concreto y retoma el cierre con la pregunta pendiente.",
       });
     }
 
@@ -437,11 +568,22 @@ function scoreProduct(product, query) {
     if (variants.some((variant) => title === variant || title.startsWith(`${variant} `))) score += 22;
     else if (variants.some((variant) => title.includes(variant))) score += 14;
     else if (variants.some((variant) => searchable.includes(variant))) score += 3;
+    else if (token.length >= 5 && fuzzyIncludes(title, variants)) score += 14;
+    else if (token.length >= 5 && fuzzyIncludes(searchable, variants)) score += 3;
   }
 
   const matchedTokens = query.tokens.filter((token) => searchableHasToken(searchable, token)).length;
   if (matchedTokens === query.tokens.length && query.tokens.length >= 2) score += 10;
-  if (matchedTokens < Math.min(2, query.tokens.length)) score = 0;
+  // Una palabra distintiva (6+ letras) con match fuerte en titulo/handle basta
+  // aunque el resto de la consulta sean calificadores que no estan en el
+  // catalogo (ej. "Nattokinase Liposomal": "liposomal" es marketing del anuncio).
+  const strongTokenMatch = query.tokens.some((token) => {
+    if (token.length < 6) return false;
+    const variants = tokenVariants(token);
+    return variants.some((variant) => title.includes(variant) || handle.includes(variant))
+      || fuzzyIncludes(title, variants) || fuzzyIncludes(handle, variants);
+  });
+  if (matchedTokens < Math.min(2, query.tokens.length) && !(matchedTokens >= 1 && strongTokenMatch)) score = 0;
   return score;
 }
 
@@ -626,6 +768,180 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function detectPresentationRequest(root) {
+  if (!root) return false;
+  if (root.presentation === true || root.presentation === "true") return true;
+  return String(root.purpose || "").toLowerCase() === "presentation";
+}
+
+const BEFORE_AFTER_PATTERN = /(antes|despues|before|after)/;
+const TESTIMONIAL_PATTERN = /(testimoni|resena|review|opinion|comentario)/;
+
+// Lista las imagenes del producto con un "haystack" normalizado (alt + nombre
+// de archivo) para clasificar antes/despues y testimonios sin depender solo
+// del alt (muchas tiendas solo describen la foto en el nombre del archivo).
+function listProductImages(product) {
+  const items = [];
+  const seen = new Set();
+  const push = (rawUrl, alt) => {
+    const url = normalizeImageUrl(rawUrl);
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    items.push({
+      url,
+      haystack: normalizeSearchText([alt, fileNameFromUrl(url)].filter(Boolean).join(" ")),
+    });
+  };
+
+  for (const media of Array.isArray(product.media) ? product.media : []) {
+    if (!media || (media.media_type && media.media_type !== "image")) continue;
+    push(media.src || media.preview_image?.src, media.alt);
+  }
+  for (const image of product.images || []) {
+    push(image?.src || image, image?.alt);
+  }
+  return items;
+}
+
+function fileNameFromUrl(url) {
+  try {
+    const pathname = new URL(url).pathname;
+    const name = decodeURIComponent(pathname.split("/").pop() || "");
+    return name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ");
+  } catch {
+    return "";
+  }
+}
+
+// Separa las fotos del producto en: principal, segunda (antes/despues si
+// existe) y testimonio, para la secuencia de presentacion.
+function classifyPresentationImages(product) {
+  const images = listProductImages(product);
+  const testimonialImg = images.find((img) => TESTIMONIAL_PATTERN.test(img.haystack)) || null;
+  const regular = images.filter((img) => img !== testimonialImg);
+  const beforeAfterImg = regular.find((img) => BEFORE_AFTER_PATTERN.test(img.haystack)) || null;
+  const plain = regular.filter((img) => img !== beforeAfterImg);
+
+  const photos = [];
+  const principal = plain[0] || beforeAfterImg;
+  if (principal) {
+    photos.push({ ...mediaItem(product, "Principal", principal.url), role: "principal" });
+  }
+  if (beforeAfterImg && beforeAfterImg !== principal) {
+    photos.push({ ...mediaItem(product, "Antes y despues", beforeAfterImg.url), role: "antes_despues" });
+  } else if (plain[1]) {
+    photos.push({ ...mediaItem(product, "Foto 2", plain[1].url), role: "foto_2" });
+  }
+
+  return {
+    photos,
+    beforeAfterAvailable: Boolean(beforeAfterImg),
+    testimonial: testimonialImg
+      ? { ...mediaItem(product, "Testimonio", testimonialImg.url), role: "testimonio" }
+      : null,
+  };
+}
+
+// Fallback de video: media de tipo video subida al producto en Shopify
+// (product.media del endpoint publico .js), cuando no hay metacampo custom.video.
+function findInlineProductVideo(product) {
+  for (const media of Array.isArray(product.media) ? product.media : []) {
+    if (!media || media.media_type !== "video") continue;
+    const sources = (Array.isArray(media.sources) ? media.sources : []).map((source) => ({
+      url: source?.url,
+      mimeType: source?.mime_type || source?.mimeType || "",
+      format: source?.format || "",
+      height: source?.height,
+    }));
+    const src = pickVideoSource(sources);
+    if (src?.url) return videoItem(product, normalizeImageUrl(src.url), src.mimeType || "video/mp4");
+  }
+  return null;
+}
+
+// Respuesta del modo presentacion: media ordenada y con rol (principal,
+// antes_despues/foto_2, video, testimonio) para la secuencia de mensajes.
+// knownAddress (vars.known_address del flujo) decide el cierre: confirmar la
+// direccion guardada del cliente recurrente o preguntar Lima/provincia.
+async function buildPresentationResponse(config, product, knownAddress = null) {
+  const classified = classifyPresentationImages(product);
+  let photos = classified.photos;
+  if (photos.length === 0) {
+    photos = buildMediaItems(product, { limit: 2, requestedVariant: "" })
+      .map((item, index) => ({ ...item, role: index === 0 ? "principal" : "foto_2" }));
+  }
+
+  // Los metacampos de imagen (custom.testimonio / custom.antes_y_despues)
+  // tienen prioridad sobre la clasificacion por alt/nombre de archivo.
+  const mfImages = await fetchPresentationMetafieldImages(config, product);
+  if (mfImages.beforeAfter && !photos.some((p) => p.url === mfImages.beforeAfter)) {
+    const item = { ...mediaItem(product, "Antes y despues", mfImages.beforeAfter), role: "antes_despues" };
+    const secondIndex = photos.findIndex((p) => p.role !== "principal");
+    if (secondIndex >= 0) photos.splice(secondIndex, 1, item);
+    else photos.push(item);
+  }
+  const testimonial = mfImages.testimonial
+    ? { ...mediaItem(product, "Testimonio", mfImages.testimonial), role: "testimonio" }
+    : classified.testimonial;
+
+  const vres = await fetchProductVideo(config, product);
+  let video = vres.item || findInlineProductVideo(product);
+  if (video) video = { ...video, role: "video" };
+
+  const media = [...photos];
+  if (video) media.push(video);
+  if (testimonial) media.push(testimonial);
+
+  if (media.length === 0) {
+    return {
+      ok: false,
+      found: true,
+      presentation: true,
+      videoAvailable: false,
+      beforeAfterAvailable: false,
+      testimonialAvailable: false,
+      reason: "media_not_found",
+      product: productSummary(product, config.publicShopDomain),
+      message: "El producto existe, pero no encontre fotos ni video publicos: omite los mensajes de media y sigue la secuencia solo con los textos.",
+    };
+  }
+
+  return {
+    ok: true,
+    found: true,
+    presentation: true,
+    videoAvailable: Boolean(video),
+    beforeAfterAvailable: Boolean(mfImages.beforeAfter) || classified.beforeAfterAvailable,
+    testimonialAvailable: Boolean(testimonial),
+    product: productSummary(product, config.publicShopDomain),
+    media,
+    count: media.length,
+    sendMediaInstructions: [
+      "Usa la herramienta send_media para enviar cada item como media real de WhatsApp (los de type video como video, los de type image como imagen), un mensaje por item y en el orden del array, llamando la herramienta pause (2-4 segundos, variando) entre item e item.",
+      "No escribas ni pegues estas URLs en texto al cliente.",
+      "No uses Markdown de imagen ni de enlace.",
+    ].join(" "),
+    followUpText: [
+      "Secuencia de presentacion:",
+      "1) saludo corto de 1 linea;",
+      "2) send_media de la imagen rol principal;",
+      "3) send_media de la segunda imagen (rol antes_despues si existe);",
+      "4) si hay item rol video: send_media del video con un caption corto de UNA linea que lo presente (ej \"Mira este video corto del [producto] 🎬\"), SIN mensaje de texto separado antes;",
+      "5) mensaje de texto con precio y promociones;",
+      "6) si hay item rol testimonio: send_media de esa imagen;",
+      knownAddress
+        ? `7) cierra con send_buttons: bodyText "¿Te lo enviamos a ${knownAddress}, como la vez pasada? 😊" y botones "Si, la misma" y "Cambiar direccion".`
+        : '7) cierra con send_buttons: bodyText "¿El envio seria para *Lima* o para *provincia*? 😊" y botones "Lima" y "Provincia".',
+      "Omite sin avisar los pasos cuyo item no exista. Nunca pegues URLs en el texto.",
+    ].join(" "),
+  };
+}
+
+function detectTestimonialRequest(queryText, root) {
+  if (root && (root.includeTestimonial === true || root.wantsTestimonial === true || root.testimonial === true)) return true;
+  return TESTIMONIAL_PATTERN.test(normalizeSearchText(queryText));
+}
+
 function detectVideoRequest(queryText, root) {
   if (root && (root.includeVideo === true || root.wantsVideo === true || root.video === true)) return true;
   const flag = String((root && (root.mediaType || root.media_type)) || "").toLowerCase();
@@ -700,6 +1016,53 @@ async function fetchProductVideo(config, product) {
   }
 }
 
+// Lee los metacampos de imagen del namespace custom (testimonio y antes y
+// despues) via Admin API: son referencias a archivo y NO vienen en el
+// products.json publico. Las keys se detectan por patron (testimoni... /
+// antes|despues|before|after) para tolerar variantes como antes_y_despues.
+async function fetchPresentationMetafieldImages(config, product) {
+  const result = { testimonial: null, beforeAfter: null };
+  if (!config.adminToken || !product?.id) return result;
+
+  try {
+    const query = `#graphql
+      query ProductPresentationImages($id: ID!, $ns: String!) {
+        product(id: $id) {
+          metafields(first: 30, namespace: $ns) {
+            nodes {
+              key
+              reference {
+                __typename
+                ... on MediaImage { image { url } }
+                ... on GenericFile { url mimeType }
+              }
+            }
+          }
+        }
+      }`;
+    const data = await shopifyAdminGraphql(config, query, {
+      id: `gid://shopify/Product/${product.id}`,
+      ns: VIDEO_METAFIELD_NAMESPACE,
+    });
+    for (const node of data?.product?.metafields?.nodes || []) {
+      const key = normalizeSearchText(node?.key);
+      const ref = node?.reference;
+      let url = "";
+      if (ref?.__typename === "MediaImage") url = ref.image?.url || "";
+      else if (ref?.__typename === "GenericFile" && /^image\//i.test(ref.mimeType || "")) url = ref.url || "";
+      url = normalizeImageUrl(url);
+      if (!url) continue;
+      if (!result.testimonial && TESTIMONIAL_PATTERN.test(key)) result.testimonial = url;
+      else if (!result.beforeAfter && BEFORE_AFTER_PATTERN.test(key)) result.beforeAfter = url;
+    }
+  } catch {
+    // Sin Admin API (o con error de query) seguimos con la clasificacion
+    // por alt/nombre de archivo de las fotos publicas.
+  }
+
+  return result;
+}
+
 // Elige la fuente mp4 mas liviana (menor altura) para no pasar el limite de
 // 16MB de WhatsApp; cae a la primera fuente con url si faltan metadatos.
 function pickVideoSource(sources) {
@@ -748,8 +1111,14 @@ function json(body, status = 200) {
 
 globalThis.__kenkuProductMediaLookup = {
   buildMediaItems,
+  buildPresentationResponse,
+  classifyPresentationImages,
+  detectPresentationRequest,
+  detectTestimonialRequest,
   detectVideoRequest,
+  fetchPresentationMetafieldImages,
   fetchProductVideo,
+  findInlineProductVideo,
   handleRequest,
   handler,
   pickVideoSource,

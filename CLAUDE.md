@@ -29,7 +29,10 @@
   create-shopify-order=f513d5ea-7d45-4623-af58-3b1b810abed0,
   notify-team=00dd67bd-df4b-4477-af5c-2530c44a5b60,
   customer-lookup=1708bd8d-0a55-4a1e-9ed7-fe2e543c4305,
-  campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b.
+  campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b,
+  send-buttons=2620cfb9-b8c9-48b0-bed8-b8f2f9ac16a1,
+  loop-guard=b2aebd00-2661-46e4-8946-419e4b8df13b,
+  pause=738279fc-0263-4eef-8afa-1e084e17521e.
 - **NO usar el MCP de Kapso para mutaciones**: el conector MCP de Kapso de las
   sesiones está autenticado contra el proyecto de AURELA. Solo sirve
   `search_docs` (documentación, es neutral). Nada de escribir por MCP.
@@ -47,6 +50,29 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+## Enviar a leads que entran por username (LECCION IMPORTANTE)
+
+- Los leads que llegan por usuario de WhatsApp no tienen `phone_number`: solo un
+  **BSUID** (`business_scoped_user_id`, formato `PE.948592654941065`).
+- Al postear a `https://api.kapso.ai/meta/whatsapp/v24.0/{pnid}/messages`, esos
+  contactos van en **`recipient`**, NO en `to`. `to` es solo para telefonos.
+- Mandar el BSUID en `to` **parece** funcionar: responde 200 con un `messages[].id`.
+  Pero Meta le quita el prefijo del pais, lo trata como telefono y el mensaje
+  muere despues con `131026 Message undeliverable`; el cliente no recibe nada.
+  Un 200 con messageId NO es prueba de entrega: hay que mirar `kapso.status` y
+  `kapso.statuses[].errors[]` del mensaje.
+- Como distinguirlo en la respuesta del envio: con `to` el eco vuelve como
+  `"wa_id":"948592654941065"`; con `recipient` vuelve como
+  `"user_id":"PE.948592654941065"`, que es el que llega. Igual en los webhooks:
+  los fallidos traen `recipient_id`, los entregados `recipient_user_id`.
+- No existe ningun otro parametro: `to_user_id`, `bsuid`,
+  `business_scoped_user_id`, `recipient_user_id`, `username` y
+  `to_parent_user_id` devuelven 400, y `recipient_type` solo acepta
+  `individual`/`group` (Meta rechaza `user_id`).
+- Ya corregido (2026-08-23) en `send-text`, `send-buttons` y `send-payment`.
+  Cualquier funcion nueva que envie mensajes debe resolver el BSUID igual.
+- Doc de Kapso: https://docs.kapso.ai/docs/whatsapp/business-scoped-user-ids
+
 ## Secrets de funciones (LECCION IMPORTANTE)
 
 - Las variables de entorno de las funciones se configuran como **Secrets** vía
@@ -57,15 +83,21 @@
   (`SHOPIFY_...` → `sHOPIFY...` → `s_h_o_p_...`). No usarlo para configurar.
 - Secrets ya configurados (2026-07-02): Shopify (domain/version/token) en
   shopify-product-lookup, product-media-lookup, create-shopify-order y
-  campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage y
-  campaign-report; Telegram en notify-team, check-coverage y campaign-report;
+  campaign-report; KAPSO_API_KEY en create-shopify-order, check-coverage,
+  campaign-report, customer-lookup (2026-07-04, para leer el referral CTWA) y
+  send-buttons (2026-07-05, para enviar botones por el proxy Meta) y
+  loop-guard (2026-07-05, para leer el historial de la conversacion); Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
 
 ## Datos del proyecto Kenku
 
-- phoneNumberId actual: `597907523413541` (Sandbox WhatsApp de Kapso, para
-  pruebas). Al conectar el número definitivo, reemplazarlo en todo el repo y
-  en `wHATSAPPPHONENUMBERIDS` del yaml de campaign-report.
+- phoneNumberIds de producción: `1145171692021464` ("Kenku Peru 348") y
+  `1239315459260256` ("Kenku Peru 981"), conectados el 2026-07-04 en
+  reemplazo de "Kenku Peru Arqui Nexo" (que fue eliminado del proyecto; su
+  borrado arrastró los nodos send_text que lo referenciaban — por eso los
+  follow-ups ya NO llevan phone_number_id y envían por el número de la
+  conversación). El sandbox `597907523413541` queda solo para pruebas. El
+  secret `WHATSAPP_PHONE_NUMBER_IDS` de campaign-report incluye los tres.
 - Los `functions/**/function.yaml` están gitignorados (contienen secretos);
   la config vive en Kapso y en la copia local del usuario.
 - Productos estrella para enganche: *Black Seed Oil* y *NAD+ Resveratrol*.
