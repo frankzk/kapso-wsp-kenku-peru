@@ -7,6 +7,14 @@ const DEFAULT_API_VERSION = "2026-04";
 // generico de suplementos), asi que fijamos el producto por el ad_id.
 // Para agregar un anuncio nuevo: pon su Source ID (ad_id) -> handle del producto.
 const AD_PRODUCT_MAP = {
+  "120249262673040056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (variante)
+  "120249262502140056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (variante)
+  "120248946836410056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (variante)
+  "120248946835720056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (variante)
+  "120249262500370056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (variante)
+  "120249262464100056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (variante)
+  "120249114207730056": "iced-coffee-cafe-funcional-con-probioticos-activos-y-prebioticos-naturales-para-equilibrio-intestinal-y-microbiota-saludable-500-g-superhuman™",  // Digestion ligera en 10 segundos (variante)
+  "120249116041530056": "iced-coffee-cafe-funcional-con-probioticos-activos-y-prebioticos-naturales-para-equilibrio-intestinal-y-microbiota-saludable-500-g-superhuman™",  // Digestion ligera en 10 segundos (confirmado por el dueno)
   "120249262670440056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",  // Noches Mas Tranquilas (confirmado por el dueno, SKU 456153444)
   "120248448610150056": "true-beauty-aceite-post-afeitado-donut-glaseado",           // Adios Irritacion Post-Afeitado
   "120249183604400267": "nails-repairing-suero-reparador-de-unas",                    // Elimina Hongos en Pies
