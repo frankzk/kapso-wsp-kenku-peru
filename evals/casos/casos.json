@@ -1,416 +1,458 @@
 [
-  {
-    "id": "pulsera-unidad",
-    "origen": "Falla real: el bot ofrecio '1 par' de una pulsera magnetica y el cliente se confundio.",
-    "producto": "pulsera-magnetica-de-cobre-saludable-cooper",
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "Hola, quiero info de la pulsera magnetica"
-      }
-    ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "product": {
-          "handle": "pulsera-magnetica-de-cobre-saludable-cooper",
-          "title": "Pulsera Magnética de Cobre Saludable Cooper+",
-          "priceRange": {
-            "min": 99,
-            "max": 99,
-            "currencyCode": "PEN"
-          },
-          "description": "",
-          "tags": []
-        },
-        "outOfStock": false
-      },
-      "product_media_lookup": {
-        "media": [],
-        "videoAvailable": false
-      }
+ {
+  "id": "pulsera-unidad",
+  "origen": "Falla real: el bot ofrecio '1 par' de una pulsera magnetica y el cliente se confundio.",
+  "producto": "pulsera-magnetica-de-cobre-saludable-cooper",
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Hola, quiero info de la pulsera magnetica"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "pulsera-magnetica-de-cobre-saludable-cooper",
+     "title": "Pulsera Magnética de Cobre Saludable Cooper+",
+     "priceRange": {
+      "min": 99,
+      "max": 99,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
     },
-    "reglas": [
-      {
-        "tipo": "prohibido_texto",
-        "valor": [
-          "par",
-          "pares"
-        ],
-        "porque": "una pulsera es unidad; 'par' solo aplica a calzado y medias"
-      },
-      {
-        "tipo": "precio_valido",
-        "valor": [
-          99,
-          198,
-          297
-        ]
-      },
-      {
-        "tipo": "sin_narracion"
-      }
-    ]
+    "outOfStock": false
+   },
+   "product_media_lookup": {
+    "media": [],
+    "videoAvailable": false
+   }
   },
-  {
-    "id": "black-seed-parasitos",
-    "origen": "Falla real: el bot NEGO que el Black Seed Oil sirviera para parasitos, que es justo para lo que se vende.",
-    "producto": "purely-nutrient-ethiopian-black-seed-oil",
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "el aceite de semilla negra sirve para los parasitos?"
-      }
+  "reglas": [
+   {
+    "tipo": "prohibido_texto",
+    "valor": [
+     "par",
+     "pares"
     ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "product": {
-          "handle": "purely-nutrient-ethiopian-black-seed-oil",
-          "title": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Etíope (60 Softgels)",
-          "priceRange": {
-            "min": 149,
-            "max": 149,
-            "currencyCode": "PEN"
-          },
-          "description": "",
-          "tags": [
-            "parasitos",
-            "defensas",
-            "digestion"
-          ]
-        },
-        "outOfStock": false
-      }
-    },
-    "reglas": [
-      {
-        "tipo": "prohibido_regex",
-        "valor": [
-          "no (es|est[aá]|sirve)[^.]{0,40}(para )?(los )?par[aá]sitos",
-          "no (esta )?(indicado|recomendado) para par[aá]sitos"
-        ],
-        "porque": "los tags del producto confirman el uso; negar un uso real es la peor falla comercial"
-      },
-      {
-        "tipo": "sin_narracion"
-      }
+    "porque": "una pulsera es unidad; 'par' solo aplica a calzado y medias"
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     99,
+     198,
+     297
     ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "black-seed-parasitos",
+  "origen": "Falla real: el bot NEGO que el Black Seed Oil sirviera para parasitos, que es justo para lo que se vende.",
+  "producto": "purely-nutrient-ethiopian-black-seed-oil",
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "el aceite de semilla negra sirve para los parasitos?"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "purely-nutrient-ethiopian-black-seed-oil",
+     "title": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Etíope (60 Softgels)",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": [
+      "parasitos",
+      "defensas",
+      "digestion"
+     ]
+    },
+    "outOfStock": false
+   }
   },
-  {
-    "id": "iced-coffee-precio",
-    "origen": "Falla real del 2026-09-01: le cotizaron S/80 (precio de un molinillo) por un producto de S/149, y el pedido salio a S/149. Ademas: mini cerro ofreciendo 'la direccion que usaste la vez pasada' sin que hubiera ninguna guardada.",
-    "producto": "iced-coffee-cafe-funcional",
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "El café"
-      }
+  "reglas": [
+   {
+    "tipo": "prohibido_regex",
+    "valor": [
+     "no (es|est[aá]|sirve)[^.]{0,40}(para )?(los )?par[aá]sitos",
+     "no (esta )?(indicado|recomendado) para par[aá]sitos"
     ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "product": {
-          "handle": "iced-coffee-cafe-funcional",
-          "title": "Iced Coffee – Café Funcional con Probióticos y Prebióticos – SuperHuman™",
-          "priceRange": {
-            "min": 149,
-            "max": 149,
-            "currencyCode": "PEN"
-          },
-          "description": "",
-          "tags": []
-        },
-        "outOfStock": false
-      }
+    "porque": "los tags del producto confirman el uso; negar un uso real es la peor falla comercial"
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "iced-coffee-precio",
+  "origen": "Falla real del 2026-09-01: le cotizaron S/80 (precio de un molinillo) por un producto de S/149, y el pedido salio a S/149. Ademas: mini cerro ofreciendo 'la direccion que usaste la vez pasada' sin que hubiera ninguna guardada.",
+  "producto": "iced-coffee-cafe-funcional",
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "El café"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "iced-coffee-cafe-funcional",
+     "title": "Iced Coffee – Café Funcional con Probióticos y Prebióticos – SuperHuman™",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
     },
-    "reglas": [
-      {
-        "tipo": "precio_valido",
-        "valor": [
-          149,
-          298,
-          447
-        ],
-        "porque": "unidad 149, 3x2 298 (paga 2), 5x3 447 (paga 3)"
-      },
-      {
-        "tipo": "sin_narracion"
-      },
-      {
-        "tipo": "prohibido_regex",
-        "valor": [
-          "direcci[oó]n que (usaste|dejaste)",
-          "la vez pasada",
-          "como la vez pasada",
-          "direcci[oó]n de siempre"
-        ],
-        "porque": "este caso NO tiene known_address; ofrecer 'la direccion de la vez pasada' es inventarle un historial a un cliente nuevo (lo hizo gpt-4.1-mini en la corrida del 2026-09-06)"
-      }
-    ]
+    "outOfStock": false
+   }
   },
-  {
-    "id": "carrito-doble-descuento",
-    "origen": "Falla real: el carrito traia 3 x S/99.34 = S/298, que YA era el 3x2, y el bot aplico 3x2 encima ofreciendo S/198.68.",
-    "producto": "8-en-1-ultra",
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "Hola, deje esto en el carrito: 3 unidades de 8 en 1 Ultra por S/ 298"
-      },
-      {
-        "rol": "cliente",
-        "texto": "me haces precio por las 3?"
-      }
+  "reglas": [
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     149,
+     298,
+     447
     ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "product": {
-          "handle": "8-en-1-ultra",
-          "title": "8 en 1 Ultra",
-          "priceRange": {
-            "min": 149,
-            "max": 149,
-            "currencyCode": "PEN"
-          },
-          "description": "",
-          "tags": []
-        },
-        "outOfStock": false
-      },
-      "quote_order": {
-        "total": 298,
-        "unitPrice": 99.33,
-        "quantity": 3,
-        "promoApplied": "3x2"
-      }
+    "porque": "unidad 149, 3x2 298 (paga 2), 5x3 447 (paga 3)"
+   },
+   {
+    "tipo": "sin_narracion"
+   },
+   {
+    "tipo": "prohibido_regex",
+    "valor": [
+     "direcci[oó]n que (usaste|dejaste)",
+     "la vez pasada",
+     "como la vez pasada",
+     "direcci[oó]n de siempre"
+    ],
+    "porque": "este caso NO tiene known_address; ofrecer 'la direccion de la vez pasada' es inventarle un historial a un cliente nuevo (lo hizo gpt-4.1-mini en la corrida del 2026-09-06)"
+   }
+  ]
+ },
+ {
+  "id": "carrito-doble-descuento",
+  "origen": "Falla real: el carrito traia 3 x S/99.34 = S/298, que YA era el 3x2, y el bot aplico 3x2 encima ofreciendo S/198.68.",
+  "producto": "8-en-1-ultra",
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Hola, deje esto en el carrito: 3 unidades de 8 en 1 Ultra por S/ 298"
+   },
+   {
+    "rol": "cliente",
+    "texto": "me haces precio por las 3?"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "8-en-1-ultra",
+     "title": "8 en 1 Ultra",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
     },
-    "reglas": [
-      {
-        "tipo": "prohibido_texto",
-        "valor": [
-          "198.68",
-          "198,68",
-          "198"
-        ],
-        "porque": "aplicar 3x2 sobre un precio que ya lo tenia"
-      },
-      {
-        "tipo": "precio_valido",
-        "valor": [
-          149,
-          298,
-          447,
-          99.33
-        ]
-      },
-      {
-        "tipo": "sin_narracion"
-      }
-    ]
+    "outOfStock": false
+   },
+   "quote_order": {
+    "total": 298,
+    "unitPrice": 99.33,
+    "quantity": 3,
+    "promoApplied": "3x2"
+   }
   },
-  {
-    "id": "direccion-ya-conocida",
-    "origen": "Regla del prompt: si known_address tiene valor hay que confirmarla, no volver a pedirla desde cero.",
-    "producto": "nattokinase",
-    "variables": {
-      "known_customer_found": true,
-      "known_customer_name": "Martin",
-      "known_address": "Calle Díaz de Cienfuegos 232 dpto 303, Trujillo, La Libertad"
-    },
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "quiero el nattokinase, una unidad"
-      }
+  "reglas": [
+   {
+    "tipo": "prohibido_texto",
+    "valor": [
+     "198.68",
+     "198,68",
+     "198"
     ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "product": {
-          "handle": "nattokinase",
-          "title": "Nattokinase - Mejora de Circulación Arterial (90 cápsulas)",
-          "priceRange": {
-            "min": 149,
-            "max": 149,
-            "currencyCode": "PEN"
-          },
-          "description": "",
-          "tags": []
-        },
-        "outOfStock": false
-      },
-      "check_coverage": {
-        "cashOnDelivery": true,
-        "shippingMode": "contraentrega",
-        "requiresDni": false
-      }
-    },
-    "reglas": [
-      {
-        "tipo": "requerido_texto",
-        "valor": [
-          "Díaz de Cienfuegos",
-          "Diaz de Cienfuegos"
-        ],
-        "porque": "debe confirmar la direccion guardada, no pedirla de nuevo"
-      },
-      {
-        "tipo": "precio_valido",
-        "valor": [
-          149,
-          298,
-          447
-        ]
-      },
-      {
-        "tipo": "sin_narracion"
-      }
+    "porque": "aplicar 3x2 sobre un precio que ya lo tenia"
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     149,
+     298,
+     447,
+     99.33
     ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "direccion-ya-conocida",
+  "origen": "Regla del prompt: si known_address tiene valor hay que confirmarla, no volver a pedirla desde cero.",
+  "producto": "nattokinase",
+  "variables": {
+   "known_customer_found": true,
+   "known_customer_name": "Martin",
+   "known_address": "Calle Díaz de Cienfuegos 232 dpto 303, Trujillo, La Libertad"
   },
-  {
-    "id": "producto-ambiguo",
-    "origen": "Falla real: 'cafe' resolvia al molinillo. Con la correccion del lookup ahora llega 'ambiguous' y el bot tiene que desambiguar, NO inventar un precio.",
-    "producto": null,
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "hola, quiero el cafe"
-      }
-    ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": false,
-        "reason": "ambiguous",
-        "matches": [
-          {
-            "title": "Iced Coffee – Café Funcional con Probióticos",
-            "handle": "iced-coffee-cafe-funcional"
-          },
-          {
-            "title": "Mushroom Coffee - Café Instantáneo con 6 Hongos",
-            "handle": "mushroom-coffee"
-          }
-        ],
-        "message": "Encontre varios productos parecidos y no quiero darte un dato incorrecto."
-      }
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "quiero el nattokinase, una unidad"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "nattokinase",
+     "title": "Nattokinase - Mejora de Circulación Arterial (90 cápsulas)",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
     },
-    "reglas": [
-      {
-        "tipo": "sin_precio",
-        "porque": "con una busqueda ambigua NO se puede cotizar nada"
-      },
-      {
-        "tipo": "requerido_regex",
-        "valor": [
-          "cu[aá]l|cual de|iced|mushroom"
-        ],
-        "porque": "tiene que preguntar cual de los dos"
-      },
-      {
-        "tipo": "sin_narracion"
-      }
-    ]
+    "outOfStock": false
+   },
+   "check_coverage": {
+    "cashOnDelivery": true,
+    "shippingMode": "contraentrega",
+    "requiresDni": false
+   }
   },
-  {
-    "id": "producto-agotado",
-    "origen": "Comportamiento esperado: si esta agotado no se vende, se ofrece alternativa o asesor.",
-    "producto": "gel-limpieza-lengua",
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "Hola! Quiero más información del Gel de Limpieza de Lengua"
-      }
+  "reglas": [
+   {
+    "tipo": "requerido_texto",
+    "valor": [
+     "Díaz de Cienfuegos",
+     "Diaz de Cienfuegos"
     ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "outOfStock": true,
-        "product": {
-          "handle": "gel-limpieza-lengua",
-          "title": "Gel de limpieza de Lengua con Cepillo",
-          "priceRange": {
-            "min": 79,
-            "max": 79,
-            "currencyCode": "PEN"
-          }
-        },
-        "alternatives": [],
-        "customerMessage": "Uy, el Gel de limpieza de Lengua con Cepillo está agotado por ahora"
-      }
-    },
-    "reglas": [
-      {
-        "tipo": "requerido_regex",
-        "valor": [
-          "agotad|sin stock|no tenemos|repon"
-        ],
-        "porque": "tiene que avisar que no hay"
-      },
-      {
-        "tipo": "sin_precio",
-        "porque": "no se cotiza un producto agotado"
-      },
-      {
-        "tipo": "sin_narracion"
-      }
+    "porque": "debe confirmar la direccion guardada, no pedirla de nuevo"
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     149,
+     298,
+     447
     ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "producto-ambiguo",
+  "origen": "Falla real: 'cafe' resolvia al molinillo. Con la correccion del lookup ahora llega 'ambiguous' y el bot tiene que desambiguar, NO inventar un precio.",
+  "producto": null,
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "hola, quiero el cafe"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": false,
+    "reason": "ambiguous",
+    "matches": [
+     {
+      "title": "Iced Coffee – Café Funcional con Probióticos",
+      "handle": "iced-coffee-cafe-funcional"
+     },
+     {
+      "title": "Mushroom Coffee - Café Instantáneo con 6 Hongos",
+      "handle": "mushroom-coffee"
+     }
+    ],
+    "message": "Encontre varios productos parecidos y no quiero darte un dato incorrecto."
+   }
   },
-  {
-    "id": "presentacion-completa",
-    "origen": "Caso normal: es el 87% del trafico. Mide si sigue la secuencia y cierra pidiendo ubicacion.",
-    "producto": "pyroslim",
-    "turnos": [
-      {
-        "rol": "cliente",
-        "texto": "https://kenku.pe/products/pyroslim Tengo una consulta"
-      }
+  "reglas": [
+   {
+    "tipo": "sin_precio",
+    "porque": "con una busqueda ambigua NO se puede cotizar nada"
+   },
+   {
+    "tipo": "requerido_regex",
+    "valor": [
+     "cu[aá]l|cual de|iced|mushroom"
     ],
-    "herramientas_grabadas": {
-      "shopify_product_lookup": {
-        "found": true,
-        "product": {
-          "handle": "pyroslim",
-          "title": "PYROSLIM™ - Quemador de Grasa con L-Carnitina y Garcinia Cambogia (350 gr)",
-          "priceRange": {
-            "min": 129,
-            "max": 129,
-            "currencyCode": "PEN"
-          },
-          "description": "",
-          "tags": []
-        },
-        "outOfStock": false
-      },
-      "product_media_lookup": {
-        "media": [
-          {
-            "rol": "principal",
-            "mediaUrl": "https://ejemplo/pyroslim.webp"
-          }
-        ],
-        "videoAvailable": false
-      }
+    "porque": "tiene que preguntar cual de los dos"
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "producto-agotado",
+  "origen": "Comportamiento esperado: si esta agotado no se vende, se ofrece alternativa o asesor.",
+  "producto": "gel-limpieza-lengua",
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Hola! Quiero más información del Gel de Limpieza de Lengua"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "outOfStock": true,
+    "product": {
+     "handle": "gel-limpieza-lengua",
+     "title": "Gel de limpieza de Lengua con Cepillo",
+     "priceRange": {
+      "min": 79,
+      "max": 79,
+      "currencyCode": "PEN"
+     }
     },
-    "reglas": [
-      {
-        "tipo": "precio_valido",
-        "valor": [
-          129,
-          258,
-          387
-        ]
-      },
-      {
-        "tipo": "herramienta_esperada",
-        "valor": [
-          "shopify_product_lookup"
-        ]
-      },
-      {
-        "tipo": "sin_narracion"
-      }
+    "alternatives": [],
+    "customerMessage": "Uy, el Gel de limpieza de Lengua con Cepillo está agotado por ahora"
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "requerido_regex",
+    "valor": [
+     "agotad|sin stock|no tenemos|repon"
+    ],
+    "porque": "tiene que avisar que no hay"
+   },
+   {
+    "tipo": "sin_precio",
+    "porque": "no se cotiza un producto agotado"
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "presentacion-completa",
+  "origen": "Caso normal: es el 87% del trafico. Mide si sigue la secuencia y cierra pidiendo ubicacion.",
+  "producto": "pyroslim",
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "https://kenku.pe/products/pyroslim Tengo una consulta"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "pyroslim",
+     "title": "PYROSLIM™ - Quemador de Grasa con L-Carnitina y Garcinia Cambogia (350 gr)",
+     "priceRange": {
+      "min": 129,
+      "max": 129,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "product_media_lookup": {
+    "media": [
+     {
+      "rol": "principal",
+      "mediaUrl": "https://ejemplo/pyroslim.webp"
+     }
+    ],
+    "videoAvailable": false
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     129,
+     258,
+     387
     ]
-  }
+   },
+   {
+    "tipo": "herramienta_esperada",
+    "valor": [
+     "shopify_product_lookup"
+    ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "foto-entrante",
+  "origen": "Falla real del 2026-09-11: un cliente mando la foto de un frasco de Glucora (control del azucar) y escribio 'Y esto'. El bot respondio '¡Si, es nuestro Clean15!' y le mando foto, video y precio del producto equivocado. El bot NO recibe el contenido de las imagenes. El mismo dia, a otra clienta le dijo 'Black Seed Oil' por una foto de D3+K2 y remato con 'justo como indica la etiqueta'.",
+  "producto": null,
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "[el cliente envia una foto de un producto]"
+   },
+   {
+    "rol": "cliente",
+    "texto": "Y esto"
+   }
+  ],
+  "herramientas_grabadas": {},
+  "reglas": [
+   {
+    "tipo": "sin_precio",
+    "porque": "no puede ver la foto: cotizar es inventar"
+   },
+   {
+    "tipo": "prohibido_regex",
+    "valor": [
+     "\\bes nuestro\\b",
+     "como indica la etiqueta",
+     "seg[uu]n la (foto|imagen|etiqueta)",
+     "en la (foto|imagen) (veo|se ve|aparece)"
+    ],
+    "porque": "afirmar que producto aparece en una imagen que no recibe"
+   },
+   {
+    "tipo": "requerido_regex",
+    "valor": [
+     "no alcanzo a ver|no logro ver|no puedo ver|nombre del producto|me pasas el link"
+    ],
+    "porque": "tiene que decir que no la ve y pedir nombre o link"
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ }
 ]

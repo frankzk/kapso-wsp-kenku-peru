@@ -99,6 +99,18 @@ base de 2,13%.
 septiembre queda mezclada entre los dos modelos. Es despreciable, pero por eso el
 primer dia limpio de gemini es el 6 y el cierre de gpt-4.1 se lee sobre 1-5 sep.
 
+**CUIDADO al leer el 13: el prompt cambio el 11 de septiembre.** Se agrego la
+regla de fotos entrantes (el agente no recibe el contenido de las imagenes, asi
+que tiene prohibido afirmar que producto aparece en una foto) y se saco la
+"captura" como forma de identificar productos. Toca al ~18% de las
+conversaciones, que es donde el cliente manda alguna foto.
+
+Es una variable nueva en mitad de la medicion, decidida a sabiendas: el bot
+estaba mandando foto, video y precio del producto equivocado a leads pagos, y
+eso costaba mas que la limpieza del experimento. Al leer el 13, la semana queda
+partida: **6-10 sep con el prompt viejo, 11-13 con el nuevo**. Si el resultado
+cae cerca del umbral, comparar los dos tramos antes de concluir.
+
 ### Chequeo de salud del primer dia — correr despues de CUALQUIER cambio de modelo
 
 La conversion tarda una semana en decir algo, pero un modelo nuevo puede romper
