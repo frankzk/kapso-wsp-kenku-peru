@@ -57,11 +57,57 @@ tramos de la linea base de abajo estan verificados con `convTruncated: false`.
 |---|---|
 | **Modelo actual** | `google/gemini-3.7-flash`, `provider_model_id` `a88e0501-2f81-4e01-831f-0fed220cc0bc` (OpenRouter) |
 | **Puesto** | 2026-09-05 ~22:55 hora Lima, por PATCH del definition (lock_version 18784 -> 18785) |
-| **Marcha** | 6 sep: 703 convs, 24 ped, 3,41% · 7 sep: 654, 22, 3,36% · **acumulado 1.357 / 46 / 3,39%, z = 3,21** |
-| **Leer** | 2026-09-13 (una semana), con el mismo criterio que se leyo gpt-4.1 |
+| **RESULTADO (6-12 sep)** | 4.362 convs, 108 pedidos, **2,48%** · z corregida **1,05** · **sin efecto detectable** |
+| **Leido** | 2026-09-14 sobre la ventana preacordada de 7 dias |
 | **Revertir** | gpt-4.1-mini: `6172658f-422b-4224-8df3-d7795fbc5cc3` / gpt-4.1: `de8992a1-6f21-4a30-9d37-f8645f66e14e` |
 
-**Los dos primeros dias NO son evidencia, y hay una razon concreta y medida
+## VEREDICTO (leido el 2026-09-14): el modelo NO es la palanca
+
+**Ventana preacordada 6-12 sep: 4.362 conversaciones, 108 pedidos, 2,48%**
+contra la base de 2,13%. z binomial 1,58; **z corregida por sobredispersion
+1,05**. El umbral de 2 sigmas estaba en 2,79%. **Sin efecto detectable.**
+
+Y paso exactamente lo que la advertencia de los dos dias anticipaba:
+
+| Dia | | Tasa | Sobre su dia |
+|---|---|---|---|
+| 6 sep | dom | 3,41% | 1,17x |
+| 7 sep | lun | 3,36% | 1,41x |
+| 8 sep | mar | 2,61% | 1,06x |
+| 9 sep | mie | **1,38%** | **0,63x** |
+| 10 sep | jue | **1,58%** | **0,78x** |
+| 11 sep | vie | 2,39% | 1,21x |
+| 12 sep | sab | 2,50% | 1,42x |
+
+Arranco con dos dias muy buenos y se desinflo, igual que gpt-4.1. **Dos modelos,
+dos semanas, dos veces sin señal.** Ese es el hallazgo que mas vale: dejar de
+buscar conversion en el modelo y buscarla en otro lado.
+
+**El 13 de septiembre dio 4,42%** (domingo, 1,52x su dia). Sumandolo, la ventana
+da 2,75% con z corregida 2,04. **No cuenta como evidencia**: es un dia agregado
+despues de ver que era bueno, que es justo como se fabrican los falsos positivos.
+Queda anotado para la proxima lectura, no para esta.
+
+**Aun asi, gemini se queda.** No porque convierta mejor —eso quedo sin probar—
+sino porque:
+
+- **Cuesta ~1/10 de gpt-4.1 y ~1/2 de mini** (41% menos tokens y mas barato por
+  token). Con 2,48% no hay penalidad de conversion que compensar.
+- En `evals/` saco 23/23 dos veces; mini saco 20/23.
+- **Cero precios inventados en 140 pedidos.** El unico que la auditoria marco
+  (#KP134191, S/134,10 sobre S/149) es el descuento de 10% del 6to recordatorio,
+  que el prompt autoriza expresamente.
+- Cancelaciones a 24 h: 8% contra 20% de gpt-4.1 (no significativo, pero no hay
+  ninguna señal en contra).
+
+**Cuidado al comparar los dos tramos de prompt.** Viejo (6-10): 2,49%. Nuevo
+(11-13): 3,21%. Tentador, pero el tramo nuevo tiene solo 3 dias, incluye el
+domingo de 4,42% y son 1.869 conversaciones. No alcanza para atribuirle nada al
+cambio de prompt.
+
+---
+
+**Los dos primeros dias NO fueron evidencia, y habia una razon concreta y medida
 para decirlo:** gpt-4.1 arranco con el mismo numero y termino en nada.
 
 | Primeros 2 dias | Convs | Pedidos | Tasa | z |
@@ -336,6 +382,25 @@ precio por unidad calculado, y una sola insistencia si el cliente elige 1 unidad
 ganar, porque cada pedido deja mas. En el peor escenario de costos un 3x2 deja
 S/117,40 de contribucion contra S/55,60 de una unidad (2,1x): el envio y el
 riesgo de rechazo se pagan una sola vez por pedido.
+
+### RESULTADO (leido el 2026-09-14, 31 ago - 13 sep): P2 PIERDE
+
+| | Leads | Pedidos | Tasa | AOV | Unid/pedido | Ingreso/lead |
+|---|---|---|---|---|---|---|
+| P1 (control) | 2.322 | 120 | **5,17%** | **S/191,15** | **1,93** | **S/9,88** |
+| P2 (empuje 3x2) | 2.391 | 97 | 4,06% | S/173,51 | 1,76 | S/7,04 |
+
+**Ingreso por lead: -29%.** Y pierde en las CUATRO columnas a la vez, incluidas
+las dos que la hipotesis decia que iba a subir: el empuje al 3x2 termino con
+**menos** unidades por pedido (1,76 vs 1,93) y **menos** ticket (S/173 vs S/191).
+
+La z de la tasa es -1,82 binomial (-1,21 corregida), o sea no concluyente por si
+sola; pero las cuatro metricas apuntan al mismo lado y la que decide estaba
+preacordada. **Recomendacion: apagar P2 y dejar a todos en P1.**
+
+Nota sobre muestras chicas: el 6 de septiembre, con 11 pedidos, P2 iba 11,4%
+contra 4,1% de P1 — parecia un exito rotundo. Con el periodo completo es al
+reves. Es el mismo error que casi cometemos con el modelo.
 
 **Ortogonalidad.** Las cuatro celdas (A/P1, A/P2, C/P1, C/P2) reciben ~25% del
 trafico cada una, asi que los experimentos 2 y 3 no se contaminan. Verificado
