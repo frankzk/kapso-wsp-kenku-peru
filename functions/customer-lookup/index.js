@@ -449,10 +449,22 @@ function mix32(value) {
   return h >>> 0;
 }
 
+// PRUEBA TERMINADA el 2026-09-14: P2 perdio y se apago. Todos van a P1.
+//
+// Resultado sobre 31 ago - 13 sep: P2 dio S/7,04 de ingreso por lead contra
+// S/9,88 de P1, un -29% en la metrica que estaba preacordada para decidir. Y
+// perdio en las CUATRO columnas, incluidas las dos que la hipotesis decia que
+// iba a subir: 1,76 unidades por pedido contra 1,93, y S/173,51 de ticket
+// contra S/191,15. Empujar el 3x2 como opcion principal vendio menos unidades,
+// no mas.
+//
+// Se deja el hash y el eje intactos a proposito: la infraestructura sirve para
+// la proxima prueba de promos. Para reactivarla, devolver el return de abajo.
 function promoVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return "P1";
-  return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
+  return "P1";
+  // return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
 }
 
 // De que forma entro el lead, leido del PRIMER mensaje del cliente:

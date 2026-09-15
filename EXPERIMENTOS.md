@@ -367,7 +367,16 @@ control, los leads "consulta" convierten al 1,52% contra 5,77% del resto.
 
 ---
 
-## 3. Prueba P1/P2 — empuje al 3x2
+## 3. Prueba P1/P2 — empuje al 3x2  ·  **APAGADA el 2026-09-15**
+
+**P2 perdio y se apago.** `promoVariant` en `customer-lookup` devuelve `"P1"`
+para todos (verificado sobre 40.000 telefonos y contra el codigo vivo,
+lock_version 141). El hash y el eje quedan intactos a proposito: la
+infraestructura sirve para la proxima prueba de promos, y para reactivarla basta
+descomentar el `return` de abajo en `promoVariant`.
+
+El prompt conserva la rama de P2, pero ya nunca se activa porque ninguna
+conversacion recibe `promo_variant: "P2"`.
 
 | | |
 |---|---|
