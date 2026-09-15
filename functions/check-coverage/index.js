@@ -473,15 +473,35 @@ async function hasLiveUnansweredInbound(payload, env) {
     const body = await response.json();
     let lastInbound = 0;
     let lastOutbound = 0;
+    let lastInboundText = "";
     for (const message of body?.data || []) {
       const timestamp = Number(message?.timestamp || 0);
-      if (message?.kapso?.direction === "inbound") lastInbound = Math.max(lastInbound, timestamp);
+      if (message?.kapso?.direction === "inbound" && timestamp >= lastInbound) {
+        lastInbound = timestamp;
+        lastInboundText = inboundText(message);
+      }
       if (message?.kapso?.direction === "outbound") lastOutbound = Math.max(lastOutbound, timestamp);
     }
+    // El silencio del bot ante un boton de cobro Shalom es deliberado (lo
+    // contesta el dashboard): no es un cliente esperando respuesta.
+    if (lastInbound > lastOutbound && isShalomPaymentButton(lastInboundText)) return false;
     return lastInbound > lastOutbound;
   } catch {
     return false;
   }
+}
+
+// El texto visible de un mensaje entrante, venga como texto suelto, como boton
+// de plantilla (type "button") o como boton interactivo (type "interactive").
+function inboundText(message) {
+  return String(
+    message?.button?.text
+    || message?.interactive?.button_reply?.title
+    || message?.interactive?.list_reply?.title
+    || message?.text?.body
+    || message?.kapso?.content
+    || ""
+  );
 }
 
 function conversationContext(payload) {
@@ -814,6 +834,30 @@ const WATCHDOG_TRIVIAL_WORDS = new Set([
   "bien", "vale", "perfecto", "entendido", "amable", "muy",
 ]);
 
+// Botones de la plantilla `guias_shalom` (numero Kenku 451). Los contesta el
+// DASHBOARD con las cuentas de cobro, no el bot: el prompt del sales-agent tiene
+// prohibido responderlos para que la clienta no reciba dos mensajes con cuentas.
+// Ese silencio es a proposito, asi que ni el watchdog debe alertarlo ni el
+// ladder debe leerlo como "cliente esperando".
+// Se listan las dos redacciones del boton del medio porque NO son iguales entre
+// las dos plantillas aprobadas: `guias_shalom` dice "Transferencia Deposito" y
+// `guias_shalom_imagen` dice "Transferencia / Deposito".
+const SHALOM_PAYMENT_BUTTONS = new Set([
+  "pagar con yape",
+  "transferencia deposito",
+  "transferencia / deposito",
+  "link de pago",
+]);
+
+function isShalomPaymentButton(text) {
+  const clean = String(text || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return SHALOM_PAYMENT_BUTTONS.has(clean);
+}
+
 function watchdogIsTrivial(text) {
   const clean = String(text || "")
     .toLowerCase()
@@ -1099,6 +1143,7 @@ async function watchdogSweep(cfg, env, now) {
         const text = String(k.last_message_text || "").trim();
         if (/^Reacted with /i.test(text)) continue;          // reaccion de emoji
         if (watchdogIsTrivial(text)) continue;               // "ok gracias" no necesita rescate
+        if (isShalomPaymentButton(text)) continue;           // boton de cobro Shalom: lo contesta el dashboard
 
         candidates.push({
           id: convo.id,
