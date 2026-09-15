@@ -345,7 +345,36 @@ reconstruye que paso en julio.
 
 ---
 
-## 2. Variante C — invitar la duda del cliente
+## 2. Variante C — invitar la duda del cliente  ·  **APAGADA el 2026-09-15**
+
+**C no movio nada y se apago.** `abVariant` en `customer-lookup` devuelve `"A"`
+para todos (verificado sobre 40.000 telefonos y contra el codigo vivo,
+lock_version 142).
+
+**Resultado sobre 28 ago - 14 sep, en el segmento preacordado** (leads que
+entran con "Tengo una consulta"):
+
+| | Leads | Pedidos | Tasa |
+|---|---|---|---|
+| A (control) | 928 | 45 | 4,85% |
+| C | 948 | 45 | 4,75% |
+
+**Lift -2%, z = -0,10.** Identicas.
+
+**La mejor leccion de este experimento es como se demuestra que ese -2% es
+ruido.** El segmento "otro" recibe en C *exactamente el mismo trato* que en A,
+asi que su diferencia real es cero por construccion. Ahi salio **-9%**
+(z = -0,64): el piso de ruido de la medicion es **mas grande** que el efecto
+medido en el segmento tratado. Cuando el control que no deberia moverse se mueve
+mas que el tratamiento, no hay nada que leer.
+
+Vale guardarlo como metodo: **en toda prueba A/B, mirar primero cuanto se mueve
+el segmento que NO recibe tratamiento.** Eso da el piso de ruido gratis, sin
+estadistica.
+
+**Lo que NO quedo resuelto.** Los leads "consulta" siguen siendo el agujero del
+embudo. Invitar su duda en vez de pedirles la ubicacion no fue la solucion, y la
+pregunta sigue abierta.
 
 | | |
 |---|---|

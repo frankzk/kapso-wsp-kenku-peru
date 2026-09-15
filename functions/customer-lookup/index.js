@@ -411,10 +411,24 @@ function fnv1a(text) {
   return h >>> 0;
 }
 
+// PRUEBA TERMINADA el 2026-09-15: C no movio nada y se apago. Todos van a A.
+//
+// Resultado sobre 28 ago - 14 sep, en el segmento que estaba preacordado para
+// decidir (leads que entran con "Tengo una consulta"): A 928 leads / 45 pedidos
+// / 4,85%, C 948 / 45 / 4,75%. Lift -2%, z = -0,10. Identicas.
+//
+// La mejor prueba de que ese -2% es ruido esta en el segmento "otro", donde C
+// trata a los leads EXACTAMENTE igual que A y por lo tanto la diferencia real
+// es cero por construccion: ahi salio -9% (z = -0,64). El piso de ruido de la
+// medicion es mas grande que el efecto medido.
+//
+// Lo que NO quedo resuelto: los leads "consulta" siguen siendo el agujero del
+// embudo. Invitar su duda en vez de pedirles la ubicacion no fue la solucion.
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
   if (!digits) return "A";
-  return fnv1a(digits) % 2 === 0 ? "A" : "C";
+  return "A";
+  // return fnv1a(digits) % 2 === 0 ? "A" : "C";
 }
 
 // SEGUNDO EJE, independiente del A/C: prueba del empuje al 3x2.
