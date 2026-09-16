@@ -1,5 +1,11 @@
 # Plantillas de WhatsApp
 
+> **Estado al 2026-09-16.** El aviso salio primero por Kenku 451 y se movio a
+> **Kenku 600 (`1117623181444547`)**, linea dedicada. Lo de abajo describe el
+> borrador `guia_shalom` que quedo SIN usar: el dueno creo sus propias plantillas
+> (`guias_shalom` y `guias_shalom_imagen`) y son esas las que corren. Ver
+> "Plantillas reales en produccion" al final.
+
 ## guia_shalom — aviso de guia de recojo con imagen
 
 Para el flujo de **Shalom**: avisarle al cliente su guia de recojo (con la
@@ -86,3 +92,53 @@ Los contactos que entran por **usuario de WhatsApp** no tienen telefono, solo
 BSUID, y Meta responde `131026` a las plantillas. En una muestra de 13 leads de
 un anuncio, **6 eran username**. A esos hay que alcanzarlos dentro de la ventana
 de 24 h o por otro canal. Ver la leccion de BSUID en `CLAUDE.md`.
+
+
+---
+
+# Plantillas reales en produccion (2026-09-16)
+
+Las creo el dueno, no salen del borrador de arriba. **Las plantillas son por
+WABA**: cada numero tiene su propia copia, y las copias NO son identicas.
+
+| Plantilla | Kenku 451 (WABA 893155223455492) | Kenku 600 (WABA 1521264238872146) |
+|---|---|---|
+| `guias_shalom` (9 vars, sin header) | APPROVED | **NO EXISTE** |
+| `guias_shalom_imagen` (8 vars, header DOCUMENT) | APPROVED, Yape **930 555 390** (MAL) | APPROVED, Yape **930 555 309** (BIEN) |
+
+**El Yape correcto es 930 555 309**, verificado por el dueno contra la base:
+1.796 comprobantes con receptor 309 (1.787 validados) desde agosto de 2025 y
+CERO con 390. El bot ya dice 309 en el prompt, en `check-coverage` y en
+`send-payment`.
+
+**Consecuencia para el envio desde Kenku 600:** ahi solo se puede mandar
+`guias_shalom_imagen`, y su copia del 600 tiene el Yape correcto. La de 9
+variables no existe en esa cuenta; si se la quiere usar hay que crearla y
+aprobarla en la WABA del 600.
+
+## Los botones y por que la regla del bot lista CUATRO textos
+
+Las dos plantillas cierran con tres botones de respuesta rapida, pero **el del
+medio no dice lo mismo**:
+
+- `guias_shalom` -> "Pagar con Yape" · **"Transferencia Deposito"** · "Link de pago"
+- `guias_shalom_imagen` -> "Pagar con Yape" · **"Transferencia / Deposito"** · "Link de pago"
+
+Por eso el bloque del prompt lista cuatro literales y `SHALOM_PAYMENT_BUTTONS`
+en `check-coverage` tambien. Con solo los tres de una variante, la otra se cuela.
+
+## La regla del prompt se dispara por TEXTO, no por nombre de plantilla
+
+El bloque "DESPUES DEL AVISO DE SHALOM" detecta la frase
+**"Te compartimos los datos de tu pedido enviado por Shalom"** en un mensaje
+saliente, no el `template.name`.
+
+Motivo: el agente NO ve el nombre de la plantilla. El historial se arma con
+`kapso.content`, que es el cuerpo ya renderizado; el nombre vive en
+`template.name` y `kapso.message_type_data.name`, campos de la API que no entran
+al contexto. Verificado sobre un mensaje real: `"carrito_abandonado_2" in
+content` -> **False**.
+
+**Cuidado al editar las plantillas:** si alguien cambia esa frase del cuerpo, la
+regla deja de dispararse **en silencio** y el bot vuelve a venderle a clientas
+que ya compraron. Si se toca el texto, actualizar tambien el prompt.
