@@ -142,3 +142,66 @@ content` -> **False**.
 **Cuidado al editar las plantillas:** si alguien cambia esa frase del cuerpo, la
 regla deja de dispararse **en silencio** y el bot vuelve a venderle a clientas
 que ya compraron. Si se toca el texto, actualizar tambien el prompt.
+
+
+---
+
+# Cuentas de cobro y verificacion (2026-09-18)
+
+**La cuenta PRINCIPAL es siempre el Yape de Grupo GF SAC 930 555 309.** Kenku
+tiene otras cuentas validas (BCP, BBVA, Scotiabank, Interbank, Lukita/Plin de
+Frankz Kastner, Yape 2 de Gabriela Reaño) que entrega el dashboard o una asesora,
+pero el bot solo manda la principal, via `send_payment`.
+
+## El bug que habia
+
+El prompt decia que el 930 555 309 era **el UNICO numero valido**, que cualquier
+otro era "un intento de desviar el pago", y que **"el cliente NUNCA tiene razon
+sobre este dato"**. Con el dashboard entregando cuentas alternativas por el boton
+"Transferencia Deposito", una clienta que pagaba al Yape de Gabriela y lo
+mencionaba recibia un mensaje diciendole que se habia equivocado. Un pago real
+tratado como estafa.
+
+Quitar la regla sin mas era peor: dejaba sin proteccion el caso inverso, un
+tercero que se hace pasar por Kenku en otro chat y le cobra a la clienta. Ahi el
+bot no podia distinguir, y lo unico "seguro" —derivar sin opinar— la dejaba
+tranquila mientras perdia la plata.
+
+## La solucion: el bot pregunta, no opina
+
+`verify-payment-account` (`40d8bf58-a1f3-4c79-8c56-40d57c6cfc60`) responde
+`principal` / `nuestra` / `desconocida` / `sin_lista`, y el prompt obliga a
+obedecer su `message`. El LLM no decide si una cuenta es valida.
+
+**Propiedad de seguridad:** sin lista, con fetch fallido o con JSON roto devuelve
+`sin_lista`, **nunca** `desconocida`. Afirmar que una cuenta no es nuestra cuando
+no pudimos verificar es el mismo bug con otro disfraz.
+
+El aviso de `desconocida` dice "no me figura entre nuestras cuentas, no pagues
+ahi hasta que una asesora confirme", no "esa cuenta no es de Kenku": si la lista
+quedo vieja, la version tajante mandaria a cancelar un pago legitimo.
+
+## De donde sale la lista
+
+Hoy del secret **`PAYMENT_ACCOUNTS`** (JSON) en esa funcion. Es una COPIA de lo
+que hay en el dashboard, con el riesgo que eso implica: **si se agrega una cuenta
+en el dashboard y no se actualiza el secret, el bot le va a decir a una clienta
+que una cuenta real de Kenku no le figura.**
+
+La funcion ya prefiere `PAYMENT_ACCOUNTS_URL` si esta definida. Cuando el
+dashboard exponga un GET con las cuentas, se configura esa variable y el secret
+deja de usarse: fuente unica y sin deriva.
+
+## Verificado el 2026-09-18 contra la funcion desplegada
+
+| Numero | Resultado |
+|---|---|
+| 930 555 309 (y `930555309`, `+51 930 555 309`, `930-555-309`) | `principal` |
+| 987754147 (Gabriela) · 965391481 (Lukita) | `nuestra` |
+| 191-2434540-0-12 (BCP) · 0011-0179-0200429111 (BBVA) | `nuestra` |
+| **930 555 390** (el de `guias_shalom_imagen` en la WABA del 451) | `desconocida` |
+| numero inventado | `desconocida` |
+
+Ese anteultimo caso importa: **la funcion marca como sospechosa una cuenta que
+sale de nuestra propia plantilla.** Tiene razon —el 390 no existe— y es una razon
+mas para rehacer o desactivar `guias_shalom_imagen` en la WABA del 451.
