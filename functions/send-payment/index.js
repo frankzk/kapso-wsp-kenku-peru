@@ -4,23 +4,39 @@
 // herramienta con el courier ("shalom" | "olva") y la funcion arma el mensaje
 // con el numero fijo y lo envia por el proxy Meta de Kapso.
 
-const YAPE_NAME = "Grupo GF SAC";
-const YAPE_NUMBER = "930 555 309"; // UNICO numero valido. NUNCA cambiar aqui salvo cambio real de cuenta.
+// Cuenta por defecto del adelanto. Se configura con los secrets
+// PAYMENT_ACCOUNT_NAME y PAYMENT_ACCOUNT_NUMBER (aplican sin redeploy); estos
+// valores quedan como respaldo si el secret no esta puesto.
+//
+// El adelanto va a esta cuenta el 99% de las veces. El 1% restante NO lo decide
+// el bot: si el cliente pide otra cuenta o no puede pagar a esta, el agente
+// avisa al equipo y deriva, y una persona manda la alternativa. Darle al modelo
+// la posibilidad de elegir entre cuentas es devolverle criterio sobre plata.
+const DEFAULT_ACCOUNT_NAME = "Grupo GF SAC";
+const DEFAULT_ACCOUNT_NUMBER = "930 555 309";
 
-function shalomMessage() {
+function account(env = globalThis) {
+  const g = (a, b) => env?.[a] || env?.[b] || globalThis[a] || globalThis[b];
+  return {
+    name: g("PAYMENT_ACCOUNT_NAME", "pAYMENTACCOUNTNAME") || DEFAULT_ACCOUNT_NAME,
+    number: g("PAYMENT_ACCOUNT_NUMBER", "pAYMENTACCOUNTNUMBER") || DEFAULT_ACCOUNT_NUMBER,
+  };
+}
+
+function shalomMessage(env) {
   return "¡Listo! Lo enviamos a esa agencia Shalom 🙌\n"
     + "Para *separarte el pedido* y despacharlo hoy/mañana con tu *código de seguimiento*, va un adelanto de *S/30* por Yape:\n"
-    + `*${YAPE_NAME}*\n📱 *${YAPE_NUMBER}*\n`
+    + `*${account(env).name}*\n📱 *${account(env).number}*\n`
     + "Ese adelanto *se descuenta de tu total* (no es un costo extra) — el saldo lo pagas al recoger 😊\n"
     + "También necesito el *DNI del titular* que recogerá.\n"
     + "Envíame el voucher o captura y lo dejo encaminado ✅";
 }
 
-function olvaMessage() {
+function olvaMessage(env) {
   return "Perfecto 😊\n"
     + "Por Olva Courier el pago es anticipado completo.\n"
     + "Puedes realizarlo al Yape:\n"
-    + `*${YAPE_NAME}*\n📱 *${YAPE_NUMBER}*\n`
+    + `*${account(env).name}*\n📱 *${account(env).number}*\n`
     + "Cuando lo realices, envíame el voucher o captura para continuar con la confirmación ✅";
 }
 
@@ -65,7 +81,7 @@ async function handleRequest(request, env = globalThis) {
 
     const courier = String(input.courier || input.metodo || "").toLowerCase();
     const isOlva = courier.includes("olva");
-    const text = isOlva ? olvaMessage() : shalomMessage();
+    const text = isOlva ? olvaMessage(env) : shalomMessage(env);
 
     if (!apiKey || !phoneNumberId || !(to || bsuid)) {
       // Fallback: si no hay contexto para enviar, devolvemos el texto EXACTO para
@@ -97,7 +113,7 @@ async function handleRequest(request, env = globalThis) {
         status: response.status,
         text,
         error: JSON.stringify(result).slice(0, 300),
-        message: "Fallo el envio automatico. Envia EXACTAMENTE el texto del campo `text` (ya trae el Yape oficial 930 555 309); NO uses otro numero.",
+        message: "Fallo el envio automatico. Envia EXACTAMENTE el texto del campo `text` (ya trae la cuenta oficial); NO escribas ningun numero de cuenta vos mismo.",
       });
     }
 
@@ -105,14 +121,14 @@ async function handleRequest(request, env = globalThis) {
       ok: true,
       sent: true,
       courier: isOlva ? "olva" : "shalom",
-      message: "Instrucciones de pago con el Yape OFICIAL (Grupo GF SAC 930 555 309) enviadas al cliente. NO escribas el numero de Yape tu mismo ni repitas el mensaje. Si el cliente objeta el numero, reafirma el oficial. Guarda stage=esperando_voucher y llama complete_task.",
+      message: "Instrucciones de pago enviadas al cliente con la cuenta oficial. NO escribas ningun numero de cuenta vos mismo ni repitas el mensaje. Si el cliente pide otra cuenta o dice que no puede pagar a esa, NO improvises: notify_team + handoff_to_human para que una persona le mande la alternativa. Guarda stage=esperando_voucher y llama complete_task.",
     });
   } catch (error) {
     return json({
       ok: false,
       reason: "send_payment_error",
       error: String(error?.message || error).slice(0, 300),
-      message: "Error enviando el pago. El Yape oficial es Grupo GF SAC 930 555 309; nunca uses otro numero.",
+      message: "Error enviando el pago. NO escribas ningun numero de cuenta vos mismo: reintenta send_payment y, si vuelve a fallar, notify_team + handoff_to_human.",
     });
   }
 }
