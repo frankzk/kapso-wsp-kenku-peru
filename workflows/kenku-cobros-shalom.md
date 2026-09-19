@@ -23,27 +23,31 @@ Las dos reglas de Shalom que se le agregaron al `sales-agent` (los cuatro botone
 y "no vender tras el aviso") **se dejan donde estan**: ya no se activan para el
 600, y sacarlas seria riesgo sin beneficio.
 
-## Sin ningun LLM
+## El silencio es deterministico; la respuesta, no
 
-Nueve nodos: `decide` de funcion, `send_text` de texto fijo y `notify-team`. No
-hay agente. En un flujo donde se habla de plata eso vale mas que la
-flexibilidad: no hay nada que alucinar, no cuesta tokens y el mismo mensaje toma
-siempre el mismo camino.
+Ocho nodos. El ruteo no usa ningun LLM: `shalom-router` mira el ultimo entrante
+y devuelve por que arista seguir. Lo que **no** hay que contestar —un boton, un
+"gracias"— se corta ahi, con codigo. Una regla en codigo no se la salta el
+modelo un mal dia, y no cuesta tokens: en el bot de ventas, **ignorar un boton
+costaba 19.064 tokens de entrada** (US$0,0156), porque cargaba el prompt de
+51.533 caracteres para decidir quedarse callado.
 
-Para comparar: en el bot de ventas, **ignorar un boton costaba 19.064 tokens de
-entrada** (US$0,0156) porque cargaba el prompt de 51.533 caracteres para decidir
-quedarse callado.
+Lo que si hay que contestar va a un nodo `agent` (`gemini-3.7-flash`, 3.389
+caracteres de prompt, `tool_only`, `send-text` + `notify-team`). Antes eso era
+una linea fija que derivaba a una asesora; derivar lo que el bot sabe contestar
+es justamente lo que habia que evitar.
 
 ## El recorrido
 
 ```
 start -> router
   router --[boton]--->   esperar-6h -> compuerta
-  router --[voucher]-->  avisar-pago -> fin
-  router --[texto]---->  avisar-consulta -> responder -> fin
+  router --[trivial]-->  fin
+  router --[voucher]-->  avisar-pago -> agente -> fin
+  router --[texto]---->  agente -> fin
 
   compuerta --[voucher]--> avisar-pago
-  compuerta --[texto]----> avisar-consulta
+  compuerta --[texto]----> agente
   compuerta --[recordar]-> recordatorio -> fin
   compuerta --[fin]------> fin
 ```
@@ -51,9 +55,31 @@ start -> router
 | Entra | Que hace |
 |---|---|
 | Uno de los 4 botones | **Silencio.** Los contesta el dashboard con las cuentas |
-| Voucher (imagen o PDF) | `notify-team`: Telegram + cola "Atender ahora" |
-| Texto libre | `notify-team` + una linea fija derivando a una asesora |
+| Acuse trivial ("ok", "gracias", un emoji) | **Silencio.** Lo contesta Kapta con el saldo y el Yape |
+| Voucher (imagen o PDF) | `notify-team` (Telegram + cola) y despues el agente agradece |
+| Texto libre | El agente contesta, o deriva si corresponde |
 | 6 h sin responder | **Un** recordatorio, sin montos |
+
+## Las dos listas de acuses tienen que ser identicas
+
+`TRIVIALES`, en `shalom-router`, y la lista de acuses de **Kapta** son la misma
+regla partida en dos sistemas: donde el router calla, Kapta contesta con el
+saldo y el Yape; donde el router habla, Kapta calla.
+
+No alcanza con que una sea subconjunto de la otra:
+
+- palabra en el router y no en Kapta → la clienta no recibe **ninguna**
+  respuesta;
+- palabra en Kapta y no en el router → recibe **dos**.
+
+Por eso `acuerdo` esta en la lista: sin ella, "de acuerdo" no era trivial para
+el router y contestaban los dos. **Si se toca una lista hay que tocar la otra.**
+
+**`no` no es un acuse, y tampoco `nunca`, `cancelar`, `anular` ni `devolver`.**
+Despues de pedirle un saldo, un "no" o un "no gracias" no cierra la
+conversacion: rechaza el pago, y eso abre el flujo de devolucion. Mandarlo a
+`fin` en silencio pierde la senal justo cuando mas vale. Van al agente, que
+deriva.
 
 ## Decisiones que conviene no deshacer
 
@@ -74,6 +100,12 @@ los nodos que lo referenciaban; no repetirlo.
 `guias_shalom` dice "Transferencia Deposito" y `guias_shalom_imagen`
 "Transferencia / Deposito".
 
+**El agente no valida pagos y no puede insinuar que lo hizo.** El voucher lo
+revisa una persona en la cola de Kapta. Si el bot dice o sugiere "ya esta
+validado", la clienta va a la agencia sin la clave liberada y hace el viaje en
+vano. El prompt se lo prohibe explicitamente; si se reescribe esa seccion, la
+prohibicion se conserva.
+
 ## Los dos limites conocidos
 
 **El seguimiento solo alcanza a quien respondio algo.** El workflow arranca con un
@@ -85,6 +117,11 @@ que el endpoint existe, espera un parametro `workflow_execution`).
 **El recordatorio no dice el monto**, porque el workflow no lo sabe: ese dato esta
 en el dashboard. Si hace falta que lo diga, el dashboard tendria que pasarlo al
 arrancar la ejecucion.
+
+**No hay asignacion automatica por numero.** Buscado en la Platform API: el
+recurso del numero no tiene campo de asignado, la conversacion tampoco, y no
+existen `assignment_rules`, `assignments` ni `inboxes`. Si la asignacion fija de
+una linea a una persona existe, es del dashboard de Kapso, no de la API.
 
 ## Pendiente ajeno a Kapso
 

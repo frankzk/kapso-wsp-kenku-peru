@@ -37,11 +37,22 @@ function esBoton(texto) {
 // "buenas noches", o solo emojis. El sistema ya le repitio su saldo y el Yape;
 // contestarlos solo agrega ruido. Se filtran aca, sin gastar una llamada al
 // modelo para decidir callarse.
+//
+// ESTA LISTA TIENE QUE SER IGUAL A LA DE ACUSES DE KAPTA. Donde el router
+// calla, Kapta contesta con el saldo y el Yape; donde el router habla, Kapta
+// calla. Una palabra que este aca y no alla deja a la clienta sin NINGUNA
+// respuesta; una que este alla y no aca le manda DOS. Si cambia una, avisar y
+// cambiar la otra.
+//
+// "no" NO va aca a proposito, ni "nunca", "cancelar", "anular" ni "devolver":
+// despues de pedirle un saldo, un "no" o un "no gracias" no es un cierre, es
+// un rechazo del pago, y eso abre el flujo de devolucion. Mandarlo a "fin" en
+// silencio pierde la senal justo cuando mas vale.
 const TRIVIALES = new Set([
   "ok","oka","okey","oki","okis","ya","listo","lista","gracias","muchas","mil",
-  "si","no","buenas","buenos","noches","dias","dia","buen","buena","tardes",
+  "si","buenas","buenos","noches","dias","dia","buen","buena","tardes",
   "de","nada","bien","vale","perfecto","entendido","amable","muy","ah","aah",
-  "bueno","genial","excelente","correcto","claro","dale","conforme",
+  "bueno","genial","excelente","correcto","claro","dale","conforme","acuerdo",
 ]);
 
 function esTrivial(texto) {

@@ -53,8 +53,18 @@ const casos = [
   ["agradecimiento", [texto("Ok, muchas gracias 😊")], ENTRADA, "trivial"],
   ["saludo de cortesia", [texto("Buenas noches")], ENTRADA, "trivial"],
   ["solo emojis", [texto("👍👍")], ENTRADA, "trivial"],
+  ["de acuerdo (acuse de Kapta)", [texto("De acuerdo")], ENTRADA, "trivial"],
   ["aviso de pago", [texto("ya pague")], ENTRADA, "texto"],
   ["consulta", [texto("donde lo recojo?")], ENTRADA, "texto"],
+  // Un "no" despues de pedirle el saldo es rechazo del pago, no cierre: tiene
+  // que llegar al agente para que derive, nunca irse a "fin" en silencio.
+  ["rechazo seco", [texto("no")], ENTRADA, "texto"],
+  ["rechazo cortes", [texto("No gracias")], ENTRADA, "texto"],
+  ["no quiere el pedido", [texto("ya no lo quiero")], ENTRADA, "texto"],
+  ["quiere cancelar", [texto("cancelar")], ENTRADA, "texto"],
+  ["quiere devolver", [texto("devolver")], ENTRADA, "texto"],
+  ["nunca", [texto("nunca")], ENTRADA, "texto"],
+  ["anular", [texto("anular")], ENTRADA, "texto"],
   ["sin mensaje legible", [], ENTRADA, "texto"],
   // Compatibilidad: contra la definicion vieja, sin arista "trivial", un
   // cierre trivial tiene que caer en "texto" y no romper la ejecucion.
