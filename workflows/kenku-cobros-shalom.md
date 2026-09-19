@@ -118,6 +118,13 @@ que el endpoint existe, espera un parametro `workflow_execution`).
 en el dashboard. Si hace falta que lo diga, el dashboard tendria que pasarlo al
 arrancar la ejecucion.
 
+**`notify_team` sin `reason` sale titulado "Voucher recibido".** Es el default
+correcto para el nodo `avisar-pago`, que no pasa argumentos, y el equivocado
+para un handoff: el equipo buscaria un comprobante que no existe. Por eso el
+prompt y el schema le exigen al agente una etiqueta en `reason`
+(`cobro_shalom_devolucion`, `_reclamo`, `_ya_pago`, `_pide_humano`, `_otro`).
+Esas etiquetas son ademas lo que hace medible el conteo de handoffs por motivo.
+
 **No hay asignacion automatica por numero.** Buscado en la Platform API: el
 recurso del numero no tiene campo de asignado, la conversacion tampoco, y no
 existen `assignment_rules`, `assignments` ni `inboxes`. Si la asignacion fija de
