@@ -43,11 +43,67 @@ async function handleRequest(request, env = globalThis) {
 
     const config = await getConfig(env);
     const dryRun = Boolean(input.dryRun || input.dry_run);
-    input.ctwaReferral = await fetchCtwaReferral(env, input);
+    // Referral del anuncio para atribucion CTWA. Orden de preferencia: (1) el que
+    // ya paso el agente, (2) fetch en vivo por conversation_id, (3) respaldo desde
+    // las vars del flujo (ad_referral_*) que dejo customer-lookup al inicio. El (3)
+    // es clave: como tool de agente, el payload a veces NO trae conversation_id/
+    // phone y el fetch en vivo devuelve null, dejando el pedido sin etiquetar.
+    input.ctwaReferral = input.ctwaReferral
+      || (await fetchCtwaReferral(env, input))
+      || ctwaFromVars(payload);
 
     const build = await buildOrderInput(config, input, { createMissingCustomer: !dryRun });
     const orderInput = build.orderInput;
     const customerLookup = build.customerLookup;
+
+    // Requisito duro para CONTRAENTREGA: direccion realmente entregable. Un pedido
+    // contraentrega necesita ciudad/distrito real Y (calle+numero O una referencia
+    // clara). Si falta, NO lo creamos con "Por coordinar" (eso genero ordenes
+    // basura como #KP126229, Camana sin direccion): pedimos la direccion. Cuando la
+    // haya, check_coverage decide contraentrega vs agencia (Shalom + adelanto).
+    if (!dryRun) {
+      const addr = orderInput.shippingAddress || {};
+      const isPlaceholder = isAddressPlaceholder;
+      const noCity = isPlaceholder(addr.city);
+      const noStreet = isPlaceholder(addr.address1);
+      const noReference = isPlaceholder(addr.address2);
+      if (noCity || (noStreet && noReference)) {
+        return json({
+          ok: false,
+          reason: "address_incomplete",
+          message: "No registro el pedido: falta la direccion completa. Pide al cliente su *distrito* y su *direccion exacta* (calle y numero, o una referencia clara). Cuando la tengas, corre check_coverage con ese distrito: si da contraentrega, crea el pedido; si da agencia (Shalom), sigue la ruta de agencia con el adelanto de S/30. NUNCA registres un pedido contraentrega con la direccion en 'Por coordinar'.",
+          customerLookup,
+        });
+      }
+    }
+
+    // Requisito duro: telefono de contacto REAL. Los leads que entran por
+    // username de WhatsApp no traen numero, y el flujo llegaba a crear el
+    // pedido con phone vacio: quedaba un cliente con direccion completa al que
+    // era IMPOSIBLE contactar para coordinar la entrega. Sin celular valido no
+    // hay pedido; se pide y despues se reintenta.
+    if (!dryRun && !isPeruMobile(orderInput.phone || input.phone)) {
+      return json({
+        ok: false,
+        reason: "phone_missing",
+        message: "No registro el pedido: falta el numero de celular del cliente. Este chat NO expone telefono (entro por username de WhatsApp), asi que no podemos coordinar la entrega ni contactarlo si se corta la conversacion. Pideselo de forma natural y directa: \"Para coordinar la entrega necesito tu *numero de celular* 📱 ¿Cual es?\". Debe ser un celular peruano de 9 digitos que empiece con 9. Cuando lo tengas, vuelve a llamar create_shopify_order incluyendo ese numero en el campo phone.",
+        customerLookup,
+      });
+    }
+
+    // Defensa anti-contraentrega en zona equivocada: re-verifica la cobertura con
+    // check-coverage (fuente de verdad). Si la zona NO es contraentrega, no crea
+    // la orden de pago-al-recibir; deriva a validacion logistica (Shalom/adelanto).
+    const verifiedMode = await verifyDeliveryMode(env, input, orderInput.shippingAddress);
+    if (verifiedMode === "agencia" || verifiedMode === "needs_location_confirmation") {
+      return json({
+        ok: false,
+        reason: "coverage_mismatch",
+        verifiedShippingMode: verifiedMode,
+        claimedShippingMode: input.coverage?.shippingMode || null,
+        message: "Esta zona no tiene pago contraentrega: requiere envio por agencia (Shalom) con adelanto. No se creo la orden. Corre check_coverage con el distrito y provincia reales y sigue la ruta de agencia.",
+      });
+    }
 
     const outOfStockVariants = await checkVariantsStock(config, orderInput.lineItems.map((li) => li.variantId));
     const stockToValidate = outOfStockVariants.length > 0;
@@ -65,7 +121,8 @@ async function handleRequest(request, env = globalThis) {
         outOfStockVariants,
         customerLookup,
         orderPreview: {
-          customerId: orderInput.customerId || null,
+          customer: orderInput.customer || null,
+          customerId: customerLookup?.customerId || null,
           lineItems: orderInput.lineItems,
           phone: orderInput.phone,
           email: orderInput.email || null,
@@ -76,6 +133,28 @@ async function handleRequest(request, env = globalThis) {
           hasDiscount: Boolean(orderInput.discountCode),
           shippingLines: orderInput.shippingLines || [],
         },
+      });
+    }
+
+    // Idempotencia anti-duplicado: si ya se creo un pedido IDENTICO (mismos
+    // variantes + cantidades) para este numero en las ultimas horas, NO crear
+    // otro. Cubre el caso de dos threads/ejecuciones para el mismo numero (el
+    // cliente "avanza su pedido" dos veces en conversaciones separadas y cada
+    // una llega hasta aca). Solo bloquea duplicados exactos: una compra con
+    // producto/cantidad distinta pasa igual.
+    const phoneKey = phoneDigits(orderInput.phone || input.phone).slice(-9);
+    const orderSig = orderSignature(orderInput.lineItems);
+    const existingLock = await findRecentOrderLock(env, phoneKey, orderSig);
+    if (existingLock) {
+      return json({
+        ok: true,
+        duplicate: true,
+        reason: "duplicate_prevented",
+        stage: "orden creada",
+        conversionStatus: "already_registered",
+        message: `Ya existe un pedido reciente identico (${existingLock.orderName}) para este numero; NO se creo uno nuevo. Confirma al cliente que su pedido ${existingLock.orderName} ya quedo registrado (no se duplico) y pregunta si necesita algo mas.`,
+        order: { name: existingLock.orderName },
+        customerLookup,
       });
     }
 
@@ -91,6 +170,18 @@ async function handleRequest(request, env = globalThis) {
     if (result.userErrors?.length) {
       return json({ ok: false, reason: "shopify_user_errors", errors: result.userErrors, customerLookup });
     }
+
+    // Guarda el candado anti-duplicado (por numero + firma del pedido) para que
+    // una segunda ejecucion/thread del mismo cliente no cree una orden identica.
+    await recordOrderLock(env, phoneKey, orderSig, result.order?.name);
+
+    // Registra la conversion A/B (una por pedido) para el reporte por variante.
+    const abPhone = orderInput.phone || input.phone;
+    await logAbOrder(env, result.order?.name, abVariant(abPhone), input.conversationId || input.conversation_id, {
+      promo: promoVariant(abPhone),
+      total: Number(result.order?.totalPriceSet?.shopMoney?.amount ?? result.order?.totalPrice ?? NaN),
+      units: orderInput.lineItems.reduce((n, li) => n + (Number(li.quantity) || 0), 0),
+    });
 
     return json({
       ok: true,
@@ -131,6 +222,10 @@ const ORDER_CREATE_MUTATION = `#graphql
         name
         legacyResourceId
         statusPageUrl
+        # El total se usa para medir el ticket por variante en la prueba del 3x2:
+        # sin el solo se podria comparar conversion, y empujar el 3x2 puede bajar
+        # la conversion y aun asi convenir por lo que deja cada pedido.
+        totalPriceSet { shopMoney { amount } }
         customer { id displayName email phone }
       }
     }
@@ -155,6 +250,16 @@ const CUSTOMER_CREATE_MUTATION = `#graphql
   mutation customerCreate($input: CustomerInput!) {
     customerCreate(input: $input) {
       customer { id displayName firstName lastName email phone defaultAddress { phone address1 city province country zip } }
+      userErrors { field message }
+    }
+  }`;
+
+// CustomerInput.addresses quedo deprecado (API 2026-01+) y la tienda corre
+// 2026-04: la direccion se adjunta con una mutation aparte tras crear el cliente.
+const CUSTOMER_ADDRESS_CREATE_MUTATION = `#graphql
+  mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!, $setAsDefault: Boolean) {
+    customerAddressCreate(customerId: $customerId, address: $address, setAsDefault: $setAsDefault) {
+      customerAddress { id }
       userErrors { field message }
     }
   }`;
@@ -200,6 +305,35 @@ function getKapsoConfig(env = globalThis) {
 }
 
 const CTWA_MAX_PAGES = 5;
+const CHECK_COVERAGE_FUNCTION_ID = "05a6107d-6488-4bb3-8088-9f2fce140b5e";
+
+// Defensa: re-verifica la cobertura llamando a check-coverage con la ubicacion
+// del pedido, sin confiar en el shippingMode que afirma el agente. check-coverage
+// es la fuente de verdad (maneja texto libre de Lima y cae a agencia para zonas
+// no reconocidas). Devuelve "contraentrega" | "agencia" | null (no verificable).
+async function verifyDeliveryMode(env, input, shippingAddress) {
+  try {
+    const { apiKey, apiBase } = getKapsoConfig(env);
+    if (!apiKey) return null;
+    const cov = input.coverage || {};
+    const norm = cov.normalized || {};
+    const district = cov.district || cov.distrito || norm.district || shippingAddress.city || "";
+    const province = cov.province || cov.provincia || norm.province || shippingAddress.province || "";
+    const region = cov.region || cov.departamento || norm.region || "";
+    const zone = cov.zone || shippingAddress.address1 || "";
+    if (!district && !province && !zone) return null; // sin senal de ubicacion, no verificable
+    const res = await fetch(`${apiBase}/platform/v1/functions/${CHECK_COVERAGE_FUNCTION_ID}/invoke`, {
+      method: "POST",
+      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ input: { district, province, region, zone } }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.shippingMode || null;
+  } catch {
+    return null; // ante error de red, no bloquear (falla abierto)
+  }
+}
 
 async function fetchCtwaReferral(env, input) {
   try {
@@ -209,7 +343,7 @@ async function fetchCtwaReferral(env, input) {
       input.phoneNumberId || input.phone_number_id || input.whatsappPhoneNumberId || input.whatsapp_phone_number_id || DEFAULT_PHONE_NUMBER_ID;
     if (!apiKey || !conversationId || !phoneNumberId) return null;
 
-    let url = `${apiBase}/meta/whatsapp/${encodeURIComponent(phoneNumberId)}/messages?conversation_id=${encodeURIComponent(conversationId)}&direction=inbound&limit=100`;
+    let url = `${apiBase}/meta/whatsapp/v24.0/${encodeURIComponent(phoneNumberId)}/messages?conversation_id=${encodeURIComponent(conversationId)}&direction=inbound&limit=100`;
     for (let page = 0; page < CTWA_MAX_PAGES && url; page += 1) {
       const response = await fetch(url, { headers: { "X-API-Key": apiKey, "Content-Type": "application/json" } });
       if (!response.ok) return null;
@@ -221,7 +355,7 @@ async function fetchCtwaReferral(env, input) {
       }
       const nextCursor = payload?.paging?.cursors?.after || payload?.paging?.next;
       if (!nextCursor || payload?.paging?.next === null) break;
-      url = `${apiBase}/meta/whatsapp/${encodeURIComponent(phoneNumberId)}/messages?conversation_id=${encodeURIComponent(conversationId)}&direction=inbound&limit=100&after=${encodeURIComponent(nextCursor)}`;
+      url = `${apiBase}/meta/whatsapp/v24.0/${encodeURIComponent(phoneNumberId)}/messages?conversation_id=${encodeURIComponent(conversationId)}&direction=inbound&limit=100&after=${encodeURIComponent(nextCursor)}`;
     }
     return null;
   } catch {
@@ -233,6 +367,28 @@ function extractReferral(message) {
   const referral = message?.referral || message?.message?.referral || message?.kapso?.referral;
   if (referral && (referral.source_id || referral.source_type || referral.ctwa_clid)) return referral;
   return null;
+}
+
+// Respaldo de atribucion CTWA: reconstruye el referral desde las vars del flujo
+// (ad_referral_*) que customer-lookup resolvio al inicio de la conversacion. En
+// esta tienda todo referral proviene de un anuncio Click-to-WhatsApp, asi que si
+// hay headline/body/ad_id se marca source_type "ad" (para que buildTags etiquete
+// ctwa-ad). Devuelve null si el lead no vino de un anuncio.
+function ctwaFromVars(payload) {
+  const v = payload?.execution_context?.vars || payload?.vars || {};
+  const adId = v.ad_referral_ad_id || v.ad_referral_source_id || null;
+  const headline = v.ad_referral_headline || null;
+  const body = v.ad_referral_body || null;
+  const sourceType = v.ad_referral_source_type || null;
+  if (!adId && !headline && !body && !sourceType) return null;
+  return {
+    source_type: sourceType || "ad",
+    source_id: adId,
+    headline,
+    body,
+    source_url: v.ad_referral_source_url || null,
+    ctwa_clid: v.ad_referral_ctwa_clid || null,
+  };
 }
 
 async function buildOrderInput(config, input, options = {}) {
@@ -286,11 +442,29 @@ async function buildOrderInput(config, input, options = {}) {
     presentmentCurrency: "PEN",
   };
 
+  // Asociar el cliente al pedido. OrderCreateOrderInput NO tiene un campo
+  // `customerId`: se usa `customer.toAssociate` (cliente existente) o
+  // `customer.toUpsert` (crear/actualizar). El bug anterior (order.customerId)
+  // se ignoraba y el pedido quedaba SIN cliente.
+  const email = normalizeEmail(customer.email || input.email || customerLookup?.email);
   if (customerLookup?.customerId) {
-    order.customerId = customerLookup.customerId;
+    order.customer = { toAssociate: { id: customerLookup.customerId } };
+  } else if (email) {
+    // Respaldo: si no logramos crear/encontrar el cliente pero hay email, que
+    // Shopify lo cree/asocie como parte del pedido (toUpsert dedupe por email).
+    const nameParts = splitCustomerName(
+      String(customer.name || customer.fullName || customer.full_name || "").trim()
+      || [shippingAddress.firstName, shippingAddress.lastName].filter(Boolean).join(" ")
+    );
+    order.customer = {
+      toUpsert: {
+        email,
+        firstName: nameParts.firstName || "Cliente",
+        lastName: nameParts.lastName || "Kenku",
+      },
+    };
   }
 
-  const email = normalizeEmail(customer.email || input.email || customerLookup?.email);
   if (email) {
     order.email = email;
   }
@@ -509,13 +683,28 @@ async function createShopifyCustomer(config, { phone, email, firstName, lastName
   if (cleanEmail) input.email = cleanEmail;
   if (note) input.note = note;
 
-  const mailingAddress = mailingAddressFromOrderAddress(address);
-  if (mailingAddress) {
-    input.addresses = [mailingAddress];
-  }
-
+  // NO adjuntar addresses aqui: CustomerInput.addresses esta deprecado (2026-01+)
+  // y en 2026-04 hace fallar customerCreate -> antes el pedido quedaba SIN cliente.
   const data = await shopifyGraphql(config, CUSTOMER_CREATE_MUTATION, { input });
-  return data.customerCreate || { customer: null, userErrors: [{ message: "empty customerCreate response" }] };
+  const result = data.customerCreate || { customer: null, userErrors: [{ message: "empty customerCreate response" }] };
+
+  // Best-effort: guarda la direccion como default en el perfil (para reconocer al
+  // cliente recurrente). Nunca bloquea: si falla, el cliente ya quedo creado/asociado.
+  if (result.customer?.id) {
+    const mailingAddress = mailingAddressFromOrderAddress(address);
+    if (mailingAddress) {
+      try {
+        await shopifyGraphql(config, CUSTOMER_ADDRESS_CREATE_MUTATION, {
+          customerId: result.customer.id,
+          address: mailingAddress,
+          setAsDefault: true,
+        });
+      } catch (_) {
+        // direccion best-effort; el cliente ya existe y se asociara al pedido igual
+      }
+    }
+  }
+  return result;
 }
 
 function mailingAddressFromOrderAddress(address) {
@@ -559,14 +748,53 @@ async function resolveLineItems(config, items) {
   const resolved = [];
   for (const item of items) {
     if (item.variantId) {
-      resolved.push({ ...item, variantId: normalizeVariantId(item.variantId) });
+      // Se marca para validar: el agente a veces manda un variantId inventado o
+      // truncado (ej. "437"). Si no existe en Shopify se re-resuelve por producto.
+      resolved.push({ ...item, variantId: normalizeVariantId(item.variantId), _agentVariant: true });
       continue;
     }
     const product = await findProductForItem(config, item);
     const variant = chooseVariant(product, item);
     if (variant?.id) resolved.push({ ...item, variantId: normalizeVariantId(variant.id) });
   }
+
+  // Validar los variantId que dio el agente. Si alguno NO existe (Shopify
+  // devolvia "Line items product variant X not found" y el pedido caia en
+  // handoff), lo re-resolvemos desde handle/productUrl/productTitle del item.
+  const toCheck = resolved.filter((it) => it._agentVariant && it.variantId).map((it) => it.variantId);
+  if (toCheck.length) {
+    const validIds = await fetchExistingVariantIds(config, toCheck);
+    for (const it of resolved) {
+      if (!it._agentVariant) continue;
+      delete it._agentVariant;
+      if (!it.variantId || validIds.has(it.variantId)) continue;
+      const product = await findProductForItem(config, it);
+      const variant = chooseVariant(product, it);
+      it.variantId = variant?.id ? normalizeVariantId(variant.id) : "";
+    }
+  }
   return resolved.filter((item) => item.variantId);
+}
+
+// Devuelve el subconjunto de variantIds que SI existen en Shopify. Si la
+// consulta falla, no bloquea: asume que todos son validos (comportamiento previo).
+async function fetchExistingVariantIds(config, ids) {
+  const uniq = [...new Set((ids || []).filter(Boolean))];
+  const out = new Set();
+  if (!uniq.length) return out;
+  const query = `#graphql
+    query ValidateVariants($ids: [ID!]!) {
+      nodes(ids: $ids) { ... on ProductVariant { id } }
+    }`;
+  try {
+    const data = await shopifyGraphql(config, query, { ids: uniq });
+    for (const node of data.nodes || []) {
+      if (node?.id) out.add(node.id);
+    }
+  } catch {
+    for (const id of uniq) out.add(id);
+  }
+  return out;
 }
 
 async function findProductForItem(config, item) {
@@ -731,25 +959,91 @@ function buildProductSearchQueries(text) {
   const words = unique(normalized.split(/\s+/).filter((word) => word.length >= 3).slice(0, 8));
   const queries = [];
   if (words.length > 0) {
+    // 1) Todas las palabras (mas preciso).
     queries.push(words.map((word) => `title:*${escapeSearch(word)}*`).join(" AND "));
+    // 2) Fallback tolerante: solo las palabras mas distintivas (las mas largas).
+    //    Asi un titulo con una palabra extra o mal escrita ("Cooper" vs "Copper",
+    //    "Saludable" de mas) igual resuelve, en vez de fallar y derivar a humano.
+    const distinctive = [...words].sort((a, b) => b.length - a.length);
+    for (const n of [3, 2]) {
+      if (distinctive.length >= n) {
+        queries.push(distinctive.slice(0, n).map((word) => `title:*${escapeSearch(word)}*`).join(" AND "));
+      }
+    }
+    // 3) Texto libre.
     queries.push(words.slice(0, 5).join(" "));
   }
   if (normalized) queries.push(escapeSearch(normalized));
   return unique(queries);
 }
 
+// Un campo de direccion NO sirve si esta vacio o si es relleno. La plantilla de
+// carrito abandonado manda "Direccion Registrada: -, -." y el agente reenviaba
+// ese "-, -" como direccion real: el guard solo conocia "" y "por coordinar",
+// asi que lo dejaba pasar y se creaba un pedido inentregable (#KP129457).
+// Criterio: sin al menos 3 caracteres alfanumericos no es una direccion.
+const ADDRESS_PLACEHOLDERS = new Set([
+  "por coordinar", "por confirmar", "sin direccion", "no tiene", "no tengo",
+  "pendiente", "na", "n a", "s n", "sn", "ninguna", "ninguno", "x", "xx", "xxx",
+]);
+
+function isAddressPlaceholder(value) {
+  const raw = String(value == null ? "" : value).trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (!raw) return true;
+  const compact = raw.replace(/[^a-z0-9]+/g, " ").trim();
+  if (!compact) return true;                       // solo guiones/puntos/comas
+  if (ADDRESS_PLACEHOLDERS.has(compact)) return true;
+  const alnum = raw.replace(/[^a-z0-9]/g, "");
+  return alnum.length < 3;                         // "-, -", ".", "12" -> relleno
+}
+
 function buildAddress(customer, input = {}) {
   const nameParts = splitCustomerName(customer.name || customer.fullName || customer.full_name || "");
   const firstName = nameParts.firstName || "Cliente";
   const lastName = nameParts.lastName || "Kenku";
+  // Respaldo de ciudad/provincia desde la cobertura ya calculada (input.coverage)
+  // y desde el input directo. El agente a veces manda la direccion pero NO el
+  // distrito/provincia dentro de customer -> sin ciudad, la direccion de envio de
+  // Shopify queda vacia. La cobertura SIEMPRE trae el distrito (se verifico con
+  // check_coverage), asi que la usamos como fuente confiable.
+  const cov = input.coverage || {};
+  const covNorm = cov.normalized || {};
+  let city = customer.district || customer.distrito || customer.city
+    || cov.district || cov.distrito || covNorm.district || covNorm.distrito
+    || input.district || input.distrito || "";
+  let province = customer.province || customer.provincia
+    || cov.province || cov.provincia || covNorm.province || covNorm.provincia
+    || input.province || input.provincia || "";
+  const address1 = customer.address || customer.direccion || "Por coordinar";
+
+  // Respaldo: si el agente metio distrito/provincia dentro del texto de la
+  // direccion en vez de mandarlos por separado (ej. "Av. Huanacure 221,
+  // INDEPENDENCIA, Lima"), los extraemos de los ultimos segmentos separados por
+  // coma. Sin ciudad, Shopify no muestra la direccion de envio.
+  if ((!city || !province) && address1 && address1 !== "Por coordinar") {
+    const parts = address1.split(",").map((s) => s.replace(/\(.*?\)/g, "").trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      if (!city) city = parts[parts.length - 2];
+      if (!province) province = parts[parts.length - 1];
+    } else if (parts.length === 2 && !city) {
+      city = parts[parts.length - 1];
+    }
+  }
+
+  // Shopify necesita una ciudad no vacia para poblar la direccion de envio.
+  // Si aun no la tenemos, usamos la provincia; y si tampoco, dejamos una marca
+  // clara para que logistica la complete (mejor que quede en blanco).
+  if (!city) city = province || "Por coordinar";
+
   return {
     firstName,
     lastName,
     phone: normalizePhone(customer.phone || input.phone),
-    address1: customer.address || customer.direccion || "Por coordinar",
+    address1,
     address2: customer.reference || customer.referencia || "",
-    city: customer.district || customer.distrito || "",
-    province: customer.province || customer.provincia || "",
+    city,
+    province,
     country: "PE",
     zip: "",
   };
@@ -786,6 +1080,124 @@ function buildCustomAttributes(input, customerLookup) {
   return attrs;
 }
 
+// Asignacion A/B deterministica por telefono (misma logica que customer-lookup:
+// FNV-1a mod 2). Al ser pura funcion del telefono, aqui se recalcula sin
+// arrastrar el dato desde el agente.
+function fnv1a(text) {
+  let h = 2166136261;
+  const t = String(text || "");
+  for (let i = 0; i < t.length; i += 1) {
+    h ^= t.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function abVariant(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  // Ver customer-lookup: la variante B se retiro el 2026-08-25 (22% peor que el
+  // control) y su mitad del trafico pasa a C.
+  return fnv1a(digits) % 2 === 0 ? "A" : "C";
+}
+
+// Segundo eje (empuje al 3x2), independiente del A/C. Misma logica exacta que
+// customer-lookup: el bit bajo de FNV-1a es solo paridad de XOR, asi que sin el
+// mezclador las dos asignaciones quedan perfectamente correlacionadas.
+function mix32(value) {
+  let h = value >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+function promoVariant(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
+}
+
+// Ventana del candado anti-duplicado por numero (segundos). Un pedido IDENTICO
+// (mismos variantes+cantidades) al mismo numero dentro de esta ventana se
+// considera duplicado y no se vuelve a crear. 6h cubre el caso de threads
+// separados sin bloquear una re-compra genuina al dia siguiente.
+const DUPLICATE_WINDOW_SECONDS = 6 * 3600;
+
+// Firma determinista del pedido: variantes + cantidades ordenadas. Dos pedidos
+// con la misma firma son el mismo pedido.
+function orderSignature(lineItems) {
+  return (lineItems || [])
+    .map((li) => `${normalizeVariantId(li.variantId)}x${li.quantity}`)
+    .sort()
+    .join(",");
+}
+
+async function findRecentOrderLock(env, phoneKey, signature) {
+  try {
+    const kv = env?.KV || globalThis.KV;
+    if (!kv || !phoneKey || !signature) return null;
+    const raw = await kv.get(`order_lock:${phoneKey}`);
+    if (!raw) return null;
+    const rec = JSON.parse(raw);
+    if (rec && rec.orderName && rec.signature === signature) return rec;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function recordOrderLock(env, phoneKey, signature, orderName) {
+  try {
+    const kv = env?.KV || globalThis.KV;
+    if (!kv || !phoneKey || !orderName) return;
+    await kv.put(
+      `order_lock:${phoneKey}`,
+      JSON.stringify({ orderName, signature, at: new Date().toISOString() }),
+      { expirationTtl: DUPLICATE_WINDOW_SECONDS },
+    );
+  } catch {
+    // best effort
+  }
+}
+
+// Registra la conversion A/B en KV (una por pedido). campaign-report cruza
+// ab_lead:* (leads) con ab_order:* (pedidos) para la tasa por variante.
+async function logAbOrder(env, orderName, variant, conversationId, extra = {}) {
+  try {
+    const kv = env?.KV || globalThis.KV;
+    if (!kv || !orderName || !variant) return;
+    // Fecha (dia Lima) y variante EN EL NOMBRE de la clave: el reporte cuenta
+    // listando, sin un kv.get por clave.
+    // El conversationId va EN LA CLAVE (4to segmento) para que el reporte pueda
+    // cruzar cada pedido con su lead — y con el entry_type que este guarda — sin
+    // un kv.get por pedido.
+    const day = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const cid = conversationId || "sin-conv";
+    // El total y las unidades van en el VALOR, no en la clave: son pocos pedidos
+    // (~200 cada dos semanas), asi que el reporte puede hacer un kv.get por
+    // pedido sin riesgo — lo que tumbaba al worker eran los miles de leads.
+    // Sin esto solo se podria medir conversion, y el 3x2 puede bajar la
+    // conversion y aun asi convenir por ticket.
+    await kv.put(
+      `abx_order:${day}:${variant}:${cid}:${orderName}`,
+      JSON.stringify({
+        variant,
+        promo: extra.promo || null,
+        total: Number.isFinite(extra.total) ? extra.total : null,
+        units: Number.isFinite(extra.units) ? extra.units : null,
+        conversationId: conversationId || null,
+        at: new Date().toISOString(),
+      }),
+      { expirationTtl: 90 * 24 * 3600 },
+    );
+  } catch {
+    // best effort
+  }
+}
+
 function buildTags(input) {
   const tags = new Set(["kapso", "whatsapp", "kenku"]);
   if (input.coverage?.shippingMode === "contraentrega" || input.coverage?.shipping_mode === "contraentrega" || input.coverage?.cashOnDelivery === true || input.coverage?.cash_on_delivery === true) {
@@ -795,37 +1207,41 @@ function buildTags(input) {
   }
   if (input.quote?.promoApplied || input.quote?.promo_applied) tags.add("promo-whatsapp");
   if (input.ctwaReferral?.source_type === "ad") tags.add("ctwa-ad");
+  const variant = abVariant(input.phone || input.customer?.phone);
+  if (variant) tags.add(`ab-${variant.toLowerCase()}`); // prueba A/B del arranque
   if (input.stockPorValidar || input.stock_por_validar || input.stockValidationRequired || input.stock_validation_required) tags.add("stock-por-validar");
   if (input.specialDeliveryNote || input.special_delivery_note) tags.add("fecha-hora-especial");
   return [...tags];
 }
 
 function buildNote(input, customerLookup) {
+  // Nota acotada: solo lo que el equipo de logistica necesita de un vistazo.
+  // Cliente/telefono ya salen en el bloque "Contacto"; el Shopify customer id y
+  // el Kapso conversation id ya salen en "Informacion adicional" (metacampos);
+  // por eso NO se repiten aqui. La direccion SI se conserva porque el campo
+  // estructurado de Shopify a veces queda incompleto.
   const customer = input.customer || {};
-  const quote = input.quote || {};
-  const lines = [
-    "Pedido creado desde WhatsApp/Kapso.",
-    `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
-    `Total cotizado: S/ ${formatMoney(quote.total || 0)}`,
-    "Metodo: Contraentrega - efectivo o Yape",
-    `Cliente: ${customer.name || customer.fullName || ""}`,
-    `Telefono: ${customer.phone || input.phone || ""}`,
-    `Distrito: ${customer.district || customer.distrito || ""}`,
-    `Provincia: ${customer.province || customer.provincia || ""}`,
-    `Region: ${customer.region || customer.departamento || ""}`,
-    `Direccion: ${customer.address || customer.direccion || ""}`,
-    `Referencia: ${customer.reference || customer.referencia || ""}`,
-  ];
+  const cov = input.coverage || {};
+  const covNorm = cov.normalized || {};
+  const district = customer.district || customer.distrito || cov.district || cov.distrito || covNorm.district || covNorm.distrito || "";
+  const province = customer.province || customer.provincia || cov.province || cov.provincia || covNorm.province || covNorm.provincia || "";
+  const address = customer.address || customer.direccion || "";
+  const reference = customer.reference || customer.referencia || "";
+  const place = [district, province].filter(Boolean).join(", ");
+  const entrega = [address, reference && `Ref: ${reference}`, place].filter(Boolean).join(" · ");
+  const name = customer.name || customer.fullName || customer.full_name || "";
+  const phone = customer.phone || input.phone || "";
+  const contacto = [name, phone].filter(Boolean).join(" · ");
 
-  if (customerLookup?.customerId) {
-    lines.push(`Shopify customer: ${customerLookup.customerId} (${customerLookup.status})`);
-  } else if (customerLookup?.status) {
-    lines.push(`Shopify customer lookup: ${customerLookup.status}`);
-  }
+  const lines = [
+    "Pedido WhatsApp/Kapso · Contraentrega (efectivo o Yape)",
+    `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
+  ];
+  if (contacto) lines.push(`Contacto: ${contacto}`);
+  if (entrega) lines.push(`Entrega: ${entrega}`);
 
   const specialNote = sanitizeNoteText(input.specialDeliveryNote || input.special_delivery_note);
   if (specialNote) lines.push(`Fecha/hora solicitada: ${specialNote}`);
-  if (input.conversationId) lines.push(`Kapso conversation: ${input.conversationId}`);
   return lines.filter(Boolean).join("\n");
 }
 
@@ -928,10 +1344,21 @@ function extractHandleCandidates(value) {
 }
 
 function splitCustomerName(value) {
-  const parts = String(value || "").trim().split(/\s+/).filter(Boolean);
+  const parts = sanitizeName(value).split(/\s+/).filter((p) => /\p{L}/u.test(p));
   if (parts.length === 0) return { firstName: "Cliente", lastName: "Kenku" };
   if (parts.length === 1) return { firstName: parts[0], lastName: "Kenku" };
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+// Shopify rechaza emojis y simbolos en los nombres de la direccion del cliente
+// ("Customer addresses first name cannot contain emojis"). Muchos perfiles de
+// WhatsApp traen emoji en el nombre — los quitamos dejando solo letras (con
+// tildes/ñ), espacios, guion, apostrofe y punto. Colapsa espacios sobrantes.
+function sanitizeName(value) {
+  return String(value || "")
+    .replace(/[^\p{L}\p{M}\s.'-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function slugifyHandle(value) {
@@ -972,6 +1399,14 @@ function normalizePhone(value) {
 
 function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
+}
+
+// Celular peruano valido: 9 digitos que empiezan en 9 (con o sin prefijo 51).
+// Distingue un numero real de un vacio o de un placeholder tipo "por coordinar".
+function isPeruMobile(value) {
+  let digits = phoneDigits(value);
+  if (digits.startsWith("51") && digits.length === 11) digits = digits.slice(2);
+  return digits.length === 9 && digits.startsWith("9");
 }
 
 function samePhoneDigits(a, b) {

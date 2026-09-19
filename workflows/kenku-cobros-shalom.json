@@ -1,0 +1,310 @@
+{
+ "nodes": [
+  {
+   "id": "start",
+   "type": "flow-node",
+   "position": {
+    "x": 100,
+    "y": 300
+   },
+   "data": {
+    "node_type": "start",
+    "config": {},
+    "display_name": "Start"
+   }
+  },
+  {
+   "id": "router",
+   "type": "flow-node",
+   "position": {
+    "x": 400,
+    "y": 300
+   },
+   "data": {
+    "node_type": "decide",
+    "config": {
+     "decision_type": "function",
+     "conditions": [
+      {
+       "id": "62e5fb37-72e9-4dd4-be3f-c84aa6f30599",
+       "label": "boton",
+       "description": "El cliente pulso uno de los botones de cobro del aviso de Shalom. Lo contesta el dashboard: el workflow NO responde nada."
+      },
+      {
+       "id": "3c799d35-2261-4b09-b9bc-f0d670ab771d",
+       "label": "voucher",
+       "description": "Mando una imagen o un PDF: es un comprobante de pago. Avisar al equipo para que lo valide una persona."
+      },
+      {
+       "id": "c4c0d2c6-2666-4b58-9218-2e29ae377efe",
+       "label": "texto",
+       "description": "Escribio texto libre: una consulta sobre su envio o su saldo. Avisar y derivar, sin vender."
+      }
+     ],
+     "llm_configuration": {},
+     "function_id": "ddc30944-fdbc-4eee-9ba3-b301135ac6b4",
+     "function_name": "shalom-router"
+    },
+    "display_name": "Decision: Function"
+   }
+  },
+  {
+   "id": "esperar-6h",
+   "type": "flow-node",
+   "position": {
+    "x": 750,
+    "y": 140
+   },
+   "data": {
+    "node_type": "wait_for_response",
+    "config": {
+     "has_timeout": true,
+     "timeout_seconds": 21600,
+     "save_response_to": null
+    },
+    "display_name": "Wait for Response (21600s timeout)"
+   }
+  },
+  {
+   "id": "compuerta",
+   "type": "flow-node",
+   "position": {
+    "x": 1100,
+    "y": 140
+   },
+   "data": {
+    "node_type": "decide",
+    "config": {
+     "decision_type": "function",
+     "conditions": [
+      {
+       "id": "e08844c9-52ac-41db-b8af-ec5151b37640",
+       "label": "voucher",
+       "description": "Mando el comprobante durante la espera: atenderlo, no recordarle el pago."
+      },
+      {
+       "id": "4892e4a8-a9e9-4620-bb37-323f494d487a",
+       "label": "texto",
+       "description": "Escribio durante la espera: atender la consulta."
+      },
+      {
+       "id": "30df9e93-4e0b-4e04-86d8-5530525f4ce4",
+       "label": "recordar",
+       "description": "Sigue sin responder y la ventana de 24h sigue abierta: mandar el unico recordatorio."
+      },
+      {
+       "id": "d14de709-128e-49d5-8b87-3c5bb2620f5a",
+       "label": "fin",
+       "description": "Ya le respondieron, o la ventana de 24h se cerro: no mandar nada."
+      }
+     ],
+     "llm_configuration": {},
+     "function_id": "ddc30944-fdbc-4eee-9ba3-b301135ac6b4",
+     "function_name": "shalom-router"
+    },
+    "display_name": "Decision: Function"
+   }
+  },
+  {
+   "id": "recordatorio",
+   "type": "flow-node",
+   "position": {
+    "x": 1450,
+    "y": 140
+   },
+   "data": {
+    "node_type": "send_text",
+    "config": {
+     "whatsapp_config_id": null,
+     "phone_number_id": null,
+     "message": "Hola 👋 ¿Pudiste hacer el pago del saldo pendiente? Apenas lo recibamos, tu pedido queda listo para que lo recojas en la agencia 😊\n\nSi tienes alguna duda, escribeme por aqui y te ayudo.",
+     "delay_seconds": 0,
+     "provider_model_id": null,
+     "provider_model_name": null,
+     "ai_field_config": {},
+     "to_phone_number": null
+    },
+    "display_name": "Send Text Message"
+   }
+  },
+  {
+   "id": "avisar-pago",
+   "type": "flow-node",
+   "position": {
+    "x": 750,
+    "y": 340
+   },
+   "data": {
+    "node_type": "function",
+    "config": {
+     "function_id": "00dd67bd-df4b-4477-af5c-2530c44a5b60",
+     "function_name": "Notify Team",
+     "save_response_to": null
+    },
+    "display_name": "Function: Notify Team"
+   }
+  },
+  {
+   "id": "avisar-consulta",
+   "type": "flow-node",
+   "position": {
+    "x": 750,
+    "y": 540
+   },
+   "data": {
+    "node_type": "function",
+    "config": {
+     "function_id": "00dd67bd-df4b-4477-af5c-2530c44a5b60",
+     "function_name": "Notify Team",
+     "save_response_to": null
+    },
+    "display_name": "Function: Notify Team"
+   }
+  },
+  {
+   "id": "responder",
+   "type": "flow-node",
+   "position": {
+    "x": 1100,
+    "y": 540
+   },
+   "data": {
+    "node_type": "send_text",
+    "config": {
+     "whatsapp_config_id": null,
+     "phone_number_id": null,
+     "message": "¡Hola! 😊 Ya le paso tu consulta a una asesora para que revise tu pedido y te responda enseguida 🙏",
+     "delay_seconds": 0,
+     "provider_model_id": null,
+     "provider_model_name": null,
+     "ai_field_config": {},
+     "to_phone_number": null
+    },
+    "display_name": "Send Text Message"
+   }
+  },
+  {
+   "id": "fin",
+   "type": "flow-node",
+   "position": {
+    "x": 1800,
+    "y": 340
+   },
+   "data": {
+    "node_type": "set_variable",
+    "config": {
+     "variable_name": "cobro_shalom_cerrado",
+     "variable_value": "t",
+     "value_type": "boolean"
+    },
+    "display_name": "Set Variable: cobro_shalom_cerrado"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "9c4690a1-47a2-452a-a8e7-b13077428d6f",
+   "source": "start",
+   "target": "router",
+   "label": "next",
+   "type": "default",
+   "flow_condition_id": null
+  },
+  {
+   "id": "5cc5ad0a-cda2-4ba8-ae7a-20f85bb61962",
+   "source": "router",
+   "target": "esperar-6h",
+   "label": "boton",
+   "type": "default",
+   "flow_condition_id": "62e5fb37-72e9-4dd4-be3f-c84aa6f30599"
+  },
+  {
+   "id": "c39a43db-8e8f-42fb-8e07-2e6c54b4c5c8",
+   "source": "router",
+   "target": "avisar-pago",
+   "label": "voucher",
+   "type": "default",
+   "flow_condition_id": "3c799d35-2261-4b09-b9bc-f0d670ab771d"
+  },
+  {
+   "id": "fa96ce8a-71b0-4ab6-ac86-d3c7c6d5f8f9",
+   "source": "router",
+   "target": "avisar-consulta",
+   "label": "texto",
+   "type": "default",
+   "flow_condition_id": "c4c0d2c6-2666-4b58-9218-2e29ae377efe"
+  },
+  {
+   "id": "741dec15-fca2-4b87-afe6-227fe6152c1c",
+   "source": "esperar-6h",
+   "target": "compuerta",
+   "label": "next",
+   "type": "default",
+   "flow_condition_id": null
+  },
+  {
+   "id": "0db56ca2-df31-497c-9069-21e04b8228c3",
+   "source": "compuerta",
+   "target": "avisar-pago",
+   "label": "voucher",
+   "type": "default",
+   "flow_condition_id": "e08844c9-52ac-41db-b8af-ec5151b37640"
+  },
+  {
+   "id": "4dffb900-563f-4277-8477-96b31363ebf5",
+   "source": "compuerta",
+   "target": "avisar-consulta",
+   "label": "texto",
+   "type": "default",
+   "flow_condition_id": "4892e4a8-a9e9-4620-bb37-323f494d487a"
+  },
+  {
+   "id": "6060b721-ae64-4ada-a7f6-1f7a4714c200",
+   "source": "compuerta",
+   "target": "recordatorio",
+   "label": "recordar",
+   "type": "default",
+   "flow_condition_id": "30df9e93-4e0b-4e04-86d8-5530525f4ce4"
+  },
+  {
+   "id": "5edc1f7b-e87d-46c1-ac4a-ea637fd27ac5",
+   "source": "compuerta",
+   "target": "fin",
+   "label": "fin",
+   "type": "default",
+   "flow_condition_id": "d14de709-128e-49d5-8b87-3c5bb2620f5a"
+  },
+  {
+   "id": "c47e4da2-c15c-49f9-994a-9a02d72ab6c7",
+   "source": "recordatorio",
+   "target": "fin",
+   "label": "next",
+   "type": "default",
+   "flow_condition_id": null
+  },
+  {
+   "id": "dd7bb1d4-05e9-4614-9a51-ba465230b179",
+   "source": "avisar-pago",
+   "target": "fin",
+   "label": "next",
+   "type": "default",
+   "flow_condition_id": null
+  },
+  {
+   "id": "090c1d49-0314-4d67-a6d9-32b3638d521b",
+   "source": "avisar-consulta",
+   "target": "responder",
+   "label": "next",
+   "type": "default",
+   "flow_condition_id": null
+  },
+  {
+   "id": "9da21c3c-cc9e-49bb-b007-0863d59da2ae",
+   "source": "responder",
+   "target": "fin",
+   "label": "next",
+   "type": "default",
+   "flow_condition_id": null
+  }
+ ]
+}
