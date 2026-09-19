@@ -33,6 +33,23 @@ function esBoton(texto) {
   return BOTONES.has(limpiar(texto));
 }
 
+// Cierres triviales que NO necesitan respuesta: "ok", "gracias", "listo",
+// "buenas noches", o solo emojis. El sistema ya le repitio su saldo y el Yape;
+// contestarlos solo agrega ruido. Se filtran aca, sin gastar una llamada al
+// modelo para decidir callarse.
+const TRIVIALES = new Set([
+  "ok","oka","okey","oki","okis","ya","listo","lista","gracias","muchas","mil",
+  "si","no","buenas","buenos","noches","dias","dia","buen","buena","tardes",
+  "de","nada","bien","vale","perfecto","entendido","amable","muy","ah","aah",
+  "bueno","genial","excelente","correcto","claro","dale","conforme",
+]);
+
+function esTrivial(texto) {
+  const limpio = limpiar(texto).replace(/[^a-z\s]/g, " ").trim();
+  if (!limpio) return true;            // solo emojis, signos o numeros sueltos
+  return limpio.split(/\s+/).every((w) => TRIVIALES.has(w));
+}
+
 // El texto visible de un entrante, venga como boton de plantilla (type
 // "button"), boton interactivo o texto suelto.
 function textoEntrante(m) {
@@ -129,6 +146,9 @@ async function handleRequest(request, env = globalThis) {
   if (tipo === "image" || tipo === "document") {
     return json({ next_edge: "voucher", reason: `adjunto_${tipo}` });
   }
+  if (edges.includes("trivial") && esTrivial(texto)) {
+    return json({ next_edge: "trivial", reason: "cierre_trivial" });
+  }
   return json({ next_edge: "texto", reason: "texto_libre" });
 }
 
@@ -142,4 +162,4 @@ async function readJson(request) {
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
-globalThis.__kenkuShalomRouter = { handler, handleRequest, esBoton, textoEntrante, ultimoEntrante };
+globalThis.__kenkuShalomRouter = { handler, handleRequest, esBoton, esTrivial, textoEntrante, ultimoEntrante };
