@@ -46,6 +46,8 @@ const PRODUCT_STOPWORDS = new Set([
   "talla",
   "tallas",
   "tengo",
+  "tiene",
+  "tienen",
   "tienes",
   "una",
   "unas",
@@ -178,9 +180,63 @@ const SYNONYM_GROUPS = [
   // el producto equivalente es el serum Nails Repairing. Mapear hasta que el
   // producto tenga el tag "terbifin" en Shopify (los tags son buscables).
   ["terbifin", "terbinafina", "nails repairing"],
+  // Los clientes nombran el ACTIVO en vez del producto ("deseo informacion de
+  // la timoquinona"). El titulo del Black Seed Oil no trae ninguna de estas
+  // palabras, asi que sin el grupo la consulta muere en not_found.
+  // Ojo: el matcher parte la consulta en palabras, asi que los terminos de una
+  // sola palabra son los que puede nombrar el cliente ("negro" ademas es
+  // stopword de color); los de varias palabras sirven para encontrar el
+  // producto en el catalogo.
+  ["timoquinona", "thymoquinone", "nigella", "sativa", "comino", "kalonji", "nigella sativa", "comino negro", "black seed oil"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
+// Indice fonetico de las claves de sinonimos. SYNONYM_MAP.get() es exacto, asi
+// que un sinonimo escrito de oido ("kimokimona" por "timoquinona") no entraba
+// al grupo y la consulta terminaba en not_found aunque el activo estuviera
+// mapeado. Los sinonimos mal escritos son la norma, no la excepcion.
+const SYNONYM_FOLD_KEYS = buildSynonymFoldKeys(SYNONYM_MAP);
+const TOKEN_VARIANTS_CACHE = new Map();
+
+function buildSynonymFoldKeys(map) {
+  const folded = new Map();
+  for (const key of map.keys()) {
+    if (key.length < 5) continue;
+    const fold = phoneticFold(key);
+    if (!folded.has(fold)) folded.set(fold, key);
+  }
+  return folded;
+}
+
+// Clave de sinonimo mas parecida al token: mismo fold fonetico, o a 1-2 letras
+// de distancia. Si dos grupos distintos quedan igual de cerca no adivina.
+function nearestSynonymKey(token) {
+  if (!token || token.length < 5) return null;
+
+  const fold = phoneticFold(token);
+  const sameSound = SYNONYM_FOLD_KEYS.get(fold);
+  if (sameSound) return sameSound;
+
+  const maxDistance = token.length >= 9 ? 2 : 1;
+  let best = null;
+  let bestDistance = maxDistance + 1;
+  let ambiguous = false;
+
+  for (const [candidateFold, key] of SYNONYM_FOLD_KEYS) {
+    if (Math.abs(candidateFold.length - fold.length) > maxDistance) continue;
+    const distance = editDistance(candidateFold, fold, maxDistance);
+    if (distance > maxDistance) continue;
+    if (distance < bestDistance) {
+      best = key;
+      bestDistance = distance;
+      ambiguous = false;
+    } else if (distance === bestDistance && best && !SYNONYM_MAP.get(key).has(best)) {
+      ambiguous = true;
+    }
+  }
+
+  return ambiguous ? null : best;
+}
 
 function buildSynonymMap(groups) {
   const map = new Map();
@@ -196,8 +252,24 @@ function buildSynonymMap(groups) {
 }
 
 function tokenVariants(token) {
-  const set = SYNONYM_MAP.get(token);
-  return set ? [...set] : [token];
+  const cached = TOKEN_VARIANTS_CACHE.get(token);
+  if (cached) return cached;
+
+  const exact = SYNONYM_MAP.get(token);
+  // En el match difuso el token propio se conserva: si la correccion fonetica
+  // se equivoca, la palabra original sigue pudiendo encontrar su producto.
+  const near = exact ? null : nearestSynonymKey(token);
+  const variants = exact
+    ? [...exact]
+    : near
+      ? [...new Set([token, ...SYNONYM_MAP.get(near)])]
+      : [token];
+
+  // El cache vive en el worker entre invocaciones: las claves son texto del
+  // cliente, asi que se vacia al crecer en vez de acumular sin limite.
+  if (TOKEN_VARIANTS_CACHE.size > 500) TOKEN_VARIANTS_CACHE.clear();
+  TOKEN_VARIANTS_CACHE.set(token, variants);
+  return variants;
 }
 
 function searchableHasToken(searchable, token) {

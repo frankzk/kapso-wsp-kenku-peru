@@ -101,5 +101,16 @@
 - Los `functions/**/function.yaml` están gitignorados (contienen secretos);
   la config vive en Kapso y en la copia local del usuario.
 - Productos estrella para enganche: *Black Seed Oil* y *NAD+ Resveratrol*.
+- **Sinónimos de búsqueda** (`SYNONYM_GROUPS`, duplicado en
+  `shopify-product-lookup` y `product-media-lookup`: cada función se despliega
+  sola y no puede importar de la otra). Sirven para lo que el cliente nombra y
+  el catálogo no dice: el activo en vez del producto (timoquinona → Black Seed
+  Oil), la marca del anuncio, el nombre peruano. Al agregar un grupo:
+  los términos de **una sola palabra** son los que puede escribir el cliente
+  (la consulta se parte en palabras y los colores son stopwords), los de varias
+  palabras sirven para encontrar el producto en el catálogo. Los errores de
+  escritura no hay que listarlos: `nearestSynonymKey` resuelve el sinónimo por
+  fonética + distancia de edición ("kimokimona" → timoquinona). Correr después
+  `node functions/shopify-product-lookup/test/synonyms.test.cjs`.
 - Ver `MIGRACION.md` para el historial de la migración desde Aurela y los
   pendientes de negocio (promos 3x2/5x3, Yape/razón social, prefijo de pedidos).
