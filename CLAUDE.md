@@ -50,6 +50,39 @@
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
    `kapso push` haga `git pull && kapso pull` para realinear el baseline.
 
+### Antes de editar el workflow: verificar contra producción (LECCION)
+
+- **La rama por defecto va meses atrás de producción.** El 2026-09-19 apuntaba
+  a un estado de julio: 43 nodos y un prompt de 51k, contra 46 nodos y 52k en
+  vivo. Antes de tocar el workflow, hacer `GET .../workflows/{id}/definition` y
+  trabajar sobre **esa** definición; comparar también el código desplegado de
+  la función (`GET /functions/{id}` trae `code`) con el del repo: si difieren,
+  la rama que estás usando no es la base correcta.
+- **`workflows/kenku-sales-bot/workflow.js` está obsoleto** (9 nodos, sin la
+  cadena de seguimientos). El artefacto real es `definition.json`.
+- Para PATCHear: partir de la definición en vivo, cambiar solo lo necesario,
+  exigir match exacto del texto anterior, verificar que ningún `function_id`
+  quede en null y re-leer con GET después.
+
+## Seguimientos automáticos (cadena fu-s1..fu-s7)
+
+- 7 toques: 20 min, 1 h, 4 h, 8 h, 12 h, 16 h y 23 h desde el último mensaje.
+  Cada `fu-wN` espera respuesta, `fu-wrN` decide si respondió, `fu-gN` aplica
+  el silencio nocturno (00:00–07:00 Perú, vía `check-coverage`) y `fu-sN`
+  envía. **La cadena se reinicia con cada respuesta del cliente**, por eso hay
+  conversaciones con 8–12 recordatorios.
+- Medición del 2026-09-19 (200 conversaciones, 7 días): responden 13% a s1,
+  11% a s2, 8% a s3, 4% a s4, 3% a s5, 1% a s6 y 0% a s7. 101 de 200 leads
+  escribieron una sola vez y aun así recibieron 463 mensajes. Decisión del
+  dueño: mantener los 7 toques y el horario; se corrigió solo el copy.
+- Cada toque debe aportar SU propio ángulo. El `followup_hint` solo se repite
+  en s1, s2 y s7 (antes salía literal en 6 de los 7 mensajes y se leía como
+  spam). No meter en el copy promesas que el bot no controla ("es lo más
+  pedido", "entra al despacho de mañana") ni dar por hecho que ya se mostró un
+  producto: la mitad de los leads nunca eligió uno.
+- Para volver a medir: `KAPSO_API_KEY=... node scripts/followup-stats.cjs 7 120`
+  (si se reescribe un texto, actualizar su `match` en el script).
+
 ## Enviar a leads que entran por username (LECCION IMPORTANTE)
 
 - Los leads que llegan por usuario de WhatsApp no tienen `phone_number`: solo un
