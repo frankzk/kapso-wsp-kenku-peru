@@ -943,7 +943,7 @@ const LEAK_TOOL_NAMES = [
   "get_whatsapp_context", "get_current_datetime", "get_execution_metadata",
   "product_media_lookup", "shopify_product_lookup", "check_coverage",
   "create_shopify_order", "customer_lookup", "send_buttons", "send_payment",
-  "quote_order", "notify_team", "loop_guard",
+  "quote_order", "notify_team", "loop_guard", "send_presentation",
 ];
 
 // Frases de proceso. Ancladas para no pisar texto legitimo ("te paso el precio",

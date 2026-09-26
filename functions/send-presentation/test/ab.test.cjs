@@ -116,13 +116,23 @@ caso("reporte: cuenta D, ignora N, calcula lift, z y adopcion", async () => {
   assert.ok(Math.abs(r.pruebaD.z - 1.08) < 0.02, `z=${r.pruebaD.z}`);
   assert.ok(Math.abs(r.pruebaD.zCorregida - 0.72) < 0.02, `zc=${r.pruebaD.zCorregida}`);
   assert.deepStrictEqual(r.pruebaD.revenuePerLead, { A: 5.96, D: 7.45 });
-  assert.deepStrictEqual(r.pruebaD.presentacionesPorFuncion, { completa: 2, parcial: 1 });
+  assert.deepStrictEqual(r.pruebaD.presentacionesPorFuncion, { completa: 2, completa_sin_media: 0, parcial: 1, fallo_inicial: 0, sin_tiempo: 0 });
 });
+
+// Tope por caso: un caso colgado (una promesa que nunca resuelve) haria que
+// Node se quede sin nada pendiente y salga con codigo 0 SIN imprimir el
+// resumen — o sea, un test colgado pasaria como verde. El timer lo convierte en
+// FALLA y mantiene vivo el proceso mientras tanto.
+function conTope(promesa, ms = 3000) {
+  let timer;
+  const tope = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`colgado: no termino en ${ms} ms`)), ms); });
+  return Promise.race([promesa, tope]).finally(() => clearTimeout(timer));
+}
 
 (async () => {
   let fallos = 0;
   for (const [n, f] of casos) {
-    try { await f(); console.log(`ok    ${n}`); }
+    try { await conTope(f()); console.log(`ok    ${n}`); }
     catch (e) { fallos += 1; console.log(`FALLA ${n}\n      ${e.message.split("\n")[0]}`); }
   }
   console.log(`\n${casos.length - fallos}/${casos.length}`);

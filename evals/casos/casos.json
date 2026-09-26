@@ -454,5 +454,142 @@
     "tipo": "sin_narracion"
    }
   ]
+ },
+ {
+  "id": "presentacion-variante-d",
+  "origen": "Prueba A/D (2026-09-26): en la variante D la presentacion sale entera por send_presentation. Mide que la use y que NO la mande a mano (pause, send_media, product_media_lookup): eso es justo lo que cuesta ~18 llamadas.",
+  "producto": "pyroslim",
+  "variables": {
+   "ab_variant": "D",
+   "entry_type": "link",
+   "promo_variant": "P1"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "https://kenku.pe/products/pyroslim"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "pyroslim",
+     "title": "PYROSLIM™ - Quemador de Grasa con L-Carnitina y Garcinia Cambogia (350 gr)",
+     "priceRange": {
+      "min": 129,
+      "max": 129,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "send_presentation": {
+    "ok": true,
+    "sent": true,
+    "enCurso": false,
+    "enviados": [
+     "saludo",
+     "foto_principal",
+     "beneficio",
+     "precio",
+     "pregunta_final"
+    ],
+    "omitidos": [],
+    "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "herramienta_esperada",
+    "valor": [
+     "shopify_product_lookup",
+     "send_presentation"
+    ]
+   },
+   {
+    "tipo": "herramienta_prohibida",
+    "valor": [
+     "pause",
+     "product_media_lookup",
+     "send_media"
+    ]
+   },
+   {
+    "tipo": "sin_precio"
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "presentacion-control-a",
+  "origen": "Prueba A/D: el control. Con ab_variant=A NO puede usar send_presentation (en el eval le devolveria ok y nada lo notaria).",
+  "producto": "pyroslim",
+  "variables": {
+   "ab_variant": "A",
+   "entry_type": "link",
+   "promo_variant": "P1"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "https://kenku.pe/products/pyroslim"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "pyroslim",
+     "title": "PYROSLIM™ - Quemador de Grasa con L-Carnitina y Garcinia Cambogia (350 gr)",
+     "priceRange": {
+      "min": 129,
+      "max": 129,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "product_media_lookup": {
+    "media": [
+     {
+      "rol": "principal",
+      "mediaUrl": "https://ejemplo/pyroslim.webp"
+     }
+    ],
+    "videoAvailable": false
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "herramienta_prohibida",
+    "valor": [
+     "send_presentation"
+    ]
+   },
+   {
+    "tipo": "herramienta_esperada",
+    "valor": [
+     "shopify_product_lookup"
+    ]
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     129,
+     258,
+     387
+    ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
  }
 ]

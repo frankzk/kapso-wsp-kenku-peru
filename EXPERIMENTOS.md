@@ -16,6 +16,11 @@ POST /platform/v1/functions/e7c39748-c57c-4322-b532-a31d9ac5949b/invoke
 El `/invoke` de Kapso a veces corre codigo viejo y devuelve `{"error":"Internal
 server error"}` o ceros: hay que reintentar hasta que responda `ok: true`.
 
+**Desde el 2026-09-26 la key en el BODY devuelve 403** con una pagina HTML de
+bloqueo (algo delante de Kapso filtra un token con forma de secreto en el
+cuerpo). Pasarla por header funciona:
+`-H "x-dashboard-key: <INTERNAL_REPORT_KEY>"` y sacar `"key"` del input.
+
 **La trampa del borde (corregida el 2026-09-06).** El reporte PEDIA los datos en
 UTC (`${until}T23:59:59Z`) pero los agrupa por dia de LIMA. Como el dia de Lima X
 va de X 05:00Z a X+1 04:59Z, al ultimo dia del rango se le perdian las ultimas 5
@@ -449,6 +454,74 @@ A y dentro de C.
 `fnv1a(x + sal) % 2` queda PERFECTAMENTE correlacionado con `fnv1a(x) % 2` — el
 primer intento dejaba dos celdas vacias sin dar ningun error. Por eso el eje de
 promo pasa el hash por un mezclador de avalancha antes de tomar el bit.
+
+---
+
+## 4. Prueba A/D — la presentacion por `send-presentation`  ·  **PREPARADA 2026-09-26**
+
+**Que se prueba.** La presentacion de producto es la misma secuencia para todos
+(saludo, fotos, video, beneficio, precio, testimonio, botones) y el agente la
+mandaba mensaje por mensaje con un `pause` entre cada uno: ~17 llamadas al
+modelo por presentacion, cada una con el prompt entero adentro. En D la manda
+la funcion `send-presentation` en UNA llamada; el modelo solo escribe el saludo
+y el beneficio. Ver `COSTOS.md`.
+
+**Por que es un A/B y no un cambio directo:** el costo baja seguro, pero cambia
+el RITMO. Hoy los mensajes salen cada ~12 s (el tiempo de pensar del modelo);
+en D salen cada ~2 s. Parece menos humano, y eso podria convertir peor.
+
+**Reparto.** `abVariant` en customer-lookup: hash nuevo con sal (`present:`) y
+`mix32`, 50/50, independiente de los ejes A/C y P1/P2 anteriores (verificado en
+`functions/send-presentation/test/ab.test.cjs`). Los leads sin telefono van a
+**N**: reciben el control y quedan FUERA de la cuenta, porque su pedido se
+atribuiria con el celular que dan al cerrar, no con uno hasheado al entrar.
+
+**La separacion se aplica en codigo, no por instruccion.** Si un lead A llama
+`send_presentation`, la funcion se niega (lee `ab_variant` de las vars del
+flujo) y el agente presenta a mano.
+
+**Como se lee.** `only=ab` → `pruebaD`: `liftDvsA`, `z`, `zCorregida`,
+`revenuePerLead` y `presentacionesPorFuncion` (cuantas presentaciones D salieron
+de verdad por la funcion: si son pocas, D no se esta probando).
+
+### Lo que esta prueba PUEDE y NO PUEDE decir
+
+Base real (12-25 sep): 348 leads/dia con telefono, **3,96%** de conversion. Al
+50% son 174 por brazo por dia. Caida minima detectable con 80% de potencia y la
+SE inflada 1,51 por sobredispersion:
+
+| dias | leads/brazo | bilateral 95% | guardarrail unilateral 95% |
+|---|---|---|---|
+| 7 | 1.218 | 3,34 pp (84%) | 2,97 pp (75%) |
+| 14 | 2.436 | 2,36 pp (60%) | 2,10 pp (53%) |
+| 21 | 3.653 | 1,93 pp (49%) | 1,71 pp (43%) |
+| 28 | 4.871 | 1,67 pp (42%) | 1,48 pp (37%) |
+
+**No puede confirmar que D "convierte igual".** En tres semanas solo ve una
+caida de ~45% o mas. Es un **guardarrail contra un desastre**, no una medicion
+fina. Un empate a los 21 dias significa "no se hundio", no "es igual".
+
+**Regla propuesta** (a confirmar antes de mirar resultados):
+1. Dia 1-2, operativo: `presentacionesPorFuncion` tiene que acompañar a los
+   leads D; `parcial`, `fallo_inicial` y `sin_tiempo` tienen que ser raros.
+2. Cada 7 dias: si `zCorregida <= -1,96`, **se apaga D**.
+3. A los 21 dias sin señal de daño: D al 100%. El ahorro es seguro; el riesgo
+   que queda acotado es el de una caida menor a ~45%.
+
+**Contar desde el 2026-09-27** (primer dia completo), no desde el dia del
+cambio: las conversaciones que cruzan el cambio pueden re-registrarse.
+
+### Bug de atribucion que aparecio al prepararla (corregido)
+
+Desde el 15-sep, customer-lookup mandaba a todos a A, pero create-shopify-order
+seguia repartiendo los PEDIDOS entre A y C por su cuenta (y P1/P2 igual). El
+12-25 sep eso dio **A: 4.342 leads / 94 pedidos = 2,16%** y **C: 529 leads / 99
+pedidos = 18,71%** — C ya no tenia leads nuevos pero seguia cobrando la mitad de
+los pedidos. **La conversion real del bot era 3,96%, no 2,16%.** Cualquier
+lectura de A posterior al 15-sep hecha con el reporte esta partida a la mitad.
+
+Ahora el pedido se atribuye a la variante que el lead RECIBIO (vars del flujo),
+y las dos copias de `abVariant` tienen un test que exige que coincidan.
 
 ---
 

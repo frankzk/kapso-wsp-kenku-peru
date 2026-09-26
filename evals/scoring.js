@@ -22,7 +22,7 @@ const TOOL_NAMES = [
   "enter_waiting", "send_media", "send_notification_to_user", "send_text",
   "get_whatsapp_context", "product_media_lookup", "shopify_product_lookup",
   "check_coverage", "create_shopify_order", "customer_lookup", "send_buttons",
-  "quote_order", "notify_team", "save_order_state",
+  "quote_order", "notify_team", "save_order_state", "send_presentation",
 ];
 
 const NARRACION = [
@@ -115,6 +115,16 @@ const REGLAS = {
     const faltan = (regla.valor || []).filter((h) => !ctx.herramientasLlamadas.includes(h));
     return faltan.length
       ? { ok: false, detalle: `no llamo ${faltan.join(", ")}` }
+      : { ok: true };
+  },
+
+  // La inversa. Hace falta porque una herramienta sin resultado grabado devuelve
+  // {ok:true}: un modelo que llama algo que no debia (send_presentation en el
+  // control) seguiria de largo y ninguna otra regla lo notaria.
+  herramienta_prohibida(regla, ctx) {
+    const usadas = (regla.valor || []).filter((h) => ctx.herramientasLlamadas.includes(h));
+    return usadas.length
+      ? { ok: false, detalle: `llamo ${usadas.join(", ")} y no debia` }
       : { ok: true };
   },
 };

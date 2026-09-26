@@ -1252,7 +1252,7 @@ function safeError(error) {
 // salieron por la funcion (completa o parcial). Sin esto no se distingue "D no
 // convierte distinto" de "el agente casi nunca uso la herramienta".
 async function contarPresentaciones(kv, range) {
-  const out = { completa: 0, parcial: 0 };
+  const out = { completa: 0, completa_sin_media: 0, parcial: 0, fallo_inicial: 0, sin_tiempo: 0 };
   try {
     let cursor;
     for (let page = 0; page < 20; page += 1) {

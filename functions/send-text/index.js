@@ -27,6 +27,7 @@ const TOOL_NAMES = [
   "product_media_lookup", "shopify_product_lookup", "check_coverage",
   "create_shopify_order", "customer_lookup", "send_buttons", "send_payment",
   "quote_order", "notify_team", "loop_guard", "campaign_report",
+  "send_presentation",
 ];
 
 // Frases de proceso/estado. Ancladas a proposito para no pisar texto legitimo:

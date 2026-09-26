@@ -12,7 +12,7 @@ sesiones bloquea `openrouter.ai`, `api.openai.com` y `api.x.ai`.
 ```bash
 export OPENROUTER_API_KEY=sk-or-...
 
-node evals/runner.js                          # los 6 candidatos por defecto, los 8 casos
+node evals/runner.js                          # los 6 candidatos por defecto, todos los casos
 node evals/runner.js --caso pulsera-unidad --verbose
 node evals/runner.js --modelos openai/gpt-4.1,google/gemini-3.7-flash
 ```
@@ -44,7 +44,14 @@ línea concreta: *dijo `S/80` cuando los precios válidos son 149, 298 y 447*.
 
 Las reglas disponibles están en `scoring.js`: `precio_valido`, `sin_precio`,
 `prohibido_texto`, `prohibido_regex`, `requerido_texto`, `requerido_regex`,
-`sin_narracion`, `herramienta_esperada`.
+`sin_narracion`, `herramienta_esperada`, `herramienta_prohibida`.
+
+`herramienta_prohibida` existe porque una herramienta sin resultado grabado
+devuelve `{ok: true}`: un modelo que llama algo que no debia seguiria de largo
+y ninguna otra regla lo notaria.
+
+Un caso puede fijar las variables del flujo con `"variables": {...}`: es lo que
+devuelve `get_variable`. Asi se prueban las variantes de un A/B.
 
 ## Los casos
 
@@ -61,6 +68,9 @@ Cada uno viene de una falla real que ya nos costó plata o confianza. Están en
 | `producto-ambiguo` | Con búsqueda ambigua tiene que desambiguar, nunca cotizar |
 | `producto-agotado` | No se vende ni se cotiza lo que no hay |
 | `presentacion-completa` | El caso normal, que es el 87% del tráfico |
+| `foto-entrante` | El agente no ve las fotos: no puede inventar que es "nuestro" producto |
+| `presentacion-variante-d` | Prueba A/D: en D tiene que usar `send_presentation` y NO presentar a mano (`pause`, `send_media`) |
+| `presentacion-control-a` | Prueba A/D: en A NO puede usar `send_presentation` |
 
 **Agregar un caso nuevo cada vez que aparezca una falla en producción.** Ese es
 el valor que se acumula: la próxima vez que cambiemos de modelo o toquemos el
@@ -219,3 +229,9 @@ Para gastar menos mientras iteras, usa `--caso` y `--modelos` para acotar.
 prompt cambia mucho, hay que recapturarlo para que la comparación siga siendo
 contra el bot actual — si no, se estarían midiendo modelos contra instrucciones
 viejas.
+
+**Pendiente (2026-09-26):** el fixture es de `lock_version 18750` (gpt-4.1, 12
+herramientas). No tiene `verify_payment_account` ni `send_presentation`, asi que
+los dos casos de la prueba A/D no se pueden correr hasta recapturarlo del
+workflow vivo. Al recapturar, los puntajes dejan de ser comparables con las
+corridas anteriores.

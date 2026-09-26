@@ -41,7 +41,7 @@ llamadas de LLM por cada mensaje que escribe el cliente**, de las cuales ~2 son
 mensajes salen con **12 segundos de mediana** entre uno y otro: no es un lote,
 es un viaje de ida y vuelta al modelo por mensaje.
 
-## Hallazgo 1 — la presentacion gasta 6 llamadas en ejecutar un guion fijo
+## Hallazgo 1 — la presentacion gasta ~17 llamadas en ejecutar un guion fijo
 
 **376 presentaciones por dia, de 5,9 envios cada una: 2.212 envios diarios, el
 54% de todo lo que manda el agente.**
@@ -67,12 +67,25 @@ Dos conversaciones reales, productos distintos, misma forma exacta:
   ¿te encuentras en *Lima* o en *provincia*?      ¿te encuentras en *Lima* o en *provincia*?
 ```
 
-Lo unico que cambia es el producto. **Se le esta pagando a un LLM ~6 veces por
-conversacion para que ejecute una plantilla parametrizada.**
+Lo unico que cambia es el producto. **Se le esta pagando a un LLM para que
+ejecute una plantilla parametrizada.**
 
-**Arreglo:** una funcion `send-presentation(handle)` que haga los 6 envios de
-corrido. El agente pasa de ~7 iteraciones a 2 (la llamada y el cierre).
-Ahorro estimado: **~1.800 llamadas/dia ≈ US$250/mes**.
+**Y son mas llamadas de las que se ven en el chat.** El prompt pide, entre cada
+mensaje de la presentacion, llamar `pause` con 2-4 s ("RITMO (pause)"). `pause`
+solo duerme, pero es una herramienta: cada pausa es otra vuelta del modelo con
+el prompt entero. La cuenta real por presentacion es: `shopify_product_lookup` +
+`product_media_lookup` + 8 envios + 7 pausas + 2 `save_variable` +
+`complete_task` ≈ **17 llamadas**. Cuadra con los 12 s de mediana entre mensaje y
+mensaje: son dos vueltas del modelo por mensaje, no una.
+
+**Arreglo:** una funcion `send-presentation` que haga los envios y las pausas en
+codigo. El agente queda en ~5 llamadas (lookup, la funcion, 2 `save_variable`,
+`complete_task`): **~12 llamadas menos por presentacion**. Con 376 por dia:
+**~US$610/mes al 100%**, ~US$305/mes durante la prueba al 50%. (La primera
+estimacion de este archivo decia US$250: contaba solo los envios y no las
+pausas.)
+
+Se lanza como A/B y no directo: ver `EXPERIMENTOS.md`, seccion 4.
 
 La unica pieza que no es mecanica es la linea de beneficio
 ("Fortalece tus defensas y cuida tu salud digestiva..."). Sale del producto:
@@ -143,13 +156,14 @@ descarrilado cueste hasta US$0,18. Bajarlo a 15 no toca el flujo normal.
 
 | # | Cambio | Ahorro/mes | Riesgo |
 |---|---|---|---|
-| 1 | `send-presentation` como funcion | ~US$250 | bajo, es codigo deterministico |
+| 1 | `send-presentation` como funcion | ~US$610 | bajo en codigo; el ritmo se mide con A/B |
 | 2 | `message_debounce_seconds` 1 -> 15 | ~US$100 | bajo, un campo |
 | 3 | Achicar el prompt a ~35k | ~US$230 | alto, correr los evals antes |
 | 4 | `max_iterations` 40 -> 15 | cola | bajo |
 
-Los tres primeros juntos son **~US$580 de US$1.800, un tercio de la factura**,
-sin tocar lo que ve el cliente.
+Los tres primeros juntos son **~US$940 de US$1.800, la mitad de la factura**.
+El 1 cambia el ritmo de la presentacion (por eso va con A/B); el 2 agrega hasta
+15 s de latencia; el 3 no cambia lo que ve el cliente si los evals pasan.
 
 ## Como reproducirlo
 

@@ -40,19 +40,24 @@ const MEDIA_COMPLETA = {
 };
 const MEDIA_MINIMA = { ok: true, found: true, media: [{ type: "image", role: "principal", url: "https://cdn/p.jpg" }] };
 
-let enviados, pausas, falloEnvioN;
-function mock({ lookup = producto(), media = MEDIA_COMPLETA } = {}) {
-  enviados = []; pausas = []; falloEnvioN = null;
-  P.deps.dormir = async (ms) => { pausas.push({ ms, antesDelEnvio: enviados.length }); };
+// Reloj simulado: dormir y cada envio lo avanzan, asi se puede probar el tope de
+// tiempo sin esperar de verdad.
+let enviados, pausas, falloEnvioN, reloj, latencia;
+function mock({ lookup = producto(), media = MEDIA_COMPLETA, latenciaMs = 1700, lookupMs = 0 } = {}) {
+  enviados = []; pausas = []; falloEnvioN = null; reloj = 0; latencia = latenciaMs;
+  P.deps.dormir = async (ms) => { pausas.push({ ms, antesDelEnvio: enviados.length }); reloj += ms; };
   P.deps.azar = () => 0.5;
+  P.deps.ahora = () => reloj;
+  let intentos = 0;
   globalThis.fetch = async (url, opts) => {
     const u = String(url);
-    if (u.includes(`/functions/${LOOKUP_FN}/invoke`)) return resp(lookup);
+    if (u.includes(`/functions/${LOOKUP_FN}/invoke`)) { reloj += lookupMs; return resp(lookup); }
     if (u.includes(`/functions/${MEDIA_FN}/invoke`)) return resp(media);
     if (u.endsWith("/messages")) {
-      const body = JSON.parse(opts.body);
-      if (falloEnvioN !== null && enviados.length === falloEnvioN) return resp({ error: { code: 131000 } }, 400);
-      enviados.push(body);
+      reloj += latencia;
+      const n = intentos; intentos += 1;
+      if (falloEnvioN !== null && n === falloEnvioN) return resp({ error: { code: 131000 } }, 400);
+      enviados.push(JSON.parse(opts.body));
       return resp({ messages: [{ id: `wamid.${enviados.length}` }] });
     }
     throw new Error(`fetch inesperado: ${u}`);
@@ -63,13 +68,13 @@ const resp = (b, status = 200) => ({ ok: status < 400, status, json: async () =>
 const CON_TEL = { conversation: { id: "c1", phone_number_id: "1239315459260256", phone_number: "51965391481" } };
 const SOLO_BSUID = { conversation: { id: "c2", phone_number_id: "1239315459260256", business_scoped_user_id: "PE.948592654941065" } };
 
-async function correr({ vars = { ab_variant: "D" }, wa = CON_TEL, input = {} } = {}) {
+async function correr({ vars = { ab_variant: "D" }, wa = CON_TEL, input = {}, execCtx = null } = {}) {
   const payload = {
     input: { product: "magnesio-12-en-1", saludo: "¡Hola Federico! Soy *Akemi* de Kenku 😊", beneficio: "Recupera tu energía y mejora tu descanso de forma natural 🌿", ...input },
     whatsapp_context: wa,
     execution_context: { vars },
   };
-  const res = await P.handleRequest({ text: async () => JSON.stringify(payload) }, { KAPSO_API_KEY: "k-test" });
+  const res = await P.handleRequest({ text: async () => JSON.stringify(payload) }, { KAPSO_API_KEY: "k-test" }, execCtx);
   return JSON.parse(await res.text());
 }
 const tipos = () => enviados.map((b) => b.type);
@@ -130,8 +135,11 @@ caso("pausa entre cada envio, nunca antes del primero", async () => {
 });
 caso("pausa mas larga despues del video", async () => {
   mock(); await correr();
-  assert.strictEqual(pausas[3].ms, 4500);            // despues del paso 4 (video)
-  assert.ok(pausas.filter((_, i) => i !== 3).every((p) => p.ms >= 2000 && p.ms <= 4000));
+  // Despues del paso 4 (video) va la pausa mas larga. El valor exacto depende de
+  // cuanto presupuesto queda, asi que se prueba la propiedad, no el numero.
+  assert.ok(pausas.every((p, i) => i === 3 || pausas[3].ms > p.ms), JSON.stringify(pausas.map((p) => p.ms)));
+  assert.strictEqual(pausas[3].ms, 2000, "a latencia normal no se recorta");
+  assert.ok(pausas.filter((_, i) => i !== 3).every((p) => p.ms >= 1000 && p.ms <= 1500));
 });
 
 // --- Destinatario (la leccion BSUID de CLAUDE.md) ---
@@ -146,21 +154,96 @@ caso("lead solo con BSUID: va en `recipient`, nunca en `to`", async () => {
 });
 
 // --- Falla a mitad ---
-caso("falla el 4to envio: corta, no manda nada mas y dice que falta", async () => {
+caso("falla el video: se salta y sigue (el material era opcional)", async () => {
   mock(); falloEnvioN = 3;
   const r = await correr();
-  assert.strictEqual(r.ok, false); assert.strictEqual(r.reason, "envio_parcial");
-  assert.deepStrictEqual(r.enviados, ["saludo", "foto_principal", "foto_antes_despues"]);
-  assert.strictEqual(r.fallo.paso, "video");
-  assert.deepStrictEqual(r.pendientes.map((p) => p.paso), ["video", "beneficio", "precio", "testimonio", "pregunta_final"]);
-  assert.strictEqual(enviados.length, 3, "no siguio mandando despues del error");
-  assert.strictEqual(r.pendientes[2].texto.split("\n")[0].startsWith("*Magnesio 12 en 1 Complex* queda en"), true);
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(r.omitidos, ["video"]);
+  assert.deepStrictEqual(r.enviados, ["saludo", "foto_principal", "foto_antes_despues", "beneficio", "precio", "testimonio", "pregunta_final"]);
+  assert.strictEqual(enviados.at(-1).type, "interactive", "la pregunta final igual sale");
 });
-caso("falla el primero: no se mando nada, presenta a mano", async () => {
+caso("falla un texto (el precio): corta y dice que falta", async () => {
+  mock(); falloEnvioN = 5;
+  const r = await correr();
+  assert.strictEqual(r.ok, false); assert.strictEqual(r.reason, "envio_parcial");
+  assert.deepStrictEqual(r.enviados, ["saludo", "foto_principal", "foto_antes_despues", "video", "beneficio"]);
+  assert.strictEqual(r.fallo.paso, "precio");
+  assert.deepStrictEqual(r.pendientes.map((p) => p.paso), ["precio", "testimonio", "pregunta_final"]);
+  assert.strictEqual(enviados.length, 5, "no siguio mandando despues del error");
+  assert.ok(r.pendientes[0].texto.startsWith("*Magnesio 12 en 1 Complex* queda en"));
+});
+caso("falla el saludo: no se mando nada, presenta a mano", async () => {
   mock(); falloEnvioN = 0;
   const r = await correr();
-  assert.strictEqual(r.reason, "envio_parcial"); assert.deepStrictEqual(r.enviados, []);
+  assert.strictEqual(r.reason, "envio_fallido"); assert.strictEqual(enviados.length, 0);
   assert.ok(r.message.startsWith("No se envio nada"));
+});
+
+// --- Dos fases: el invoke vuelve rapido y el resto sale en segundo plano ---
+// Compuerta: en el mock todo resuelve al instante, asi que sin esto el "segundo
+// plano" se adelantaria antes de que el test mire. Retiene la primera pausa.
+function compuerta() {
+  let soltar; const abierta = new Promise((r) => { soltar = r; });
+  const dormirOriginal = P.deps.dormir;
+  P.deps.dormir = async (ms) => { await abierta; return dormirOriginal(ms); };
+  return soltar;
+}
+
+caso("con waitUntil: responde tras el saludo y el resto sale despues", async () => {
+  mock();
+  const soltar = compuerta();
+  const pendientes = [];
+  const r = await correr({ execCtx: { waitUntil: (p) => pendientes.push(p) } });
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.enCurso, true);
+  assert.strictEqual(enviados.length, 1, "al responder solo salio el saludo");
+  assert.strictEqual(enviados[0].text.body.startsWith("¡Hola Federico!"), true);
+  assert.strictEqual(pendientes.length, 1);
+  soltar();
+  const fin = await pendientes[0];
+  assert.strictEqual(fin.ok, true); assert.strictEqual(enviados.length, 8);
+  assert.ok(r.message.includes("NO mandes nada mas"));
+});
+caso("con waitUntil: si falla el saludo NO deja nada corriendo", async () => {
+  mock(); falloEnvioN = 0;
+  const pendientes = [];
+  const r = await correr({ execCtx: { waitUntil: (p) => pendientes.push(p) } });
+  assert.strictEqual(r.ok, false); assert.strictEqual(pendientes.length, 0); assert.strictEqual(enviados.length, 0);
+});
+
+// --- El tope de tiempo del segundo plano ---
+caso("Meta muy lenta: salta lo opcional y NUNCA el precio ni la pregunta final", async () => {
+  mock({ latenciaMs: 4000 }); const r = await correr();
+  assert.strictEqual(r.ok, true);
+  assert.ok(r.omitidos.length > 0, "algo opcional se tuvo que saltar");
+  assert.ok(r.omitidos.every((p) => ["foto_principal", "foto_antes_despues", "video", "testimonio"].includes(p)), r.omitidos.join());
+  for (const critico of ["saludo", "beneficio", "precio", "pregunta_final"]) assert.ok(r.enviados.includes(critico), critico);
+  assert.ok(r.duracionTotalMs <= 25000 + 4000, `tardo ${r.duracionTotalMs} ms`);
+});
+caso("catalogo lento: si no alcanza el tiempo, NO arranca (nada enviado)", async () => {
+  mock({ lookupMs: 20000 }); const r = await correr();
+  assert.strictEqual(r.reason, "sin_tiempo");
+  assert.strictEqual(enviados.length, 0, "no salio ni el saludo: el agente presenta a mano sin duplicar");
+});
+caso("catalogo lento Y Meta lenta: el total no pasa los 30 s del corte de Kapso", async () => {
+  mock({ lookupMs: 9000, latenciaMs: 3000 }); const r = await correr();
+  if (r.reason === "sin_tiempo") { assert.strictEqual(enviados.length, 0); return; }
+  assert.ok(r.duracionTotalMs < 30000, `tardo ${r.duracionTotalMs} ms`);
+  for (const critico of ["saludo", "beneficio", "precio", "pregunta_final"]) assert.ok(r.enviados.includes(critico), critico);
+});
+// El tope es de 25 s desde que EMPIEZA el invoke: Kapso corta a los 30 y el
+// runtime no da waitUntil, asi que todo corre adentro (medido 2026-09-26).
+caso("latencia normal: todo entra en 25 s desde el inicio del invoke", async () => {
+  mock({ latenciaMs: 1700, lookupMs: 2000 }); const r = await correr();
+  assert.ok(r.duracionTotalMs <= 25000, `tardo ${r.duracionTotalMs} ms`);
+  assert.ok(pausas.every((p) => p.ms > 0), "con tiempo de sobra, pausas normales");
+});
+caso("Meta lenta: las pausas se achican antes que pasarse", async () => {
+  mock({ latenciaMs: 3000 }); const r = await correr();
+  // 7 envios de 3 s ya son 21 s: casi no queda lugar para pausas.
+  const totalPausas = pausas.reduce((n, p) => n + p.ms, 0);
+  assert.ok(totalPausas < 2000, `pausas totales ${totalPausas} ms`);
+  assert.ok(r.duracionTotalMs <= 25000 + 3000, `tardo ${r.duracionTotalMs} ms`);
+  assert.strictEqual(r.ok, true, "igual se manda todo");
 });
 
 // --- Casos que NO son limpios: se devuelven al agente sin mandar nada ---
@@ -262,16 +345,29 @@ caso("sanitizador identico al de send-text", async () => {
     "Ambos valores existen, asi que procedo con el product_media_lookup",
     "Refuerza tus defensas. Ahora completo la tarea.",
     "Según las instrucciones debo enviar el saludo",
+    // Herramienta nueva: tiene que estar en las DOS listas (se agrego primero
+    // solo aca y el test no lo vio porque ningun caso la nombraba).
+    "Listo, ya use send_presentation con el producto",
     "🙌",
   ]) {
     assert.deepStrictEqual(P.sanitize(t).clean, SendText.sanitize(t).clean, t);
   }
 });
 
+// Tope por caso: un caso colgado (una promesa que nunca resuelve) haria que
+// Node se quede sin nada pendiente y salga con codigo 0 SIN imprimir el
+// resumen — o sea, un test colgado pasaria como verde. El timer lo convierte en
+// FALLA y mantiene vivo el proceso mientras tanto.
+function conTope(promesa, ms = 3000) {
+  let timer;
+  const tope = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(`colgado: no termino en ${ms} ms`)), ms); });
+  return Promise.race([promesa, tope]).finally(() => clearTimeout(timer));
+}
+
 (async () => {
   let fallos = 0;
   for (const [nombre, fn] of casos) {
-    try { await fn(); console.log(`ok    ${nombre}`); }
+    try { await conTope(fn()); console.log(`ok    ${nombre}`); }
     catch (e) { fallos += 1; console.log(`FALLA ${nombre}\n      ${e.message.split("\n")[0]}`); }
   }
   console.log(`\n${casos.length - fallos}/${casos.length}`);

@@ -131,7 +131,8 @@ function textoAlCliente(pasos, turnosCliente = []) {
     if (p.tipo === "texto" && p.texto && !esEco(p.texto)) partes.push(p.texto);
     if (p.tipo === "tool") {
       const a = p.argumentos || {};
-      for (const campo of ["text", "bodyText", "body_text", "caption", "message"]) {
+      // saludo/beneficio/nombre: las lineas que el modelo escribe para send_presentation.
+      for (const campo of ["text", "bodyText", "body_text", "caption", "message", "saludo", "beneficio", "nombre"]) {
         if (typeof a[campo] === "string" && a[campo].trim() && !esEco(a[campo])) partes.push(a[campo]);
       }
     }

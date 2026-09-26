@@ -31,30 +31,59 @@ const VARIANTE_TRATAMIENTO = "D";
 // Igual que quote-order (FREE_SHIPPING_THRESHOLD, comparacion estricta).
 const FREE_SHIPPING_THRESHOLD = 40;
 
-// Ritmo: el mismo que pedia el prompt para `pause` (2-4 s, variando). Esperar no
-// cuesta tokens; lo que costaba era despertar al modelo para esperar. Ademas el
-// hueco evita que un texto llegue antes que la imagen que se mando antes que el.
-const PAUSA_MIN_MS = 2000;
-const PAUSA_MAX_MS = 4000;
+// TIEMPOS. Kapso corta el invoke a los 30 s y le devuelve 500 al agente aunque
+// la funcion siga corriendo. Medido el 2026-09-26: una presentacion de 8
+// mensajes con pausas de 2-4 s tardo 37 s; llegaron los 8, en orden, y el invoke
+// devolvio 500 a los 30,4 s. En produccion ese 500 hace que el agente reintente
+// o presente a mano: el cliente recibe la presentacion DOS veces.
+//
+// Diseño: primero lo que decide si se puede presentar (guardas y lookups) y el
+// saludo, que prueba que el canal funciona (ventana de 24 h, destinatario). El
+// resto va en segundo plano si el runtime da `waitUntil`, y si no, dentro del
+// mismo invoke.
+//
+// Y el runtime de Kapso NO lo da: medido el 2026-09-26, la funcion corrio por el
+// camino sincrono (enCurso:false) y volvio en 17,4 s con los 8 mensajes
+// entregados. Por eso el tope se cuenta desde que EMPIEZA el invoke y no desde
+// el saludo: si los lookups vienen lentos (el catalogo en frio pagina hasta 20
+// veces) no se pueden sumar 22 s de envios encima y pasarse de 30. Deja 5 s de
+// margen. Si el runtime algun dia da `waitUntil`, el mismo tope lo mantiene
+// seguro igual.
+const PRESUPUESTO_TOTAL_MS = 25000;
+// Lo que tarda un envio en volver de Meta. Medido: ~1,5-2 s.
+const LATENCIA_ENVIO_MS = 1700;
+
+// Ritmo entre mensajes. Esperar no cuesta tokens: lo que costaba era despertar
+// al modelo para esperar. El hueco ademas evita que un texto llegue antes que la
+// imagen que se mando primero (cada envio se espera antes de mandar el
+// siguiente). Mas corto que los 2-4 s del `pause` del prompt por el tope de
+// arriba: con latencia normal (7 envios x 1,7 s = 11,9 s) estas pausas suman
+// ~9,5 s y entran en los 22 s sin recorte, ~2,9 s entre mensaje y mensaje. Si
+// Meta viene lenta, el tope las achica.
+const PAUSA_MIN_MS = 1000;
+const PAUSA_MAX_MS = 1500;
 // El video tarda mas en procesarse del lado de Meta.
-const PAUSA_TRAS_VIDEO_MS = 4500;
+const PAUSA_TRAS_VIDEO_MS = 2000;
 
 const deps = {
   dormir: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   azar: () => Math.random(),
+  ahora: () => Date.now(),
 };
 
-async function handler(request, env = globalThis) {
-  return handleRequest(request, env);
+async function handler(request, env = globalThis, execCtx = null) {
+  return handleRequest(request, env, execCtx);
 }
 
 if (typeof addEventListener === "function") {
   addEventListener("fetch", (event) => {
-    event.respondWith(handleRequest(event.request, globalThis));
+    event.respondWith(handleRequest(event.request, globalThis, event));
   });
 }
 
-async function handleRequest(request, env = globalThis) {
+async function handleRequest(request, env = globalThis, execCtx = null) {
+  const inicio = deps.ahora();
+  const limite = inicio + PRESUPUESTO_TOTAL_MS;
   const payload = await readJson(request);
   const input = isPlainObject(payload.input) ? payload.input : payload;
   const ctx = contexto(payload, input, env);
@@ -112,41 +141,116 @@ async function handleRequest(request, env = globalThis) {
     knownAddress: String(ctx.vars.known_address || "").trim(),
   });
 
-  // --- Envio: en orden, esperando cada respuesta, y cortando en el primer error ---
-
-  const enviados = [];
-  for (let i = 0; i < pasos.length; i += 1) {
-    const paso = pasos[i];
-    if (i > 0) {
-      const previo = pasos[i - 1];
-      await deps.dormir(previo.tipo === "video" ? PAUSA_TRAS_VIDEO_MS : pausa());
-    }
-    const res = await enviar(paso, ctx);
-    if (!res.ok) {
-      await registrar(env, ctx, "parcial");
-      return json({
-        ok: false,
-        reason: "envio_parcial",
-        enviados: enviados.map((p) => p.paso),
-        fallo: { paso: paso.paso, error: res.error },
-        pendientes: pasos.slice(i).map(describir),
-        message: enviados.length
-          ? `Se enviaron ${enviados.map((p) => p.paso).join(", ")} y fallo "${paso.paso}". Manda a mano SOLO lo que falta (campo pendientes), en ese orden, y sigue normal. No repitas lo que ya se envio.`
-          : "No se envio nada. Presenta a mano como siempre (PRESENTACION DE PRODUCTO).",
-      });
-    }
-    enviados.push({ paso: paso.paso, messageId: res.messageId });
+  // Si los lookups ya se comieron el tiempo, no se arranca: no hay que dejar
+  // una presentacion a medias ni arriesgar el corte de los 30 s. Como todavia no
+  // salio nada, el agente puede presentar a mano sin duplicar.
+  const criticos = pasos.filter((p) => p.tipo === "text" || p.tipo === "buttons").length;
+  if (limite - deps.ahora() < criticos * LATENCIA_ENVIO_MS * 1.5) {
+    await registrar(env, ctx, "sin_tiempo");
+    return rechazo("sin_tiempo", "No se envio nada (el catalogo tardo demasiado). Presenta a mano como siempre (PRESENTACION DE PRODUCTO).");
   }
 
-  await registrar(env, ctx, "completa");
+  // --- Fase 1: el saludo. Prueba que el canal funciona. ---
+
+  const primero = await enviar(pasos[0], ctx);
+  if (!primero.ok) {
+    await registrar(env, ctx, "fallo_inicial");
+    return json({
+      ok: false,
+      reason: "envio_fallido",
+      fallo: { paso: pasos[0].paso, error: primero.error },
+      message: "No se envio nada. Presenta a mano como siempre (PRESENTACION DE PRODUCTO).",
+    });
+  }
+
+  // --- Fase 2, en segundo plano: el resto, con tope de tiempo. ---
+
+  const resto = enviarResto(pasos, ctx, env, primero.ms, limite);
+  const producto_ = { handle: lookup.product.handle, titulo, precio: precio.precio };
+
+  if (execCtx && typeof execCtx.waitUntil === "function") {
+    execCtx.waitUntil(resto);
+    return json({
+      ok: true,
+      sent: true,
+      enCurso: true,
+      producto: producto_,
+      pasos: pasos.map((p) => p.paso),
+      message: "Presentacion en curso: el saludo ya salio y el resto (fotos, video, beneficio, precio, testimonio"
+        + " y la pregunta final con botones) se esta enviando solo en los proximos segundos. NO mandes nada mas"
+        + " en este turno ni repitas nada de eso. Guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task.",
+    });
+  }
+
+  // Sin waitUntil (tests, u otro runtime) se espera todo antes de responder.
+  const r = await resto;
   return json({
-    ok: true,
+    ok: r.ok,
     sent: true,
-    producto: { handle: lookup.product.handle, titulo, precio: precio.precio },
-    enviados: enviados.map((p) => p.paso),
-    message: "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso."
-      + " Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task.",
+    enCurso: false,
+    producto: producto_,
+    ...r,
+    duracionTotalMs: deps.ahora() - inicio,
+    message: r.ok
+      ? "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso."
+        + " Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+      : `Se enviaron ${r.enviados.join(", ")} y fallo "${r.fallo.paso}". Manda a mano SOLO lo que falta (campo pendientes), en ese orden, y sigue normal. No repitas lo que ya se envio.`,
   });
+}
+
+// Envia pasos[1..] en orden. Una foto o un video que falla se SALTA (el
+// material ya era opcional: "omite sin avisar"); un texto o los botones que
+// fallan CORTAN, porque sin precio o sin pregunta final la presentacion no
+// sirve y algo esta roto de fondo.
+async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
+  const inicio = deps.ahora();
+  const enviados = [pasos[0].paso];
+  const omitidos = [];
+  // La latencia se estima con la OBSERVADA (arranca con la del saludo), no con
+  // una constante: si Meta viene lenta hoy, las pausas tienen que achicarse
+  // desde el primer mensaje y no recien cuando ya no queda tiempo.
+  const latencias = Number.isFinite(latenciaSaludo) && latenciaSaludo > 0 ? [latenciaSaludo] : [];
+  const latencia = () => (latencias.length
+    ? Math.max(LATENCIA_ENVIO_MS, latencias.reduce((a, b) => a + b, 0) / latencias.length)
+    : LATENCIA_ENVIO_MS);
+  for (let i = 1; i < pasos.length; i += 1) {
+    const paso = pasos[i];
+    const previo = pasos[i - 1];
+    const nominal = previo.tipo === "video" ? PAUSA_TRAS_VIDEO_MS : pausa();
+    const quedan = pasos.length - i;
+    // La pausa puede ser completa mientras a los pasos que siguen les quede al
+    // menos su pausa minima; si no alcanza, se achica hasta cero.
+    const holgura = limite - deps.ahora() - quedan * latencia() - (quedan - 1) * PAUSA_MIN_MS;
+    await deps.dormir(Math.max(0, Math.min(nominal, Math.floor(holgura))));
+
+    // Si ya no alcanza el tiempo para todo, se sacrifica primero lo opcional
+    // (fotos, video, testimonio) y NUNCA el precio ni la pregunta final: sin la
+    // pregunta con botones la presentacion no pide nada y el lead se enfria.
+    const esMedia = paso.tipo === "image" || paso.tipo === "video";
+    const criticosRestantes = pasos.slice(i).filter((p) => p.tipo === "text" || p.tipo === "buttons").length;
+    if (esMedia && limite - deps.ahora() < (criticosRestantes + 1) * latencia()) {
+      omitidos.push(paso.paso);
+      continue;
+    }
+
+    const res = await enviar(paso, ctx);
+    if (Number.isFinite(res.ms)) latencias.push(res.ms);
+    if (res.ok) { enviados.push(paso.paso); continue; }
+    if (paso.tipo === "image" || paso.tipo === "video") { omitidos.push(paso.paso); continue; }
+
+    await registrar(env, ctx, "parcial");
+    return {
+      ok: false,
+      reason: "envio_parcial",
+      enviados,
+      omitidos,
+      fallo: { paso: paso.paso, error: res.error },
+      pendientes: pasos.slice(i).map(describir),
+      duracionMs: deps.ahora() - inicio,
+    };
+  }
+  await registrar(env, ctx, omitidos.length ? "completa_sin_media" : "completa");
+  return { ok: true, enviados, omitidos, duracionMs: deps.ahora() - inicio };
 }
 
 // ---------------------------------------------------------------------------
@@ -295,6 +399,7 @@ async function enviar(paso, ctx) {
   else if (paso.tipo === "video") Object.assign(body, { type: "video", video: limpiarCaption(paso.body) });
   else if (paso.tipo === "buttons") Object.assign(body, { type: "interactive", interactive: paso.body });
 
+  const t0 = deps.ahora();
   try {
     const response = await fetch(`${KAPSO}/meta/whatsapp/v24.0/${ctx.phoneNumberId}/messages`, {
       method: "POST",
@@ -302,10 +407,11 @@ async function enviar(paso, ctx) {
       body: JSON.stringify(body),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) return { ok: false, error: `${response.status} ${JSON.stringify(result).slice(0, 200)}` };
-    return { ok: true, messageId: result?.messages?.[0]?.id || null };
+    const ms = deps.ahora() - t0;
+    if (!response.ok) return { ok: false, ms, error: `${response.status} ${JSON.stringify(result).slice(0, 200)}` };
+    return { ok: true, ms, messageId: result?.messages?.[0]?.id || null };
   } catch (error) {
-    return { ok: false, error: String(error?.message || error).slice(0, 200) };
+    return { ok: false, ms: deps.ahora() - t0, error: String(error?.message || error).slice(0, 200) };
   }
 }
 
