@@ -82,7 +82,17 @@ async function handleRequest(request, env = globalThis) {
       liftCvsA: liftOf("C"),
       liftCvsA_soloConsulta: liftConsulta,
       liftBvsA: liftOf("B"),
-      note: "A = control (cierra pidiendo ubicacion tras el precio)."
+      // Prueba en curso. Decidir con zCorregida, no con z (ver zDosProporciones),
+      // y mirar revenuePerLead ademas de la conversion.
+      pruebaD: {
+        liftDvsA: liftOf("D"),
+        ...(zDosProporciones(ab?.A, ab?.D) || {}),
+        revenuePerLead: ab?.revenuePerLead ? { A: ab.revenuePerLead.A, D: ab.revenuePerLead.D } : null,
+        presentacionesPorFuncion: ab?.presentacionesPorFuncion || null,
+      },
+      note: "D = presentacion enviada por send-presentation (una llamada al modelo en vez de ~18),"
+        + " desde 2026-09-26; A = control. Los leads sin telefono (N) no cuentan en ninguna."
+        + " A = control (cierra pidiendo ubicacion tras el precio)."
         + " C = a los leads que entran con 'Tengo una consulta' les cierra invitando su duda"
         + " en vez de pedirles logistica; al resto los trata igual que A, por eso mirar"
         + " liftCvsA_soloConsulta y no el global."
@@ -707,7 +717,8 @@ async function fetchAbTest(env, range) {
     // conversationId. Claves del formato viejo (sin esos segmentos) siguen
     // contando en el total y caen en "otro".
     const blank = () => ({ leads: 0, orders: 0 });
-    const tally = { A: blank(), B: blank(), C: blank() };
+    const tally = { A: blank(), B: blank(), C: blank(), D: blank() };
+    const revenueOf = { A: 0, B: 0, C: 0, D: 0 };   // variante -> ingreso de sus pedidos
     const byEntry = {};                       // variante -> entry_type -> {leads, orders}
     const entryOfConv = new Map();            // conversationId -> entry_type
     // Segundo eje, independiente del A/C: prueba del empuje al 3x2.
@@ -776,6 +787,7 @@ async function fetchAbTest(env, range) {
         } catch {
           // si el valor no se puede leer, el pedido igual cuenta para conversion
         }
+        if (total != null) revenueOf[variant] += total;
         bumpPromo(promo || "?", "orders", 1);
         if (total != null) bumpPromo(promo || "?", "revenue", total);
         if (units != null) bumpPromo(promo || "?", "units", units);
@@ -796,6 +808,11 @@ async function fetchAbTest(env, range) {
       A: withRate(tally.A),
       B: withRate(tally.B),
       C: withRate(tally.C),
+      // Prueba A/D (send-presentation, desde 2026-09-26). La N (leads sin
+      // telefono) queda fuera a proposito: ver abVariant en customer-lookup.
+      D: withRate(tally.D),
+      revenuePerLead: Object.fromEntries(Object.entries(tally).map(([k, v]) => [k, v.leads ? round2(revenueOf[k] / v.leads) : null])),
+      presentacionesPorFuncion: await contarPresentaciones(kv, range),
       // Desglose por como entro el lead: la variante C solo cambia el cierre de
       // los leads "consulta", asi que la comparacion que importa es esa columna;
       // el total esta diluido por los leads que no reciben ningun cambio.
@@ -1229,6 +1246,44 @@ function buildTelegramSummary(report) {
 
 function safeError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+// Adopcion de send-presentation: cuantas presentaciones de la variante D
+// salieron por la funcion (completa o parcial). Sin esto no se distingue "D no
+// convierte distinto" de "el agente casi nunca uso la herramienta".
+async function contarPresentaciones(kv, range) {
+  const out = { completa: 0, parcial: 0 };
+  try {
+    let cursor;
+    for (let page = 0; page < 20; page += 1) {
+      const list = await kv.list({ prefix: "abx_present:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const [, day, resultado] = String(entry.name || "").split(":");
+        if (!day || day < range.since || day > range.until) continue;
+        if (resultado in out) out[resultado] += 1;
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+  } catch {
+    // best effort
+  }
+  return out;
+}
+
+// z de dos proporciones, y la misma dividida por 1,51: las tasas diarias de este
+// proyecto estan 2,28x sobredispersas respecto de la binomial (EXPERIMENTOS.md),
+// asi que la z binomial sola sobreestima la significancia. Decidir con la
+// corregida: |z| >= 1,96 es el 95%.
+function zDosProporciones(a, b) {
+  if (!a?.leads || !b?.leads) return null;
+  const p1 = a.orders / a.leads;
+  const p2 = b.orders / b.leads;
+  const p = (a.orders + b.orders) / (a.leads + b.leads);
+  const se = Math.sqrt(p * (1 - p) * (1 / a.leads + 1 / b.leads));
+  if (!se) return null;
+  const z = (p2 - p1) / se;
+  return { z: round2(z), zCorregida: round2(z / 1.51) };
 }
 
 globalThis.__kenkuCampaignReport = { buildReport, buildConversion, buildTelegramSummary, fetchOrderAggregates, fetchMetaInsights, fetchConversationStats, handleRequest, handler, resolveRange };

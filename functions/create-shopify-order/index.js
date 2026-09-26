@@ -52,7 +52,10 @@ async function handleRequest(request, env = globalThis) {
       || (await fetchCtwaReferral(env, input))
       || ctwaFromVars(payload);
 
-    const build = await buildOrderInput(config, input, { createMissingCustomer: !dryRun });
+    const build = await buildOrderInput(config, input, {
+      createMissingCustomer: !dryRun,
+      abVariant: varianteAsignada(payload, input.phone || input.customer?.phone),
+    });
     const orderInput = build.orderInput;
     const customerLookup = build.customerLookup;
 
@@ -177,8 +180,8 @@ async function handleRequest(request, env = globalThis) {
 
     // Registra la conversion A/B (una por pedido) para el reporte por variante.
     const abPhone = orderInput.phone || input.phone;
-    await logAbOrder(env, result.order?.name, abVariant(abPhone), input.conversationId || input.conversation_id, {
-      promo: promoVariant(abPhone),
+    await logAbOrder(env, result.order?.name, varianteAsignada(payload, abPhone), input.conversationId || input.conversation_id, {
+      promo: promoAsignada(payload, abPhone),
       total: Number(result.order?.totalPriceSet?.shopMoney?.amount ?? result.order?.totalPrice ?? NaN),
       units: orderInput.lineItems.reduce((n, li) => n + (Number(li.quantity) || 0), 0),
     });
@@ -436,7 +439,7 @@ async function buildOrderInput(config, input, options = {}) {
     phone: normalizePhone(customer.phone || input.phone || shippingAddress.phone),
     shippingAddress,
     billingAddress,
-    tags: buildTags(input),
+    tags: buildTags(input, options.abVariant),
     note: buildNote(input, customerLookup),
     financialStatus: "PENDING",
     presentmentCurrency: "PEN",
@@ -1093,12 +1096,34 @@ function fnv1a(text) {
   return h >>> 0;
 }
 
+// COPIA EXACTA de customer-lookup/abVariant (prueba A/D, send-presentation).
+// Tienen que ser identicas; hay un test que lo verifica.
+//
+// Hasta el 2026-09-26 esta copia seguia repartiendo A/C mientras customer-lookup
+// ya mandaba a todos a A: desde el 15-sep los leads se registraban como A y la
+// mitad de sus pedidos como C, asi que el reporte mostraba la conversion de A
+// partida a la mitad.
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return null;
-  // Ver customer-lookup: la variante B se retiro el 2026-08-25 (22% peor que el
-  // control) y su mitad del trafico pasa a C.
-  return fnv1a(digits) % 2 === 0 ? "A" : "C";
+  if (!digits) return "N";
+  return mix32(fnv1a(`present:${digits}`)) % 2 === 0 ? "A" : "D";
+}
+
+// La variante que se le ASIGNO al lead al entrar (customer-lookup la deja en las
+// vars del flujo). Tiene prioridad sobre recalcularla: un lead que entro sin
+// telefono (N, control) da su celular al cerrar, y recalcular con ese numero lo
+// mandaria a A o a D sin haber recibido nunca ese tratamiento.
+const VARIANTES_AB = new Set(["A", "D", "N"]);
+const VARIANTES_PROMO = new Set(["P1", "P2"]);
+
+function varianteAsignada(payload, phone) {
+  const v = String(payload?.execution_context?.vars?.ab_variant || payload?.vars?.ab_variant || "").trim().toUpperCase();
+  return VARIANTES_AB.has(v) ? v : abVariant(phone);
+}
+
+function promoAsignada(payload, phone) {
+  const v = String(payload?.execution_context?.vars?.promo_variant || payload?.vars?.promo_variant || "").trim().toUpperCase();
+  return VARIANTES_PROMO.has(v) ? v : promoVariant(phone);
 }
 
 // Segundo eje (empuje al 3x2), independiente del A/C. Misma logica exacta que
@@ -1114,10 +1139,14 @@ function mix32(value) {
   return h >>> 0;
 }
 
+// COPIA de customer-lookup/promoVariant. La prueba P1/P2 termino el 2026-09-14
+// y alla se fuerza P1; aca seguia repartiendo P1/P2, con el mismo efecto sobre
+// el reporte del 3x2 que el de abVariant sobre el A/C.
 function promoVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return null;
-  return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
+  if (!digits) return "P1";
+  return "P1";
+  // return mix32(fnv1a(`promo:${digits}`)) % 2 === 0 ? "P1" : "P2";
 }
 
 // Ventana del candado anti-duplicado por numero (segundos). Un pedido IDENTICO
@@ -1198,7 +1227,7 @@ async function logAbOrder(env, orderName, variant, conversationId, extra = {}) {
   }
 }
 
-function buildTags(input) {
+function buildTags(input, varianteDelLead = null) {
   const tags = new Set(["kapso", "whatsapp", "kenku"]);
   if (input.coverage?.shippingMode === "contraentrega" || input.coverage?.shipping_mode === "contraentrega" || input.coverage?.cashOnDelivery === true || input.coverage?.cash_on_delivery === true) {
     tags.add("contraentrega");
@@ -1207,7 +1236,7 @@ function buildTags(input) {
   }
   if (input.quote?.promoApplied || input.quote?.promo_applied) tags.add("promo-whatsapp");
   if (input.ctwaReferral?.source_type === "ad") tags.add("ctwa-ad");
-  const variant = abVariant(input.phone || input.customer?.phone);
+  const variant = varianteDelLead || abVariant(input.phone || input.customer?.phone);
   if (variant) tags.add(`ab-${variant.toLowerCase()}`); // prueba A/B del arranque
   if (input.stockPorValidar || input.stock_por_validar || input.stockValidationRequired || input.stock_validation_required) tags.add("stock-por-validar");
   if (input.specialDeliveryNote || input.special_delivery_note) tags.add("fecha-hora-especial");
@@ -1457,6 +1486,9 @@ function safeError(error) {
 }
 
 globalThis.__kenkuCreateShopifyOrder = {
+  abVariant,
+  promoVariant,
+  varianteAsignada,
   buildOrderInput,
   computePricing,
   countFreeUnits,

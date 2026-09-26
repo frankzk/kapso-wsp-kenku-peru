@@ -176,6 +176,10 @@ async function handleRequest(request, env = globalThis) {
 
     const phone = normalizePhone(input.phone || "");
     const email = normalizeEmail(input.email || "");
+    // La variante que ya tiene la conversacion manda sobre recalcularla: el agente
+    // vuelve a llamar customer_lookup a mitad de charla, a veces con un celular que
+    // el cliente recien dio, y recalcular lo cambiaria de brazo en pleno experimento.
+    const asignada = { ab: varianteDelLead(payload, phone), promo: promoDelLead(payload, phone) };
 
     if (!phone && !email && !input.debugQuery) {
       // Sin telefono no podemos buscar al cliente en Shopify, PERO si el lead
@@ -190,7 +194,7 @@ async function handleRequest(request, env = globalThis) {
         reason: "missing_phone",
         phone: null,
         adReferral,
-        vars: buildFlowVars(null, null, adReferral, "", contactIdentity(input)),
+        vars: buildFlowVars(null, null, adReferral, "", contactIdentity(input), asignada),
         message: "No hay telefono para buscar al cliente en Shopify; tratalo como cliente nuevo."
           + " ESTE LEAD NO TIENE CELULAR (entro por username de WhatsApp): no podemos contactarlo"
           + " fuera del chat ni coordinar la entrega. Pide su numero de celular JUNTO con la"
@@ -209,7 +213,7 @@ async function handleRequest(request, env = globalThis) {
     ]);
     // El tipo de entrada sale del mismo fetch del referral, asi que el registro
     // A/B va DESPUES y no en paralelo: sin eso no se puede guardar en la clave.
-    await logAbLead(env, conversationId, abVariant(phone), adReferral?.entryType || "otro", promoVariant(phone));
+    await logAbLead(env, conversationId, asignada.ab, adReferral?.entryType || "otro", asignada.promo);
     await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
       return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
@@ -223,7 +227,7 @@ async function handleRequest(request, env = globalThis) {
         phone: phone || null,
         email: email || null,
         adReferral,
-        vars: buildFlowVars(null, null, adReferral, phone, contactIdentity(input)),
+        vars: buildFlowVars(null, null, adReferral, phone, contactIdentity(input), asignada),
         message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente."
           + (adReferral ? " OJO: llego desde un anuncio (adReferral); si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
       });
@@ -263,7 +267,7 @@ async function handleRequest(request, env = globalThis) {
         : null,
       addressSummary,
       adReferral,
-      vars: buildFlowVars(match, addressSummary, adReferral, phone, contactIdentity(input)),
+      vars: buildFlowVars(match, addressSummary, adReferral, phone, contactIdentity(input), asignada),
       hint: (ordersCount > 0
         ? "Cliente recurrente: saludalo con cercania y, al llegar al envio, CONFIRMA la direccion guardada en vez de pedir todos los datos de nuevo."
         : "Cliente registrado sin pedidos previos: confirma sus datos guardados antes de usarlos.")
@@ -360,7 +364,7 @@ async function shopifyGraphql(config, query, variables) {
 // (clave "vars"): asi el resultado queda disponible via get_variable tanto si
 // la funcion corre como nodo del workflow (init-customer) como si la llama el
 // agente como herramienta.
-function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
+function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}, asignada = {}) {
   // Lead SIN telefono: llego por username de WhatsApp. No tenemos como
   // contactarlo fuera del chat ni coordinar la entrega, asi que el bot debe
   // pedir el celular COMO PARTE de los datos de envio (no al final).
@@ -382,9 +386,9 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}) {
     // adivinar. ad_referral_match_via dice cual de los dos lo resolvio.
     ad_referral_product_handle: resolveAdProductHandle(adReferral)?.handle || null,
     ad_referral_match_via: resolveAdProductHandle(adReferral)?.via || null,
-    ab_variant: abVariant(phone),
+    ab_variant: asignada.ab || abVariant(phone),
     // Segundo eje, independiente: prueba del empuje al 3x2 (ver promoVariant).
-    promo_variant: promoVariant(phone),
+    promo_variant: asignada.promo || promoVariant(phone),
     // "consulta" | "link" | "otro" — como llego el lead (ver classifyEntry).
     entry_type: adReferral?.entryType || "otro",
   };
@@ -424,11 +428,42 @@ function fnv1a(text) {
 //
 // Lo que NO quedo resuelto: los leads "consulta" siguen siendo el agujero del
 // embudo. Invitar su duda en vez de pedirles la ubicacion no fue la solucion.
+//
+// PRUEBA EN CURSO desde el 2026-09-26: A = control, D = presentacion por
+// send-presentation (una llamada al modelo en vez de ~18; ver COSTOS.md).
+//
+// Hash NUEVO con sal ("present:") y pasado por mix32, en vez de reusar el de A/C:
+// asi los clientes que estuvieron en C no caen en bloque en D, y el reparto queda
+// independiente del eje de promo (que usa otra sal). Sin mix32 el bit bajo de
+// FNV-1a seria el mismo con cualquier sal — ver el comentario de promoVariant.
+//
+// "N" = lead SIN telefono (entro por username): queda FUERA del experimento y
+// recibe el control. Dos motivos: el pedido se le atribuye con el celular que da
+// al cerrar, no con el que se hasheo al entrar (no hay ninguno), asi que no se
+// puede medir limpio; y el envio por BSUID es el camino con mas riesgo de falla
+// silenciosa, que no conviene estrenar dentro de la prueba. El reporte no cuenta
+// la N en ninguna de las dos columnas.
+//
+// create-shopify-order tiene una COPIA de esta funcion: tienen que ser
+// identicas (hay un test que lo verifica).
+const VARIANTES_AB = new Set(["A", "D", "N"]);
+const VARIANTES_PROMO = new Set(["P1", "P2"]);
+
+function varianteDelLead(payload, phone) {
+  const v = String(payload?.execution_context?.vars?.ab_variant || payload?.vars?.ab_variant || "").trim().toUpperCase();
+  return VARIANTES_AB.has(v) ? v : abVariant(phone);
+}
+
+function promoDelLead(payload, phone) {
+  const v = String(payload?.execution_context?.vars?.promo_variant || payload?.vars?.promo_variant || "").trim().toUpperCase();
+  return VARIANTES_PROMO.has(v) ? v : promoVariant(phone);
+}
+
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return "A";
-  return "A";
-  // return fnv1a(digits) % 2 === 0 ? "A" : "C";
+  if (!digits) return "N";
+  return mix32(fnv1a(`present:${digits}`)) % 2 === 0 ? "A" : "D";
+  // Prueba A/C (terminada): return fnv1a(digits) % 2 === 0 ? "A" : "C";
 }
 
 // SEGUNDO EJE, independiente del A/C: prueba del empuje al 3x2.
@@ -724,4 +759,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone };
+globalThis.__kenkuCustomerLookup = { handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead };
