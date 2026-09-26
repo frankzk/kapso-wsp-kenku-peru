@@ -230,8 +230,7 @@ prompt cambia mucho, hay que recapturarlo para que la comparación siga siendo
 contra el bot actual — si no, se estarían midiendo modelos contra instrucciones
 viejas.
 
-**Pendiente (2026-09-26):** el fixture es de `lock_version 18750` (gpt-4.1, 12
-herramientas). No tiene `verify_payment_account` ni `send_presentation`, asi que
-los dos casos de la prueba A/D no se pueden correr hasta recapturarlo del
-workflow vivo. Al recapturar, los puntajes dejan de ser comparables con las
-corridas anteriores.
+**Recapturado el 2026-09-26** (lock 26701, gemini-3.7-flash, 14 herramientas,
+con `verify_payment_account` y `send_presentation`). Los puntajes de aca en
+adelante NO son comparables con las corridas anteriores: cambiaron el prompt
+(49k -> 54k caracteres), el modelo de referencia y la lista de herramientas.
