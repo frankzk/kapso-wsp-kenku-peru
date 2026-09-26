@@ -55,9 +55,15 @@ const TRIVIALES = new Set([
   "bueno","genial","excelente","correcto","claro","dale","conforme","acuerdo",
 ]);
 
+// Un numero suelto NUNCA es trivial: puede ser el DNI, el celular, el numero de
+// operacion del Yape o una cantidad. Medido en el 981: entre los entrantes que
+// se ven como acuse aparecen "950558781" y "00514186". Callarse ahi es el peor
+// error posible, porque es justo el dato que la clienta esta mandando.
 function esTrivial(texto) {
-  const limpio = limpiar(texto).replace(/[^a-z\s]/g, " ").trim();
-  if (!limpio) return true;            // solo emojis, signos o numeros sueltos
+  const base = limpiar(texto);
+  if (/\d/.test(base)) return false;
+  const limpio = base.replace(/[^a-z\s]/g, " ").trim();
+  if (!limpio) return true;            // solo emojis o signos
   return limpio.split(/\s+/).every((w) => TRIVIALES.has(w));
 }
 

@@ -54,6 +54,12 @@ const casos = [
   ["saludo de cortesia", [texto("Buenas noches")], ENTRADA, "trivial"],
   ["solo emojis", [texto("👍👍")], ENTRADA, "trivial"],
   ["de acuerdo (acuse de Kapta)", [texto("De acuerdo")], ENTRADA, "trivial"],
+  // Un numero suelto es un dato, no un acuse: DNI, celular, nro de operacion
+  // o una cantidad. Los dos primeros son entrantes reales del 981.
+  ["manda su celular", [texto("950558781")], ENTRADA, "texto"],
+  ["manda su DNI", [texto("00514186")], ENTRADA, "texto"],
+  ["nro de operacion", [texto("Ok 00514186")], ENTRADA, "texto"],
+  ["una cantidad", [texto("2")], ENTRADA, "texto"],
   ["aviso de pago", [texto("ya pague")], ENTRADA, "texto"],
   ["consulta", [texto("donde lo recojo?")], ENTRADA, "texto"],
   // Un "no" despues de pedirle el saldo es rechazo del pago, no cierre: tiene
