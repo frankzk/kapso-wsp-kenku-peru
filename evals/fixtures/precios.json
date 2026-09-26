@@ -1,0 +1,51 @@
+{
+ "bracciale-magnetico-salutare-in-rame": {
+  "titulo": "Pulsera Magnética de Cobre Saludable Cooper+",
+  "precio": 99,
+  "precio_3x2": 198,
+  "precio_5x3": 297,
+  "disponible": true
+ },
+ "purely-nutrient-ethiopian-black-seed-oil-aceite-de-semilla-negra-etiope-alta-potencia-60-softgels": {
+  "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Etíope Alta Potencia (60 Cápsulas)",
+  "precio": 149,
+  "precio_3x2": 298,
+  "precio_5x3": 447,
+  "disponible": true
+ },
+ "iced-coffee-cafe-funcional-con-probioticos-activos-y-prebioticos-naturales-para-equilibrio-intestinal-y-microbiota-saludable-500-g-superhuman™": {
+  "titulo": "Iced Coffee – Café Funcional con Probióticos Activos y Prebióticos Naturales para Equilibrio Intestinal y Microbiota Saludable (500 g) – SuperHuman™",
+  "precio": 149,
+  "precio_3x2": 298,
+  "precio_5x3": 447,
+  "disponible": true
+ },
+ "pyroslim™-quemador-de-grasa-350-gr-35-porciones-suplemento-deportivo-que-brinda-soporte-energetico-y-potencia-metabolica": {
+  "titulo": "PYROSLIM™  -  Quemador de Grasa con L- Carnitina y Garcinia Cambogia (350 gr / 35 porciones) Suplemento Deportivo que brinda Soporte Energético y Potencia Metabólica",
+  "precio": 129,
+  "precio_3x2": 258,
+  "precio_5x3": 387,
+  "disponible": false
+ },
+ "nattokinase-mejora-la-circulacion-arterial-90-capsulas": {
+  "titulo": "Nattokinase - Mejora de Circulación Arterial (90 cápsulas)",
+  "precio": 149,
+  "precio_3x2": 298,
+  "precio_5x3": 447,
+  "disponible": true
+ },
+ "nails-repairing-suero-reparador-de-unas": {
+  "titulo": "Nails Repairing – Sérum Tea Tree Ginger para Uñas (30ml)",
+  "precio": 89,
+  "precio_3x2": 178,
+  "precio_5x3": 267,
+  "disponible": true
+ },
+ "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml": {
+  "titulo": "SUGAR CONTROL - Gotas Líquidas de Berberina y Cúrcuma (30 ml)",
+  "precio": 119,
+  "precio_3x2": 238,
+  "precio_5x3": 357,
+  "disponible": true
+ }
+}
