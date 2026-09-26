@@ -92,78 +92,79 @@ La unica pieza que no es mecanica es la linea de beneficio
 conviene precomputarla por producto (metafield de Shopify) y no generarla en
 cada conversacion.
 
-## Hallazgo 2 — el debounce de 1 s parte las rafagas del cliente
+## Hallazgo 2 — ~~el debounce de 1 s parte las rafagas~~ RETRACTADO
 
-**El 22% de los turnos no produce ninguna respuesta** (629 de 2.925). No es que
-el bot se quede mudo: es que el cliente escribe en tandas y cada mensaje
-dispara su propio turno del agente. Conversacion real:
+**Lo que se dijo:** que el 22% de los mensajes del cliente sin respuesta propia
+eran turnos del agente desperdiciados, y que subir `message_debounce_seconds` de
+1 a 15 s ahorraba ~US$100/mes.
 
-```
-  >> Donde queda su tienda
-  >> Para ir a visitarlo
-     Somos tienda 100% online con envios a todo el Peru 📦 ...
-  >> Pachacamac
-  >> Manchay
-     ¡Excelente! Para Pachacamac (Manchay) tenemos entrega a domicilio...
-```
+**Lo que muestran los eventos de ejecucion** (`/workflow_executions/{id}/events`,
+150 ejecuciones del 26-sep): cuando el cliente escribe mientras el agente esta
+trabajando, Kapso **inyecta** el mensaje en la corrida en curso
+(`agent_messages_injected`, `injection_method: agent_loop`); no arranca otra. En
+la muestra fueron **109 mensajes absorbidos asi, sin corrida propia**. Por eso
+"Pachacamac" / "Manchay" reciben una sola respuesta: la ráfaga ya se junta sola.
 
-El primer mensaje de cada tanda corre el agente, gasta sus llamadas y no manda
-nada. Distribucion de los huecos entre entrante y entrante (n=530):
+Los turnos que de verdad no mandan nada son el **11,7%** y gastan el **3,1%** de
+las llamadas, y casi todos terminan en `handoff_to_human` o `complete_task`:
+son turnos donde callarse es lo correcto, no rafagas partidas.
 
-| hueco | acumulado |
-|---|---|
-| <= 5 s | 151 |
-| <= 8 s | 264 |
-| <= 15 s | 410 |
-| <= 30 s | 463 |
+**El debounce no ahorra casi nada. No cambiarlo.** El error fue leer "entrante
+seguido de entrante" en el log de mensajes como "dos corridas del agente" sin
+verificarlo contra las corridas reales.
 
-`message_debounce_seconds` esta en **1**. Subirlo a **15 s** junta el 77% de las
-tandas: **~295 turnos menos por dia**. Ahorro estimado **~US$100/mes**, y ademas
-el bot deja de contestar a medias con la mitad del mensaje.
+## Hallazgo 3 — la primera llamada de cada turno paga el prompt entero
 
-Costo: hasta 15 s mas de latencia. La mediana de respuesta del cliente son 37 s
-y el bot ya tarda 12 s entre mensaje y mensaje, asi que no cambia la sensacion.
+**Medido en los eventos:** la primera llamada al modelo de cada turno va **sin
+cache el 98,3% de las veces**; el resto de las llamadas, el 8,1%. Las primeras
+llamadas son el 10,9% de las llamadas y el **26,2% del gasto**: US$0,0157 contra
+US$0,0054 de una llamada con cache.
 
-## Hallazgo 3 — el prompt de 52.393 caracteres se paga en cada iteracion
+No depende del tiempo: pasa aunque el turno anterior haya terminado 7 segundos
+antes. (Lo que decia antes este archivo —que el cache se enfriaba en el 14,4% de
+los turnos por el TTL de 5 minutos— estaba mal.)
 
-Es el 80% del input de cada llamada. Con cache se paga barato
-(US$0,082/M), sin cache se paga 9x mas — y el **14,4% de los turnos llega
-con el cache frio**, medido sobre el hueco real entre el ultimo saliente y el
-siguiente entrante:
+**La causa probable:** Kapso vuelve a armar el system prompt en cada turno
+(`agent_prompt_built`) y le **agrega al final** la conversacion
+(`<previous_messages>`) y las variables del flujo. El 92% inicial es identico
+entre turnos, pero el bloque de instrucciones de sistema ya no es el mismo, y el
+cache implicito de Google parece compararlo entero. Dentro de un turno el bloque
+no cambia y por eso ahi si pega.
 
-| hueco saliente -> entrante | |
-|---|---|
-| <= 5 min | 85,6% |
-| <= 30 min | 95,0% |
-| <= 1 h | 96,9% |
+**No se arregla desde nuestro prompt**: el armado es de Kapso. Si se pudiera
+(que Kapso mande la conversacion como mensajes y no dentro del system prompt, o
+un modelo con cache explicito como los de Anthropic, que Kapso expone con TTL de
+1 h), vale del orden de **US$0,010 por turno, ~US$500/mes**. Es una pregunta para
+el soporte de Kapso, no un cambio que podamos hacer nosotros.
+
+**Achicar el prompt** sigue valiendo: cada 5.800 tokens menos son ~US$250/mes
+(pesa mas en las primeras llamadas, que lo pagan sin cache). Es el cambio de
+mayor riesgo: ese prompt acumula reglas que costaron plata aprender. Hacerlo con
+los evals de `evals/` como red, y despues del A/D.
 
 **Subir el TTL no es una opcion**: en el catalogo de Kapso
 `google/gemini-3.7-flash` tiene `supported_prompt_cache_ttls: []`. El
-`prompt_cache_ttl: "5m"` del nodo no hace nada; lo que se ve en el panel es el
-cache implicito de Google. Los unicos con `['5m','1h']` son los de Anthropic.
+`prompt_cache_ttl: "5m"` del nodo no hace nada.
 
-Queda entonces **achicar el prompt**. Bajarlo de 52k a ~35k caracteres
-(-5.800 tokens por llamada) vale **~US$230/mes**. Es el ahorro mas grande por
-token pero tambien el de mayor riesgo: ese prompt acumula reglas que costaron
-plata aprender. Hacerlo con los evals de `evals/` como red.
+## Hallazgo 4 — `max_iterations: 40`: NO bajarlo por ahora
 
-## Hallazgo 4 — `max_iterations: 40`
-
-Una presentacion usa ~7. El tope de 40 no limita nada util y deja que un turno
-descarrilado cueste hasta US$0,18. Bajarlo a 15 no toca el flujo normal.
+Medido: llamadas por turno p50 6, **p90 20**, p99 23, max 25. Las presentaciones
+manuales usan 18 (mediana). Bajarlo a 15 —como decia antes este archivo— las
+cortaria a la mitad. Recien cuando D pase al 100% (presentacion en ~5 llamadas)
+se puede bajar a ~20 como tope contra un turno descarrilado.
 
 ## Resumen
 
-| # | Cambio | Ahorro/mes | Riesgo |
+| # | Cambio | Ahorro/mes | Estado |
 |---|---|---|---|
-| 1 | `send-presentation` como funcion | ~US$610 | bajo en codigo; el ritmo se mide con A/B |
-| 2 | `message_debounce_seconds` 1 -> 15 | ~US$100 | bajo, un campo |
-| 3 | Achicar el prompt a ~35k | ~US$230 | alto, correr los evals antes |
-| 4 | `max_iterations` 40 -> 15 | cola | bajo |
+| 1 | `send-presentation` como funcion | ~US$610 al 100% | en A/D desde el 26-sep |
+| 2 | ~~`message_debounce_seconds` 1 -> 15~~ | ~0 | **retractado**: Kapso ya junta las rafagas |
+| 3a | Cache de la primera llamada de cada turno | ~US$500 | depende de Kapso, preguntar |
+| 3b | Achicar el prompt a ~35k | ~US$250 | alto riesgo, con evals y despues del A/D |
+| 4 | `max_iterations` 40 -> 20 | cola | solo despues de D al 100% |
 
-Los tres primeros juntos son **~US$940 de US$1.800, la mitad de la factura**.
-El 1 cambia el ritmo de la presentacion (por eso va con A/B); el 2 agrega hasta
-15 s de latencia; el 3 no cambia lo que ve el cliente si los evals pasan.
+Medido en los eventos: una presentacion manual son **18 llamadas (mediana) y
+US$0,103**. Eso confirma la cuenta del hallazgo 1.
 
 ## Como reproducirlo
 
@@ -173,5 +174,15 @@ Los mensajes se bajan del proxy de Meta de Kapso, con cursor:
 GET https://api.kapso.ai/meta/whatsapp/v24.0/{pnid}/messages?limit=100[&after={paging.next}]
 ```
 
-`limit` maximo 100, `page`/`offset` no sirven. No hay endpoint de uso de tokens
-en la Platform API: los precios de arriba salen de leer el panel.
+`limit` maximo 100, `page`/`offset` no sirven.
+
+**Los eventos de ejecucion son la fuente buena** y hay que ir a ellos antes de
+deducir nada del log de mensajes:
+
+```
+GET https://api.kapso.ai/platform/v1/workflow_executions/{id}/events?per_page=100&page=N
+```
+
+Traen `agent_token_usage` por cada llamada al modelo (input, cache, output),
+`agent_tool_called`, `agent_messages_injected` y `agent_prompt_built` (el prompt
+armado de verdad). Los precios por token salen del panel `Usage > Tokens`.
