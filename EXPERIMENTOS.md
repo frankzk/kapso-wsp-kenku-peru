@@ -480,9 +480,24 @@ atribuiria con el celular que dan al cerrar, no con uno hasheado al entrar.
 `send_presentation`, la funcion se niega (lee `ab_variant` de las vars del
 flujo) y el agente presenta a mano.
 
-**Como se lee.** `only=ab` → `pruebaD`: `liftDvsA`, `z`, `zCorregida`,
-`revenuePerLead` y `presentacionesPorFuncion` (cuantas presentaciones D salieron
-de verdad por la funcion: si son pocas, D no se esta probando).
+**Como se lee.** `only=ab` → `pruebaD`. **Decidir con `total.zCorregida` y
+`liftDvsA_total`**, que cuentan bot + asesora. `liftDvsA`/`zCorregida` a secas son
+solo pedidos del bot (comparables con el historial, pero incompletos).
+`presentacionesPorFuncion` dice cuantas presentaciones D salieron de verdad por
+la funcion: si son pocas, D no se esta probando.
+
+**Ventas que cierra una asesora (desde el 2026-09-26).** Cuando la conversacion
+pasa a handoff y la asesora cierra desde el dashboard, el pedido no pasa por el
+bot y el reporte no lo veia: el primer pedido de D (#KP136948, 3x2 de
+Urocontrol) fue asi. Ahora customer-lookup guarda `abx_phone:<9 digitos>` →
+variante al registrar cada lead A/D, y el reporte cruza los pedidos de Shopify
+que NO son del bot contra esos telefonos (`ordersAsesora`, `ordersTotal`,
+`rateTotal`, `pedidosAsesora` con el detalle). Reglas: solo telefonos de leads
+del experimento (un pedido web de alguien que nunca hablo con el bot no
+entra) y el pedido tiene que ser del dia del lead o posterior. Un cliente que
+paga con otro celular que el de WhatsApp no se cruza: afecta a los dos brazos
+por igual. Los leads anteriores al despliegue no tienen clave, otra razon para
+contar desde el 27.
 
 ### Lo que esta prueba PUEDE y NO PUEDE decir
 

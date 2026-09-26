@@ -85,8 +85,16 @@ async function handleRequest(request, env = globalThis) {
       // Prueba en curso. Decidir con zCorregida, no con z (ver zDosProporciones),
       // y mirar revenuePerLead ademas de la conversion.
       pruebaD: {
+        // Solo pedidos del bot (comparable con el historial).
         liftDvsA: liftOf("D"),
         ...(zDosProporciones(ab?.A, ab?.D) || {}),
+        // Bot + asesora: ESTA es la que decide, porque la venta puede terminar
+        // cerrandola una persona despues del handoff.
+        liftDvsA_total: (ab?.A?.rateTotal && ab?.D?.rateTotal) ? round2(ab.D.rateTotal / ab.A.rateTotal - 1) : null,
+        total: zDosProporciones(
+          ab?.A ? { leads: ab.A.leads, orders: ab.A.ordersTotal } : null,
+          ab?.D ? { leads: ab.D.leads, orders: ab.D.ordersTotal } : null,
+        ),
         revenuePerLead: ab?.revenuePerLead ? { A: ab.revenuePerLead.A, D: ab.revenuePerLead.D } : null,
         presentacionesPorFuncion: ab?.presentacionesPorFuncion || null,
       },
@@ -796,8 +804,20 @@ async function fetchAbTest(env, range) {
       cursor = list.cursor;
     }
 
+    // Pedidos que NO creo el bot (los cierra una asesora desde el dashboard tras
+    // un handoff). Se suman aparte: `orders` sigue siendo solo del bot, igual que
+    // en todo el historial, y `ordersTotal` agrega los de asesora.
+    const asesora = await pedidosDeAsesora(getConfig(env), kv, range);
+    for (const [variant, v] of Object.entries(asesora.porVariante)) {
+      if (!tally[variant]) continue;
+      tally[variant].ordersAsesora = v.orders;
+      revenueOf[variant] += v.revenue;
+    }
     const rate = (v) => (v.leads > 0 ? v.orders / v.leads : null);
-    const withRate = (v) => ({ ...v, rate: rate(v) });
+    const withRate = (v) => {
+      const ordersTotal = v.orders + (v.ordersAsesora || 0);
+      return { ...v, ordersAsesora: v.ordersAsesora || 0, ordersTotal, rate: rate(v), rateTotal: v.leads > 0 ? ordersTotal / v.leads : null };
+    };
     const breakdown = {};
     for (const [variant, entries] of Object.entries(byEntry)) {
       breakdown[variant] = {};
@@ -813,6 +833,8 @@ async function fetchAbTest(env, range) {
       D: withRate(tally.D),
       revenuePerLead: Object.fromEntries(Object.entries(tally).map(([k, v]) => [k, v.leads ? round2(revenueOf[k] / v.leads) : null])),
       presentacionesPorFuncion: await contarPresentaciones(kv, range),
+      pedidosAsesora: asesora.detalle,
+      pedidosAsesoraNota: asesora.nota,
       // Desglose por como entro el lead: la variante C solo cambia el cierre de
       // los leads "consulta", asi que la comparacion que importa es esa columna;
       // el total esta diluido por los leads que no reciben ningun cambio.
@@ -1246,6 +1268,73 @@ function buildTelegramSummary(report) {
 
 function safeError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+// Pedidos del rango que NO creo el bot y cuyo telefono es el de un lead del
+// experimento A/D (clave abx_phone:<9 digitos> que escribe customer-lookup).
+// Sin esto el A/D solo veia las ventas que cierra el bot: el primer pedido de D
+// (#KP136948, 26-sep) lo cerro una asesora y quedo afuera. Reglas:
+//  - solo cuentan telefonos de leads A/D: un pedido web de alguien que nunca
+//    hablo con el bot no entra (no tiene clave);
+//  - el pedido tiene que ser del mismo dia del lead o posterior;
+//  - las claves existen desde el 2026-09-26: leads anteriores no se pueden
+//    cruzar, por eso el A/D se cuenta desde el 27.
+// Ignora el error de Shopify (sin token, etc.): devuelve vacio y lo dice en `nota`.
+async function pedidosDeAsesora(config, kv, range) {
+  const porVariante = {};
+  const detalle = [];
+  if (!config?.token) return { porVariante, detalle, nota: "sin token de Shopify: no se cruzaron pedidos de asesora" };
+  try {
+    const queryString = `created_at:>='${range.sinceIso}' created_at:<='${range.untilIso}'`;
+    const gql = `#graphql
+      query PedidosNoBot($q: String!, $cursor: String) {
+        orders(first: 250, query: $q, after: $cursor, sortKey: CREATED_AT) {
+          nodes {
+            name
+            createdAt
+            phone
+            customer { phone }
+            shippingAddress { phone }
+            totalPriceSet { shopMoney { amount } }
+            customAttributes { key value }
+          }
+          pageInfo { hasNextPage endCursor }
+        }
+      }`;
+    const candidatos = [];
+    let cursor = null;
+    for (let page = 0; page < MAX_ORDER_PAGES; page += 1) {
+      const data = await shopifyGraphql(config, gql, { q: queryString, cursor });
+      for (const o of data.orders?.nodes || []) {
+        if (attributesToMap(o.customAttributes).source === "whatsapp-bot") continue;
+        const nueve = String(o.phone || o.customer?.phone || o.shippingAddress?.phone || "").replace(/\D/g, "").slice(-9);
+        if (nueve.length === 9) candidatos.push({ o, nueve });
+      }
+      const pi = data.orders?.pageInfo;
+      if (!pi?.hasNextPage) break;
+      cursor = pi.endCursor;
+    }
+    // kv.get en tandas: son decenas de pedidos, no miles.
+    for (let i = 0; i < candidatos.length; i += 25) {
+      const tanda = candidatos.slice(i, i + 25);
+      const vals = await Promise.all(tanda.map((c) => kv.get(`abx_phone:${c.nueve}`).catch(() => null)));
+      tanda.forEach((c, j) => {
+        if (!vals[j]) return;
+        let lead;
+        try { lead = JSON.parse(vals[j]); } catch { return; }
+        const dia = limaDay(c.o.createdAt);
+        if (!lead?.variant || !dia || (lead.day && dia < lead.day)) return;
+        const total = Number(c.o.totalPriceSet?.shopMoney?.amount || 0);
+        porVariante[lead.variant] = porVariante[lead.variant] || { orders: 0, revenue: 0 };
+        porVariante[lead.variant].orders += 1;
+        if (Number.isFinite(total)) porVariante[lead.variant].revenue += total;
+        detalle.push({ name: c.o.name, day: dia, variant: lead.variant, total: round2(total) });
+      });
+    }
+    return { porVariante, detalle, nota: null };
+  } catch (error) {
+    return { porVariante, detalle, nota: `no se pudieron cruzar pedidos de asesora: ${safeError(error)}` };
+  }
 }
 
 // Adopcion de send-presentation: cuantas presentaciones de la variante D

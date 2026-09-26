@@ -129,6 +129,65 @@ function conTope(promesa, ms = 3000) {
   return Promise.race([promesa, tope]).finally(() => clearTimeout(timer));
 }
 
+caso("lead nuevo A/D: guarda telefono -> variante (para las ventas de asesora)", async () => {
+  const store = new Map();
+  const KV = { async get(k) { return store.get(k) || null; }, async put(k, v) { store.set(k, v); } };
+  await CL.logAbLead({ KV }, "conv-1", "D", "otro", "P1", "+51 965 391 481");
+  await CL.logAbLead({ KV }, "conv-2", "N", "otro", "P1", "");
+  await CL.logAbLead({ KV }, "conv-3", "A", "otro", "P1", "51911222333");
+  const tel = JSON.parse(store.get("abx_phone:965391481"));
+  assert.strictEqual(tel.variant, "D"); assert.strictEqual(tel.conversationId, "conv-1");
+  assert.strictEqual(JSON.parse(store.get("abx_phone:911222333")).variant, "A");
+  assert.ok(![...store.keys()].some((k) => k.startsWith("abx_phone:") && !["abx_phone:965391481", "abx_phone:911222333"].includes(k)), "la N no deja telefono");
+});
+
+caso("reporte: suma las ventas de asesora a su variante, y solo esas", async () => {
+  const dia = "2026-09-28";
+  const keys = []; const valores = new Map();
+  for (let i = 0; i < 100; i += 1) { keys.push(`abx_lead:${dia}:A:otro:P1:cA${i}`); keys.push(`abx_lead:${dia}:D:otro:P1:cD${i}`); }
+  // 1 pedido del bot en D (ya contado por abx_order).
+  keys.push(`abx_order:${dia}:D:cD0:#KP1`); valores.set(`abx_order:${dia}:D:cD0:#KP1`, JSON.stringify({ total: 149, units: 1 }));
+  // Telefonos de leads del experimento.
+  valores.set("abx_phone:965000001", JSON.stringify({ variant: "D", day: dia }));
+  valores.set("abx_phone:965000002", JSON.stringify({ variant: "A", day: dia }));
+  valores.set("abx_phone:965000003", JSON.stringify({ variant: "D", day: "2026-09-29" })); // lead POSTERIOR al pedido
+  const KV = {
+    async list({ prefix }) { return { keys: keys.filter((k) => k.startsWith(prefix)).map((name) => ({ name })), list_complete: true }; },
+    async get(k) { return valores.get(k) || null; },
+  };
+  const orden = (name, phone, total, bot = false) => ({
+    name, createdAt: `${dia}T18:00:00Z`, phone, customer: null, shippingAddress: null,
+    totalPriceSet: { shopMoney: { amount: String(total) } },
+    customAttributes: bot ? [{ key: "source", value: "whatsapp-bot" }] : [],
+  });
+  const ORDENES = [
+    orden("#KP1", "+51965000001", 149, true),     // del bot: NO se suma otra vez
+    orden("#KP2", "+51 965 000 001", 298),        // asesora, lead D -> cuenta en D
+    orden("#KP3", "965000002", 149),              // asesora, lead A -> cuenta en A
+    orden("#KP4", "+51999888777", 149),           // web, no es lead -> no cuenta
+    orden("#KP5", "+51965000003", 149),           // anterior al lead -> no cuenta
+  ];
+  const fetchAntes = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("graphql.json")) return { ok: true, json: async () => ({ data: { orders: { nodes: ORDENES, pageInfo: { hasNextPage: false } } } }) };
+    throw new Error(`fetch inesperado ${url}`);
+  };
+  try {
+    const env = { dASHBOARDACCESSKEY: "K", KV, sHOPIFYADMINACCESSTOKEN: "t", sHOPIFYSHOPDOMAIN: "kenkuperu.myshopify.com", sHOPIFYAPIVERSION: "2026-04" };
+    const req = { method: "GET", url: `https://x/?key=K&format=json&only=ab&since=${dia}&until=${dia}`, headers: { get: () => null } };
+    const r = await (await CR.handleRequest(req, env)).json();
+    assert.strictEqual(r.ab.D.orders, 1, "bot");
+    assert.strictEqual(r.ab.D.ordersAsesora, 1); assert.strictEqual(r.ab.D.ordersTotal, 2);
+    assert.strictEqual(r.ab.A.orders, 0); assert.strictEqual(r.ab.A.ordersAsesora, 1); assert.strictEqual(r.ab.A.ordersTotal, 1);
+    assert.deepStrictEqual(r.ab.pedidosAsesora.map((p) => p.name).sort(), ["#KP2", "#KP3"]);
+    assert.strictEqual(r.pruebaD.liftDvsA_total, 1);            // 2% vs 1%
+    assert.deepStrictEqual(r.pruebaD.revenuePerLead, { A: 1.49, D: 4.47 });
+    assert.ok(r.pruebaD.total && typeof r.pruebaD.total.zCorregida === "number");
+  } finally {
+    globalThis.fetch = fetchAntes;
+  }
+});
+
 (async () => {
   let fallos = 0;
   for (const [n, f] of casos) {

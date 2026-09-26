@@ -213,7 +213,7 @@ async function handleRequest(request, env = globalThis) {
     ]);
     // El tipo de entrada sale del mismo fetch del referral, asi que el registro
     // A/B va DESPUES y no en paralelo: sin eso no se puede guardar en la clave.
-    await logAbLead(env, conversationId, asignada.ab, adReferral?.entryType || "otro", asignada.promo);
+    await logAbLead(env, conversationId, asignada.ab, adReferral?.entryType || "otro", asignada.promo, phone);
     await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
       return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
@@ -548,7 +548,7 @@ function limaDayNow() {
   return new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function logAbLead(env, conversationId, variant, entryType = "otro", promo = "P1") {
+async function logAbLead(env, conversationId, variant, entryType = "otro", promo = "P1", phone = "") {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv || !conversationId || !variant) return;
@@ -563,6 +563,17 @@ async function logAbLead(env, conversationId, variant, entryType = "otro", promo
     const key = `abx_lead:${day}:${variant}:${entryType}:${promo}:${conversationId}`;
     if (await kv.get(key)) return;
     await kv.put(key, JSON.stringify({ variant, entryType, promo, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    // Telefono -> variante, para atribuir los pedidos que NO crea el bot. Cuando
+    // una asesora toma la conversacion y cierra la venta desde el dashboard, el
+    // pedido no pasa por create-shopify-order y el reporte no lo veia: el primer
+    // pedido de la variante D (#KP136948, 26-sep) fue asi. Con esta clave el
+    // reporte busca el telefono del pedido y sabe de que variante era el lead.
+    // Solo A y D: la N no cuenta en el experimento. Ultimos 9 digitos, igual que
+    // en el reporte (celular peruano sin el 51).
+    const nueve = String(phone || "").replace(/\D/g, "").slice(-9);
+    if ((variant === "A" || variant === "D") && nueve.length === 9) {
+      await kv.put(`abx_phone:${nueve}`, JSON.stringify({ variant, promo, day, conversationId }), { expirationTtl: 90 * 24 * 3600 });
+    }
   } catch {
     // best effort
   }
@@ -759,4 +770,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead };
+globalThis.__kenkuCustomerLookup = { handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead };
