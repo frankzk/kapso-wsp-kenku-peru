@@ -131,11 +131,14 @@ entre turnos, pero el bloque de instrucciones de sistema ya no es el mismo, y el
 cache implicito de Google parece compararlo entero. Dentro de un turno el bloque
 no cambia y por eso ahi si pega.
 
-**No se arregla desde nuestro prompt**: el armado es de Kapso. Si se pudiera
-(que Kapso mande la conversacion como mensajes y no dentro del system prompt, o
-un modelo con cache explicito como los de Anthropic, que Kapso expone con TTL de
-1 h), vale del orden de **US$0,010 por turno, ~US$500/mes**. Es una pregunta para
-el soporte de Kapso, no un cambio que podamos hacer nosotros.
+**No se arregla desde nuestro prompt**: el armado es de Kapso. Resolverlo de
+raiz valdria del orden de **US$0,010 por turno, ~US$500/mes**, pero dependeria
+de que Kapso cambie como arma el prompt. **Descartado (2026-09-27):** no se va a
+pedir, no hay expectativa de respuesta.
+
+Lo que SI esta en nuestras manos es achicar lo que esa primera llamada paga sin
+cache: el prompt entero. Por eso el recorte del prompt es la palanca principal
+que queda.
 
 **Achicar el prompt** sigue valiendo: cada 5.800 tokens menos son ~US$250/mes
 (pesa mas en las primeras llamadas, que lo pagan sin cache). Es el cambio de
@@ -159,7 +162,7 @@ se puede bajar a ~20 como tope contra un turno descarrilado.
 |---|---|---|---|
 | 1 | `send-presentation` como funcion | ~US$610 al 100% | en A/D desde el 26-sep |
 | 2 | ~~`message_debounce_seconds` 1 -> 15~~ | ~0 | **retractado**: Kapso ya junta las rafagas |
-| 3a | Cache de la primera llamada de cada turno | ~US$500 | depende de Kapso, preguntar |
+| 3a | ~~Cache de la primera llamada de cada turno~~ | ~US$500 | **descartado**: depende de Kapso |
 | 3b | Achicar el prompt a ~35k | ~US$250 | alto riesgo, con evals y despues del A/D |
 | 4 | `max_iterations` 40 -> 20 | cola | solo despues de D al 100% |
 
