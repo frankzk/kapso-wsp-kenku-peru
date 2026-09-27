@@ -180,6 +180,25 @@ comillas** (`--caso "a,b"`): sin comillas PowerShell los parte y el runner corre
 solo el primero sin avisar. La clave se carga con
 `$env:OPENROUTER_API_KEY = "sk-or-..."`, no con `export`.
 
+## Quinta corrida (2026-09-27): LINEA BASE con el fixture nuevo
+
+Los 11 casos, gemini-3.7-flash, fixture lock 26701. **Esta es la base contra la
+que se compara el recorte del prompt.**
+
+| Resultado | Detalle |
+|---|---|
+| 34/35 reglas, 10/11 casos | 842.798 tokens (~US$0,50) |
+| unica falla: `pulsera-unidad` | falso positivo de la regla, no del modelo |
+
+La regla de `pulsera-unidad` era `prohibido_texto: "par"`, que busca el texto
+suelto: el beneficio decia "imanes terapeuticos **para** ayudar a aliviar" y
+eso la hacia fallar. Se cambio a `prohibido_regex: \bpar(es)?\b` y el caso,
+repetido con `--verbose`, dio 3/3 diciendo "por unidad". Con la regla corregida
+la base es **11/11**.
+
+Con el fixture viejo este caso pasaba por suerte: ningun texto de esa corrida
+traia un "para".
+
 ## "No llego a cotizar" es una falla real, no ruido del arnes
 
 Es el mismo modo de falla que se le vio a `claude-haiku-4.5` en la primera
