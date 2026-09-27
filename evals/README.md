@@ -160,6 +160,26 @@ tiene `supports_custom_sampling: true`, asi que acepta la `temperature: 0.2` del
 nodo. No expone cache de prompt (`supported_prompt_cache_ttls: []`), igual que
 los de OpenAI que usamos hoy.
 
+## Cuarta corrida (2026-09-27, prueba A/D, fixture recapturado)
+
+Los dos casos nuevos de la prueba A/D, contra el fixture recapturado (lock
+26701, 14 herramientas + 10 por defecto).
+
+| Modelo | Caso | Reglas |
+|---|---|---|
+| google/gemini-3.7-flash | `presentacion-variante-d` | 4/4 |
+| google/gemini-3.7-flash | `presentacion-control-a` | 4/4 |
+
+127.629 tokens los dos casos. En D uso `send_presentation` sin presentar a mano
+(ni `pause` ni `send_media`) y sin precio en el saludo ni en el beneficio; en A
+no la toco. Coincide con produccion: las 6 primeras presentaciones D reales
+(26-sep) siguieron el mismo guion, 8 llamadas cada una.
+
+Corrido desde Windows. En PowerShell los argumentos con coma van **entre
+comillas** (`--caso "a,b"`): sin comillas PowerShell los parte y el runner corre
+solo el primero sin avisar. La clave se carga con
+`$env:OPENROUTER_API_KEY = "sk-or-..."`, no con `export`.
+
 ## "No llego a cotizar" es una falla real, no ruido del arnes
 
 Es el mismo modo de falla que se le vio a `claude-haiku-4.5` en la primera
