@@ -32,12 +32,11 @@
   },
   "reglas": [
    {
-    "tipo": "prohibido_texto",
+    "tipo": "prohibido_regex",
     "valor": [
-     "par",
-     "pares"
+     "\\bpar(es)?\\b"
     ],
-    "porque": "una pulsera es unidad; 'par' solo aplica a calzado y medias"
+    "porque": "una pulsera es unidad; 'par' solo aplica a calzado y medias. Es regex con limite de palabra: como prohibido_texto buscaba 'par' suelto y marcaba 'para', 'separar' o 'comparar' (paso el 2026-09-27)."
    },
    {
     "tipo": "precio_valido",
