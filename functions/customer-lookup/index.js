@@ -572,7 +572,13 @@ async function logAbLead(env, conversationId, variant, entryType = "otro", promo
     // en el reporte (celular peruano sin el 51).
     const nueve = String(phone || "").replace(/\D/g, "").slice(-9);
     if ((variant === "A" || variant === "D") && nueve.length === 9) {
-      await kv.put(`abx_phone:${nueve}`, JSON.stringify({ variant, promo, day, conversationId }), { expirationTtl: 90 * 24 * 3600 });
+      // `at` = primer contacto: si la clave ya existe con hora y la misma
+      // variante, se conserva (un pedido de asesora cuenta desde el PRIMER
+      // contacto, no desde la ultima vez que escribio).
+      const previa = JSON.parse((await kv.get(`abx_phone:${nueve}`)) || "null");
+      if (!(previa?.at && previa.variant === variant)) {
+        await kv.put(`abx_phone:${nueve}`, JSON.stringify({ variant, promo, day, conversationId, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+      }
     }
   } catch {
     // best effort

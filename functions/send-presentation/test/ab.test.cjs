@@ -188,6 +188,49 @@ caso("reporte: suma las ventas de asesora a su variante, y solo esas", async () 
   }
 });
 
+caso("telefono: guarda la hora del PRIMER contacto y no la pisa", async () => {
+  const store = new Map();
+  const KV = { async get(k) { return store.get(k) || null; }, async put(k, v) { store.set(k, v); } };
+  await CL.logAbLead({ KV }, "conv-1", "D", "otro", "P1", "51965000009");
+  const primera = JSON.parse(store.get("abx_phone:965000009")).at;
+  assert.ok(primera, "guarda `at`");
+  await new Promise((r) => setTimeout(r, 5));
+  await CL.logAbLead({ KV }, "conv-2", "D", "otro", "P1", "51965000009");  // vuelve a escribir otro dia
+  assert.strictEqual(JSON.parse(store.get("abx_phone:965000009")).at, primera, "conserva el primer contacto");
+});
+
+caso("reporte: un pedido del MISMO dia pero ANTERIOR al lead no cuenta (#KP136850)", async () => {
+  const dia = "2026-09-28";
+  const keys = []; const valores = new Map();
+  for (let i = 0; i < 50; i += 1) { keys.push(`abx_lead:${dia}:A:otro:P1:cA${i}`); keys.push(`abx_lead:${dia}:D:otro:P1:cD${i}`); }
+  // Clave VIEJA (sin `at`): la hora sale del valor de la clave del lead.
+  valores.set("abx_phone:965000011", JSON.stringify({ variant: "D", day: dia, conversationId: "cD1" }));
+  valores.set(`abx_lead:${dia}:D:otro:P1:cD1`, JSON.stringify({ variant: "D", at: `${dia}T17:00:00Z` }));
+  // Clave NUEVA (con `at`).
+  valores.set("abx_phone:965000012", JSON.stringify({ variant: "A", day: dia, at: `${dia}T17:00:00Z` }));
+  const KV = {
+    async list({ prefix }) { return { keys: keys.filter((k) => k.startsWith(prefix)).map((name) => ({ name })), list_complete: true }; },
+    async get(k) { return valores.get(k) || null; },
+  };
+  const orden = (name, phone, hora) => ({ name, createdAt: `${dia}T${hora}:00Z`, phone, customer: null, shippingAddress: null, totalPriceSet: { shopMoney: { amount: "149" } }, customAttributes: [] });
+  const ORDENES = [
+    orden("#ANTES-VIEJA", "51965000011", "14:00"),   // antes del lead (clave vieja) -> NO
+    orden("#DESPUES-VIEJA", "51965000011", "19:00"), // despues -> SI, en D
+    orden("#ANTES-NUEVA", "51965000012", "16:59"),   // antes del lead (clave nueva) -> NO
+    orden("#DESPUES-NUEVA", "51965000012", "17:00"), // justo al contacto -> SI, en A
+  ];
+  const fetchAntes = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ data: { orders: { nodes: ORDENES, pageInfo: { hasNextPage: false } } } }) });
+  try {
+    const env = { dASHBOARDACCESSKEY: "K", KV, sHOPIFYADMINACCESSTOKEN: "t", sHOPIFYSHOPDOMAIN: "kenkuperu.myshopify.com", sHOPIFYAPIVERSION: "2026-04" };
+    const req = { method: "GET", url: `https://x/?key=K&format=json&only=ab&since=${dia}&until=${dia}`, headers: { get: () => null } };
+    const r = await (await CR.handleRequest(req, env)).json();
+    assert.deepStrictEqual(r.ab.pedidosAsesora.map((p) => `${p.name}:${p.variant}`).sort(), ["#DESPUES-NUEVA:A", "#DESPUES-VIEJA:D"]);
+  } finally {
+    globalThis.fetch = fetchAntes;
+  }
+});
+
 (async () => {
   let fallos = 0;
   for (const [n, f] of casos) {

@@ -729,6 +729,7 @@ async function fetchAbTest(env, range) {
     const revenueOf = { A: 0, B: 0, C: 0, D: 0 };   // variante -> ingreso de sus pedidos
     const byEntry = {};                       // variante -> entry_type -> {leads, orders}
     const entryOfConv = new Map();            // conversationId -> entry_type
+    const leadKeyOfConv = new Map();          // conversationId -> nombre de la clave abx_lead (su valor trae `at`)
     // Segundo eje, independiente del A/C: prueba del empuje al 3x2.
     // Se mide por conversion Y por ticket: empujar el 3x2 puede convertir menos
     // y aun asi dejar mas, porque el envio se paga una sola vez por pedido.
@@ -757,6 +758,7 @@ async function fetchAbTest(env, range) {
         const promo = parts.length >= 6 ? parts[4] : "?";
         const convId = parts[parts.length - 1];
         entryOfConv.set(convId, entryType);
+        if (!leadKeyOfConv.has(convId)) leadKeyOfConv.set(convId, entry.name);
         promoOfConv.set(convId, promo);
         tally[variant].leads += 1;
         bump(variant, entryType, "leads");
@@ -807,7 +809,7 @@ async function fetchAbTest(env, range) {
     // Pedidos que NO creo el bot (los cierra una asesora desde el dashboard tras
     // un handoff). Se suman aparte: `orders` sigue siendo solo del bot, igual que
     // en todo el historial, y `ordersTotal` agrega los de asesora.
-    const asesora = await pedidosDeAsesora(getConfig(env), kv, range);
+    const asesora = await pedidosDeAsesora(getConfig(env), kv, range, leadKeyOfConv);
     for (const [variant, v] of Object.entries(asesora.porVariante)) {
       if (!tally[variant]) continue;
       tally[variant].ordersAsesora = v.orders;
@@ -1280,7 +1282,7 @@ function safeError(error) {
 //  - las claves existen desde el 2026-09-26: leads anteriores no se pueden
 //    cruzar, por eso el A/D se cuenta desde el 27.
 // Ignora el error de Shopify (sin token, etc.): devuelve vacio y lo dice en `nota`.
-async function pedidosDeAsesora(config, kv, range) {
+async function pedidosDeAsesora(config, kv, range, leadKeyOfConv = new Map()) {
   const porVariante = {};
   const detalle = [];
   if (!config?.token) return { porVariante, detalle, nota: "sin token de Shopify: no se cruzaron pedidos de asesora" };
@@ -1318,23 +1320,39 @@ async function pedidosDeAsesora(config, kv, range) {
     for (let i = 0; i < candidatos.length; i += 25) {
       const tanda = candidatos.slice(i, i + 25);
       const vals = await Promise.all(tanda.map((c) => kv.get(`abx_phone:${c.nueve}`).catch(() => null)));
-      tanda.forEach((c, j) => {
-        if (!vals[j]) return;
+      for (let j = 0; j < tanda.length; j += 1) {
+        const c = tanda[j];
+        if (!vals[j]) continue;
         let lead;
-        try { lead = JSON.parse(vals[j]); } catch { return; }
+        try { lead = JSON.parse(vals[j]); } catch { continue; }
         const dia = limaDay(c.o.createdAt);
-        if (!lead?.variant || !dia || (lead.day && dia < lead.day)) return;
+        if (!lead?.variant || !dia) continue;
+        // El pedido tiene que ser POSTERIOR al primer contacto del lead, a la
+        // hora exacta, no solo del mismo dia: #KP136850 (26-sep) se hizo a la
+        // manana y el cliente recien entro como lead D a la tarde. La hora sale
+        // de la clave del telefono (`at`, desde el 27-sep) o, para las claves
+        // anteriores, del valor de la clave del lead de esa conversacion.
+        const desde = lead.at || await horaDelLead(kv, leadKeyOfConv, lead.conversationId);
+        if (desde ? c.o.createdAt < desde : (lead.day && dia < lead.day)) continue;
         const total = Number(c.o.totalPriceSet?.shopMoney?.amount || 0);
         porVariante[lead.variant] = porVariante[lead.variant] || { orders: 0, revenue: 0 };
         porVariante[lead.variant].orders += 1;
         if (Number.isFinite(total)) porVariante[lead.variant].revenue += total;
         detalle.push({ name: c.o.name, day: dia, variant: lead.variant, total: round2(total) });
-      });
+      }
     }
     return { porVariante, detalle, nota: null };
   } catch (error) {
     return { porVariante, detalle, nota: `no se pudieron cruzar pedidos de asesora: ${safeError(error)}` };
   }
+}
+
+// Hora exacta del primer contacto de un lead, leida del valor de su clave
+// abx_lead (logAbLead guarda `at` desde siempre). null si no esta en el rango.
+async function horaDelLead(kv, leadKeyOfConv, conversationId) {
+  const k = conversationId && leadKeyOfConv.get(conversationId);
+  if (!k) return null;
+  try { return JSON.parse((await kv.get(k)) || "{}").at || null; } catch { return null; }
 }
 
 // Adopcion de send-presentation: cuantas presentaciones de la variante D
