@@ -10,3 +10,6 @@ evals/resultados/*.json
 # Estaba sin ignorar: no llego a commitearse, pero un `git add -A` lo habria
 # subido a GitHub. Nunca commitear.
 shopify-token.json
+
+# Paquetes .zip de exportar/: se regeneran desde la carpeta versionada
+exportar/*.zip
