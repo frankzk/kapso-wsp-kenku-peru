@@ -7,9 +7,27 @@ saldo de los envios por Shalom.
 |---|---|
 | **id** | `4c2578dc-1a8e-4ae6-93bc-c6cd66678e2b` |
 | **slug** | `kenku-cobros-shalom` |
-| **trigger** | `589a4c83-c754-4142-b597-6d1e14051a7c` · inbound_message · Kenku 600 |
+| **triggers** | `589a4c83-c754-4142-b597-6d1e14051a7c` · inbound_message · Kenku 600 (`1117623181444547`) |
+| | `09179aeb-38be-4b8b-8a26-b9d2b8290996` · inbound_message · Kenku Aurela +51 929 334 428 (`1403927069462854`), desde el 2026-09-28 |
 | **router** | `shalom-router` (`ddc30944-fdbc-4eee-9ba3-b301135ac6b4`) |
 | **avisos** | `notify-team` (`00dd67bd-df4b-4477-af5c-2530c44a5b60`) |
+
+## Dos numeros, UN workflow (desde el 2026-09-28)
+
+El 929 334 428 ("Kenku Aurela") atiende los cobros con **este mismo workflow**,
+no con una copia: asi las reglas de los dos numeros no se separan con el
+tiempo. En Kapso cada trigger tiene un solo numero, por eso son dos triggers
+`inbound_message` sobre el mismo workflow.
+
+Lo que hizo falta para que el 929 quede igual que el 600:
+- trigger nuevo en este workflow (ningun otro workflow escucha el 929);
+- el 929 en `WATCHDOG_PHONE_IDS` de check-coverage (cola "Atender ahora");
+- nada en el router: toma el numero de la conversacion, no tiene numeros fijos;
+- nada en la derivacion: el webhook de handoff a Kapta es de todo el proyecto;
+- el webhook `whatsapp.message.received` del 929 a Kapta ya existia
+  (`3e574d74`): es el que contesta los botones.
+
+Al 2026-09-28 Meta tiene el 600 en estado **BANNED**.
 
 ## Por que existe
 

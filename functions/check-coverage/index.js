@@ -821,7 +821,9 @@ const WATCHDOG_SWEEP_INTERVAL_MS = 2 * 60 * 1000;    // max un barrido cada 2 mi
 const WATCHDOG_MIN_SILENCE_MS = 3 * 60 * 1000;       // cliente esperando >3 min
 const WATCHDOG_MAX_SILENCE_MS = 6 * 60 * 60 * 1000;  // ignorar silencios >6h (viejos)
 const WATCHDOG_ALERT_TTL_S = 6 * 60 * 60;            // no re-alertar la misma conversacion por 6h
-const WATCHDOG_PHONE_IDS = ["1239315459260256", "951608524703564", "1117623181444547", "597907523413541"];
+// 1403927069462854 = Kenku Aurela (+51 929 334 428): comparte el workflow de
+// cobros con el 600 desde el 2026-09-28, asi que se vigila igual que el 600.
+const WATCHDOG_PHONE_IDS = ["1239315459260256", "951608524703564", "1117623181444547", "1403927069462854", "597907523413541"];
 const WATCHDOG_MAX_ALERTS = 10;
 
 // Mensajes de cierre triviales del cliente que NO requieren respuesta del bot:
