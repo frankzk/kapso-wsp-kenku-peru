@@ -262,6 +262,14 @@ si el credito esta ajustado.
 
 Para gastar menos mientras iteras, usa `--caso` y `--modelos` para acotar.
 
+**Probar otro prompt sin tocar el fixture:** `--prompt archivo.txt` reemplaza el
+system prompt (las herramientas siguen siendo las del fixture). Es como se
+valida un recorte antes de aplicarlo:
+
+```powershell
+node evals/runner.js --modelos "google/gemini-3.7-flash" --prompt "evals/fixtures/prompt-recortado.txt"
+```
+
 ## Mantenimiento
 
 `fixtures/agente.json` es una **foto** del prompt y las herramientas. Si el

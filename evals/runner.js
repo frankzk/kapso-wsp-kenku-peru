@@ -24,6 +24,18 @@ const BASE = __dirname;
 const AGENTE = JSON.parse(fs.readFileSync(path.join(BASE, "fixtures/agente.json"), "utf8"));
 const CASOS = JSON.parse(fs.readFileSync(path.join(BASE, "casos/casos.json"), "utf8"));
 
+// --prompt archivo.txt: corre los casos con OTRO system prompt (por ejemplo una
+// version recortada) sin tocar el fixture. Las herramientas siguen siendo las
+// del fixture. Los \r\n se normalizan: en Windows git puede convertir el .txt a
+// CRLF y eso cambiaria el prompt que se evalua respecto del que se despliega.
+const PROMPT_ARCHIVO = (() => {
+  const i = process.argv.indexOf("--prompt");
+  return i >= 0 ? process.argv[i + 1] : null;
+})();
+if (PROMPT_ARCHIVO) {
+  AGENTE.system_prompt = fs.readFileSync(path.resolve(PROMPT_ARCHIVO), "utf8").replace(/\r\n/g, "\n");
+}
+
 // Candidatos por defecto. Los ids son de OpenRouter; ver evals/README.md para
 // como se eligieron y que mirar de cada uno.
 const MODELOS_DEFAULT = [
@@ -215,7 +227,7 @@ async function main() {
     process.exit(1);
   }
   const tools = herramientas();
-  console.log(`Prompt: ${AGENTE.system_prompt.length} chars | ${tools.length} herramientas | ${casos.length} casos | ${modelos.length} modelos\n`);
+  console.log(`Prompt: ${AGENTE.system_prompt.length} chars${PROMPT_ARCHIVO ? ` (de ${PROMPT_ARCHIVO})` : " (del fixture)"} | ${tools.length} herramientas | ${casos.length} casos | ${modelos.length} modelos\n`);
 
   const tabla = [];
   let gastados = 0;
@@ -269,7 +281,7 @@ async function main() {
   const dir = path.join(BASE, "resultados");
   fs.mkdirSync(dir, { recursive: true });
   const out = path.join(dir, `${stamp}.json`);
-  fs.writeFileSync(out, JSON.stringify({ fecha: new Date().toISOString(), promptChars: AGENTE.system_prompt.length, tabla }, null, 1));
+  fs.writeFileSync(out, JSON.stringify({ fecha: new Date().toISOString(), promptChars: AGENTE.system_prompt.length, promptArchivo: PROMPT_ARCHIVO || null, tabla }, null, 1));
   console.log(`\nGuardado en ${path.relative(process.cwd(), out)}`);
 }
 
