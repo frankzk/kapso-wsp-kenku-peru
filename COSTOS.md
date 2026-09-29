@@ -169,6 +169,40 @@ se puede bajar a ~20 como tope contra un turno descarrilado.
 Medido en los eventos: una presentacion manual son **18 llamadas (mediana) y
 US$0,103**. Eso confirma la cuenta del hallazgo 1.
 
+## Medicion 2026-09-29: gasto real por dia y por conversacion
+
+Sacado de `raw_usage_json.cost` de cada `agent_token_usage` (el costo que cobra
+OpenRouter), agrupado por dia de Lima. Coincide con el panel de Kapso (US$27,19
+contra US$27,46 del panel a las 13:23 del 29-sep).
+
+| dia | gasto | conversaciones nuevas | US$/conversacion |
+|---|---|---|---|
+| 20 a 24-sep (promedio) | US$64/dia | 438/dia | 0,160 |
+| 25-sep | US$83 | 526 | 0,162 |
+| 26-sep | US$93 | 565 | 0,164 |
+| 27-sep | US$99 | 579 | 0,169 |
+| 28-sep | US$63 | 434 | 0,138 |
+
+**El gasto diario subio por volumen, no por costo unitario**: las
+conversaciones nuevas pasaron de ~440 a ~580 por dia el fin de semana. El dato
+que mide la optimizacion es el costo por conversacion.
+
+**D contra A, mismas horas** (costo total de la conversacion, por dia de inicio):
+
+| inicio | A | D | D vs A |
+|---|---|---|---|
+| 26-sep tarde | 0,170 | 0,146 | -14% |
+| 27-sep | 0,190 | 0,149 | -22% |
+| 28-sep | 0,150 | 0,120 | -20% |
+
+D ahorra ~US$0,035 por conversacion (~7 llamadas menos). Con D al 50% son
+~US$10/dia; al 100%, ~US$20/dia (~US$600/mes), en linea con la estimacion del
+hallazgo 1. Las del 28 y 29 siguen abiertas: sus costos todavia suben un poco.
+
+`/workflow_executions/{id}/events?event_type=agent_token_usage` filtra por tipo
+y evita paginar todos los eventos. No hay endpoint de uso en la Platform API
+(`/usage`, `/llm_usage`, `/token_usage` dan 404).
+
 ## Como reproducirlo
 
 Los mensajes se bajan del proxy de Meta de Kapso, con cursor:
