@@ -210,7 +210,8 @@ async function correrCaso(modelo, caso, tools, key, maxIter) {
   }
 
   const textoCliente = textoAlCliente(pasos, caso.turnos.filter((t) => t.rol === "cliente").map((t) => t.texto));
-  const nota = evaluarCaso(caso, { textoCliente, herramientasLlamadas: llamadas });
+  const conArgs = pasos.filter((p) => p.tipo === "tool").map((p) => ({ nombre: p.nombre, argumentos: p.argumentos }));
+  const nota = evaluarCaso(caso, { textoCliente, herramientasLlamadas: llamadas, llamadas: conArgs });
   return { ...nota, modelo, textoCliente, herramientasLlamadas: llamadas, uso, pasos, corte, empujones };
 }
 

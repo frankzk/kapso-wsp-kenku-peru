@@ -68,7 +68,10 @@ const resp = (b, status = 200) => ({ ok: status < 400, status, json: async () =>
 const CON_TEL = { conversation: { id: "c1", phone_number_id: "1239315459260256", phone_number: "51965391481" } };
 const SOLO_BSUID = { conversation: { id: "c2", phone_number_id: "1239315459260256", business_scoped_user_id: "PE.948592654941065" } };
 
-async function correr({ vars = { ab_variant: "D" }, wa = CON_TEL, input = {}, execCtx = null } = {}) {
+// Por defecto el lead viene de un anuncio (ventana gratis de Meta): secuencia
+// completa. Los casos de la compacta pasan vars sin ad_referral_*.
+const DE_ANUNCIO = { ad_referral_ad_id: "120253987459770120" };
+async function correr({ vars = { ab_variant: "D", ...DE_ANUNCIO }, wa = CON_TEL, input = {}, execCtx = null } = {}) {
   const payload = {
     input: { product: "magnesio-12-en-1", saludo: "¡Hola Federico! Soy *Akemi* de Kenku 😊", beneficio: "Recupera tu energía y mejora tu descanso de forma natural 🌿", ...input },
     whatsapp_context: wa,
@@ -121,8 +124,68 @@ caso("pregunta final sin direccion: Lima / Provincia", async () => {
   assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["Lima", "Provincia"]);
 });
 caso("pregunta final con direccion conocida: la confirma", async () => {
-  mock(); await correr({ vars: { ab_variant: "D", known_address: "Av. Arequipa 123, Lince" } });
+  mock(); await correr({ vars: { ab_variant: "D", ...DE_ANUNCIO, known_address: "Av. Arequipa 123, Lince" } });
   const i = enviados.at(-1).interactive;
+  assert.ok(i.body.text.includes("Av. Arequipa 123, Lince"));
+  assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["Si, la misma", "Cambiar direccion"]);
+});
+
+// --- Compacta: conversacion que Meta cobra (sin anuncio) ---
+const PAGA = { ab_variant: "D" };
+caso("sin anuncio: 5 mensajes con TODO el contenido", async () => {
+  mock(); const r = await correr({ vars: PAGA });
+  assert.strictEqual(r.ok, true); assert.strictEqual(r.compacta, true);
+  assert.deepStrictEqual(r.enviados, ["foto_con_saludo", "foto_antes_despues", "video", "precio", "pregunta_final"]);
+  assert.deepStrictEqual(tipos(), ["image", "image", "video", "text", "interactive"]);
+  assert.strictEqual(enviados[0].image.caption, "¡Hola Federico! Soy *Akemi* de Kenku 😊\n\nRecupera tu energía y mejora tu descanso de forma natural 🌿");
+  assert.strictEqual(enviados[0].image.link, "https://cdn/principal.jpg");
+  const i = enviados.at(-1).interactive;
+  assert.deepStrictEqual(i.header, { type: "image", image: { link: "https://cdn/t.jpg" } });
+  assert.strictEqual(i.body.text, "Lo que dicen nuestros clientes 💬\n\nPor cierto 😊, ¿te encuentras en *Lima* o en *provincia*?");
+  assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["Lima", "Provincia"]);
+});
+caso("con anuncio: la secuencia de siempre, sin cabecera en los botones", async () => {
+  mock(); const r = await correr();
+  assert.strictEqual(r.compacta, false);
+  assert.ok(!("header" in enviados.at(-1).interactive));
+  assert.strictEqual(enviados.filter((b) => b.type === "text").length, 3);
+});
+caso("cualquier ad_referral_* cuenta como anuncio", async () => {
+  const { conversacionPaga } = P;
+  assert.strictEqual(conversacionPaga({}), true);
+  assert.strictEqual(conversacionPaga({ ad_referral_ad_id: null, ad_referral_headline: "" }), true);
+  for (const k of ["ad_referral_ad_id", "ad_referral_headline", "ad_referral_product_handle", "ad_referral_source_url"]) {
+    assert.strictEqual(conversacionPaga({ [k]: "x" }), false, k);
+  }
+});
+caso("sin anuncio y solo foto principal: 3 mensajes", async () => {
+  mock({ media: MEDIA_MINIMA }); const r = await correr({ vars: PAGA });
+  assert.deepStrictEqual(r.enviados, ["foto_con_saludo", "precio", "pregunta_final"]);
+  assert.ok(!("header" in enviados.at(-1).interactive), "sin testimonio no hay cabecera");
+  assert.strictEqual(enviados.at(-1).interactive.body.text, "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?");
+});
+caso("sin anuncio y sin fotos: saludo y beneficio en UN texto", async () => {
+  mock({ media: null }); const r = await correr({ vars: PAGA });
+  assert.deepStrictEqual(r.enviados, ["saludo_beneficio", "precio", "pregunta_final"]);
+  assert.strictEqual(enviados[0].text.body, "¡Hola Federico! Soy *Akemi* de Kenku 😊\n\nRecupera tu energía y mejora tu descanso de forma natural 🌿");
+});
+caso("sin anuncio: si Meta rechaza la cabecera, la pregunta sale igual sin ella", async () => {
+  mock(); falloEnvioN = 4; // 0 foto, 1 antes/despues, 2 video, 3 precio, 4 botones con cabecera
+  const r = await correr({ vars: PAGA });
+  assert.strictEqual(r.ok, true);
+  const i = enviados.at(-1).interactive;
+  assert.ok(!("header" in i));
+  assert.strictEqual(i.body.text, "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?");
+});
+caso("sin anuncio: falla la foto con el saludo -> nada enviado, presenta a mano", async () => {
+  mock(); falloEnvioN = 0;
+  const r = await correr({ vars: PAGA });
+  assert.strictEqual(r.ok, false); assert.strictEqual(r.reason, "envio_fallido"); assert.strictEqual(enviados.length, 0);
+});
+caso("sin anuncio con direccion conocida: la confirma con el testimonio arriba", async () => {
+  mock(); await correr({ vars: { ...PAGA, known_address: "Av. Arequipa 123, Lince" } });
+  const i = enviados.at(-1).interactive;
+  assert.ok(i.body.text.startsWith("Lo que dicen nuestros clientes 💬"));
   assert.ok(i.body.text.includes("Av. Arequipa 123, Lince"));
   assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["Si, la misma", "Cambiar direccion"]);
 });

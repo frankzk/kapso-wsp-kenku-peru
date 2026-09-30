@@ -130,7 +130,11 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
   const unidad = unidadDe(titulo);
   const media = Array.isArray(medios?.media) ? medios.media : [];
 
+  // Conversacion que Meta cobra (no vino de un anuncio): la misma presentacion
+  // en menos mensajes. Ver conversacionPaga.
+  const compacta = conversacionPaga(ctx.vars);
   const pasos = armarSecuencia({
+    compacta,
     saludo,
     beneficio,
     nombre,
@@ -175,6 +179,7 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
       sent: true,
       enCurso: true,
       producto: producto_,
+      compacta,
       pasos: pasos.map((p) => p.paso),
       message: "Presentacion en curso: el saludo ya salio y el resto (fotos, video, beneficio, precio, testimonio"
         + " y la pregunta final con botones) se esta enviando solo en los proximos segundos. NO mandes nada mas"
@@ -189,6 +194,7 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
     sent: true,
     enCurso: false,
     producto: producto_,
+    compacta,
     ...r,
     duracionTotalMs: deps.ahora() - inicio,
     message: r.ok
@@ -260,14 +266,44 @@ async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
 // material; los de texto van siempre.
 // ---------------------------------------------------------------------------
 
-function armarSecuencia({ saludo, beneficio, nombre, media, precio, antes, unidad, knownAddress }) {
+function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, precio, antes, unidad, knownAddress }) {
   const porRol = (rol) => media.find((m) => m && m.role === rol && (m.url || m.mediaUrl));
   const url = (m) => m.url || m.mediaUrl;
   const pasos = [];
+  const principal = porRol("principal");
+  const testimonio = porRol("testimonio");
+  const pregunta = knownAddress
+    ? { texto: `¿Te lo enviamos a ${knownAddress}, como la vez pasada? 😊`, botones: ["Si, la misma", "Cambiar direccion"] }
+    : { texto: "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?", botones: ["Lima", "Provincia"] };
+
+  if (compacta) {
+    // El MISMO contenido, sin sacar nada, en menos mensajes: saludo y beneficio
+    // van al pie de la foto principal, y el testimonio como imagen de cabecera
+    // de la pregunta final. Una presentacion completa pasa de 8 mensajes a 5.
+    const intro = `${saludo}\n\n${beneficio}`;
+    pasos.push(principal
+      ? { paso: "foto_con_saludo", tipo: "image", body: { link: url(principal), caption: intro } }
+      : { paso: "saludo_beneficio", tipo: "text", body: { body: intro } });
+    const antesDespuesC = porRol("antes_despues");
+    if (antesDespuesC) pasos.push({ paso: "foto_antes_despues", tipo: "image", body: { link: url(antesDespuesC) } });
+    const videoC = porRol("video");
+    if (videoC) pasos.push({ paso: "video", tipo: "video", body: { link: url(videoC), caption: `Mira este video corto del *${nombre}* 🎬` } });
+    pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad }) } });
+    const sinCabecera = botones(pregunta.texto, pregunta.botones);
+    pasos.push(testimonio
+      ? {
+        paso: "pregunta_final",
+        tipo: "buttons",
+        body: { ...botones(`Lo que dicen nuestros clientes 💬\n\n${pregunta.texto}`, pregunta.botones), header: { type: "image", image: { link: url(testimonio) } } },
+        // Si Meta rechaza la cabecera, la pregunta sale igual sin el testimonio.
+        sinCabecera,
+      }
+      : { paso: "pregunta_final", tipo: "buttons", body: sinCabecera });
+    return pasos;
+  }
 
   pasos.push({ paso: "saludo", tipo: "text", body: { body: saludo } });
 
-  const principal = porRol("principal");
   if (principal) pasos.push({ paso: "foto_principal", tipo: "image", body: { link: url(principal), caption: nombre } });
 
   const antesDespues = porRol("antes_despues");
@@ -279,22 +315,22 @@ function armarSecuencia({ saludo, beneficio, nombre, media, precio, antes, unida
   pasos.push({ paso: "beneficio", tipo: "text", body: { body: beneficio } });
   pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad }) } });
 
-  const testimonio = porRol("testimonio");
   if (testimonio) pasos.push({ paso: "testimonio", tipo: "image", body: { link: url(testimonio), caption: "Lo que dicen nuestros clientes 💬" } });
 
-  pasos.push(knownAddress
-    ? {
-      paso: "pregunta_final",
-      tipo: "buttons",
-      body: botones(`¿Te lo enviamos a ${knownAddress}, como la vez pasada? 😊`, ["Si, la misma", "Cambiar direccion"]),
-    }
-    : {
-      paso: "pregunta_final",
-      tipo: "buttons",
-      body: botones("Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?", ["Lima", "Provincia"]),
-    });
+  pasos.push({ paso: "pregunta_final", tipo: "buttons", body: botones(pregunta.texto, pregunta.botones) });
 
   return pasos;
+}
+
+// Desde el 2026-10-01 Meta cobra cada mensaje de servicio (US$0,03). Las
+// conversaciones que vienen de un anuncio (click-to-WhatsApp) estan en la
+// ventana gratuita de 72 h y no pagan; esas siguen con la secuencia de siempre.
+// customer-lookup deja las ad_referral_* cuando el lead entro por un anuncio.
+// Medido 22-28 sep: ~17% de las que Meta marco gratis no traian la variable;
+// esas reciben la compacta sin ahorro, pero sin perder contenido.
+function conversacionPaga(vars) {
+  return !["ad_referral_ad_id", "ad_referral_headline", "ad_referral_product_handle", "ad_referral_source_url"]
+    .some((k) => String(vars?.[k] ?? "").trim());
 }
 
 // Msg 6 del prompt. El ladder es el mismo que calcula quote-order: 3 unidades
@@ -379,7 +415,15 @@ function pausa() {
 
 function describir(p) {
   if (p.tipo === "text") return { paso: p.paso, tipo: "texto", texto: p.body.body };
-  if (p.tipo === "buttons") return { paso: p.paso, tipo: "botones", bodyText: p.body.body.text, botones: p.body.action.buttons.map((b) => b.reply.title) };
+  if (p.tipo === "buttons") {
+    return {
+      paso: p.paso,
+      tipo: "botones",
+      bodyText: p.body.body.text,
+      botones: p.body.action.buttons.map((b) => b.reply.title),
+      ...(p.body.header ? { headerImage: p.body.header.image.link } : {}),
+    };
+  }
   return { paso: p.paso, tipo: p.tipo, url: p.body.link, caption: p.body.caption || "" };
 }
 
@@ -390,6 +434,13 @@ function describir(p) {
 // ---------------------------------------------------------------------------
 
 async function enviar(paso, ctx) {
+  const res = await enviarUno(paso, ctx);
+  if (res.ok || !paso.sinCabecera) return res;
+  const reintento = await enviarUno({ ...paso, body: paso.sinCabecera }, ctx);
+  return { ...reintento, ms: (res.ms || 0) + (reintento.ms || 0), sinCabecera: reintento.ok };
+}
+
+async function enviarUno(paso, ctx) {
   const body = {
     messaging_product: "whatsapp",
     ...(ctx.to ? { to: ctx.to } : { recipient: ctx.bsuid }),
@@ -578,5 +629,5 @@ function json(body, status = 200) {
 }
 
 globalThis.__kenkuSendPresentation = {
-  handler, handleRequest, armarSecuencia, lineaPrecio, precioUnico, unidadDe, nombreCorto, sanitize, deps,
+  handler, handleRequest, armarSecuencia, conversacionPaga, lineaPrecio, precioUnico, unidadDe, nombreCorto, sanitize, deps,
 };

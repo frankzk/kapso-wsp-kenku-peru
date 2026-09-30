@@ -590,5 +590,228 @@
     "tipo": "sin_narracion"
    }
   ]
+ },
+ {
+  "id": "presentacion-compacta-a",
+  "origen": "Desde el 2026-10-01 Meta cobra US$0,03 por mensaje en las conversaciones que NO vienen de un anuncio. Sin ad_referral_*: saludo+beneficio al pie de la foto, testimonio como cabecera de los botones. Mismo contenido, menos mensajes.",
+  "producto": "pyroslim",
+  "variables": {
+   "ab_variant": "A",
+   "entry_type": "link",
+   "promo_variant": "P1"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "https://kenku.pe/products/pyroslim"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "pyroslim",
+     "title": "PYROSLIM™ - Quemador de Grasa con L-Carnitina y Garcinia Cambogia (350 gr)",
+     "priceRange": {
+      "min": 129,
+      "max": 129,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "product_media_lookup": {
+    "media": [
+     {
+      "rol": "principal",
+      "mediaUrl": "https://ejemplo/pyroslim.webp"
+     },
+     {
+      "rol": "testimonio",
+      "mediaUrl": "https://ejemplo/pyroslim-testimonio.webp"
+     }
+    ],
+    "videoAvailable": false
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "argumento_regex",
+    "herramienta": "send_media",
+    "campo": "caption",
+    "valor": "akemi",
+    "porque": "el saludo va al pie de la foto principal, no como mensaje aparte"
+   },
+   {
+    "tipo": "argumento_regex",
+    "herramienta": "send_buttons",
+    "campo": "headerImage",
+    "valor": "^https://ejemplo/pyroslim-testimonio",
+    "porque": "el testimonio va como cabecera de la pregunta final"
+   },
+   {
+    "tipo": "max_llamadas",
+    "valor": {
+     "send_text": 1,
+     "send_media": 1
+    },
+    "porque": "compacta: foto con saludo+beneficio, precio, botones"
+   },
+   {
+    "tipo": "herramienta_prohibida",
+    "valor": [
+     "send_presentation"
+    ]
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     129,
+     258,
+     387
+    ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "presentacion-con-anuncio-a",
+  "origen": "El control de la compacta: si el lead vino de un anuncio (mensajes gratis 72 h) la presentacion sigue como siempre, con saludo y beneficio en mensajes propios.",
+  "producto": "pyroslim",
+  "variables": {
+   "ab_variant": "A",
+   "entry_type": "otro",
+   "promo_variant": "P1",
+   "ad_referral_headline": "PYROSLIM quema grasa sin rebote",
+   "ad_referral_product_handle": "pyroslim"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "¡Hola! Quiero más información"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "pyroslim",
+     "title": "PYROSLIM™ - Quemador de Grasa con L-Carnitina y Garcinia Cambogia (350 gr)",
+     "priceRange": {
+      "min": 129,
+      "max": 129,
+      "currencyCode": "PEN"
+     },
+     "description": "",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "product_media_lookup": {
+    "media": [
+     {
+      "rol": "principal",
+      "mediaUrl": "https://ejemplo/pyroslim.webp"
+     },
+     {
+      "rol": "testimonio",
+      "mediaUrl": "https://ejemplo/pyroslim-testimonio.webp"
+     }
+    ],
+    "videoAvailable": false
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "min_llamadas",
+    "valor": {
+     "send_text": 3,
+     "send_media": 2
+    },
+    "porque": "con anuncio: saludo, beneficio y precio sueltos; foto principal y testimonio sueltos"
+   },
+   {
+    "tipo": "herramienta_prohibida",
+    "valor": [
+     "send_presentation"
+    ]
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     129,
+     258,
+     387
+    ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "un-texto-por-turno",
+  "origen": "Falla real (29-sep): tras 'Quiero 1 frasco' el bot mando '¡Excelente eleccion! ... ¿de que departamento?' y enseguida otro mensaje '¿Eres de Lima o provincia?'. Cada mensaje suelto cuesta US$0,03.",
+  "producto": "purely-nutrient-ethiopian-black-seed-oil",
+  "variables": {
+   "ab_variant": "A",
+   "entry_type": "consulta",
+   "promo_variant": "P1",
+   "last_product_title": "Black Seed Oil Etíope",
+   "last_product_handle": "purely-nutrient-ethiopian-black-seed-oil"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "https://kenku.pe/products/purely-nutrient-ethiopian-black-seed-oil Tengo una consulta"
+   },
+   {
+    "rol": "asistente",
+    "texto": "¡Hola! Soy *Akemi* de Kenku 😊 [foto] Refuerza tus defensas y tu energía desde adentro 🌿 *Black Seed Oil Etíope* queda en *S/ 149* por unidad con *envío gratis* 📦. Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+   },
+   {
+    "rol": "cliente",
+    "texto": "Provincia. Cuantas capsulas vienen? Quiero 1 frasco"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "purely-nutrient-ethiopian-black-seed-oil",
+     "title": "SUPER HUMAN Ethiopian Black Seed Oil (60 Cápsulas)",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "Aceite de semilla negra etíope prensado en frío. 60 cápsulas blandas por frasco.",
+     "tags": []
+    },
+    "outOfStock": false
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "max_llamadas",
+    "valor": {
+     "send_text": 1
+    },
+    "porque": "respuesta (60 capsulas) y siguiente paso (departamento/distrito) en UN mensaje"
+   },
+   {
+    "tipo": "requerido_texto",
+    "valor": [
+     "60"
+    ]
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
  }
 ]

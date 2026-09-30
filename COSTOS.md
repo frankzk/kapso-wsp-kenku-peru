@@ -203,6 +203,51 @@ hallazgo 1. Las del 28 y 29 siguen abiertas: sus costos todavia suben un poco.
 y evita paginar todos los eventos. No hay endpoint de uso en la Platform API
 (`/usage`, `/llm_usage`, `/token_usage` dan 404).
 
+## Meta cobra los mensajes de servicio desde el 2026-10-01 (US$0,03 c/u)
+
+Medido en los mensajes del 22 al 28-sep (3.221 conversaciones del bot de
+ventas), con la tarifa que Meta deja en `kapso.statuses[].pricing` de cada
+mensaje:
+
+| | conversaciones/dia | mensajes del bot por conversacion | que marca Meta |
+|---|---|---|---|
+| vino de un anuncio | ~230 | 14,4 | `free_entry_point` (72 h gratis) |
+| no vino de un anuncio | ~230 | 11,5 | `free_customer_service` -> **se cobra** |
+
+Las que pagan son ~2.650 mensajes/dia, **~US$80/dia**. A y D mandan lo mismo
+(13,1 contra 12,8 por conversacion): la prueba A/D no cambia esta factura.
+
+**Los seguimientos pagan lo que cuestan.** Pedido tras responder a cada toque,
+siguiendo a la clienta por telefono entre conversaciones (la respuesta al s7
+llega ~23 h despues y abre una conversacion nueva; contarla solo dentro de la
+misma daba 0 y era un error):
+
+| toque | enviados | respondieron | pedidos |
+|---|---|---|---|
+| s1 | 2.673 | 12,8% | 65 |
+| s2 | 2.321 | 7,5% | 30 |
+| s3 | 2.132 | 4,9% | 21 |
+| s4 | 2.020 | 5,6% | 19 |
+| s5 | 1.897 | 3,6% | 8 |
+| s6 | 1.824 | 4,3% | 10 |
+| s7 | 1.733 | 5,0% | 9 |
+
+Es un techo (parte habria comprado igual), pero incluso a 1/5 cada toque deja
+mas que US$0,03. **No se corta ninguno.**
+
+Lo que si se hace: el mismo contenido en menos mensajes.
+
+- **s5, aplicado el 2026-09-30** (workflow lock 28627 -> 28628): el texto "Aqui
+  sigo..." ya no va suelto; `fu-p5` manda la foto con ese texto al pie, o el
+  texto solo si no hay foto (tiene `send_text` para eso). Se borro `fu-s5` y
+  `fu-g5 --enviar--> fu-p5`. Ahorra ~0,4 mensajes por conversacion. Control:
+  la respuesta al s5 no deberia bajar de 3,6%.
+- **Tanda 2, pendiente de aprobacion** (`evals/fixtures/prompt-tanda2.diff`):
+  presentacion compacta solo en conversaciones sin anuncio (saludo+beneficio al
+  pie de la foto, testimonio como cabecera de los botones: 8 -> 5 mensajes,
+  `send-presentation` lo hace solo para D) y un solo `send_text` por turno.
+  ~US$13/dia.
+
 ## Como reproducirlo
 
 Los mensajes se bajan del proxy de Meta de Kapso, con cursor:

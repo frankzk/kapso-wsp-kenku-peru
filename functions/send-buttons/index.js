@@ -50,6 +50,11 @@ async function handleRequest(request, env = globalThis) {
 
     const bodyText = String(input.bodyText || input.body_text || input.text || "").trim();
     const buttons = normalizeButtons(input.buttons);
+    // Imagen opcional ARRIBA de los botones (header de WhatsApp). Sirve para
+    // juntar el testimonio con la pregunta final en UN mensaje: desde el
+    // 2026-10-01 Meta cobra cada mensaje de servicio (US$0,03) y el testimonio
+    // suelto era un mensaje entero.
+    const headerImage = headerImageUrl(input.headerImage || input.header_image || input.imageUrl);
 
     if (!apiKey || !phoneNumberId || !(to || bsuid)) {
       return json({ ok: false, reason: "missing_context", message: "Sin contexto de WhatsApp para enviar botones: haz la misma pregunta como mensaje de texto normal." });
@@ -58,7 +63,7 @@ async function handleRequest(request, env = globalThis) {
       return json({ ok: false, reason: "invalid_input", message: "Falta bodyText o buttons (1-3 botones con titulo de max 20 caracteres). Corrige y reintenta, o haz la pregunta como texto normal." });
     }
 
-    const response = await fetch(`https://api.kapso.ai/meta/whatsapp/v24.0/${phoneNumberId}/messages`, {
+    const enviar = (conHeader) => fetch(`https://api.kapso.ai/meta/whatsapp/v24.0/${phoneNumberId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
@@ -67,12 +72,23 @@ async function handleRequest(request, env = globalThis) {
         type: "interactive",
         interactive: {
           type: "button",
+          ...(conHeader ? { header: { type: "image", image: { link: headerImage } } } : {}),
           body: { text: bodyText.slice(0, MAX_BODY_CHARS) },
           action: { buttons },
         },
       }),
     });
-    const result = await response.json().catch(() => ({}));
+
+    let response = await enviar(Boolean(headerImage));
+    let result = await response.json().catch(() => ({}));
+    // Si Meta rechaza la imagen, la pregunta sale igual sin ella: la pregunta
+    // es lo que no se puede perder.
+    let headerDropped = false;
+    if (!response.ok && headerImage) {
+      headerDropped = true;
+      response = await enviar(false);
+      result = await response.json().catch(() => ({}));
+    }
 
     if (!response.ok) {
       return json({
@@ -88,6 +104,7 @@ async function handleRequest(request, env = globalThis) {
       ok: true,
       sent: true,
       buttons: buttons.map((b) => b.reply.title),
+      ...(headerImage ? { headerImage: !headerDropped } : {}),
       message: "Botones enviados como mensaje de WhatsApp: NO repitas la misma pregunta en texto. Si quedas esperando la respuesta del cliente, guarda stage/followup_hint y llama complete_task.",
     });
   } catch (error) {
@@ -111,6 +128,11 @@ function normalizeButtons(raw) {
     buttons.push({ type: "reply", reply: { id, title } });
   }
   return buttons;
+}
+
+function headerImageUrl(raw) {
+  const url = String(raw || "").trim();
+  return /^https:\/\/\S+$/i.test(url) ? url : "";
 }
 
 async function readJson(request) {

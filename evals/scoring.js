@@ -127,9 +127,40 @@ const REGLAS = {
       ? { ok: false, detalle: `llamo ${usadas.join(", ")} y no debia` }
       : { ok: true };
   },
+
+  // Cuantos mensajes manda. Desde el 2026-10-01 Meta cobra cada mensaje de
+  // servicio (US$0,03): {"valor": {"send_text": 1}} = como mucho 1 send_text.
+  max_llamadas(regla, ctx) {
+    const pasadas = Object.entries(regla.valor || {})
+      .map(([h, max]) => [h, ctx.herramientasLlamadas.filter((x) => x === h).length, max])
+      .filter(([, n, max]) => n > max);
+    return pasadas.length
+      ? { ok: false, detalle: pasadas.map(([h, n, max]) => `${h} x${n} (max ${max})`).join(", ") }
+      : { ok: true };
+  },
+
+  min_llamadas(regla, ctx) {
+    const faltan = Object.entries(regla.valor || {})
+      .map(([h, min]) => [h, ctx.herramientasLlamadas.filter((x) => x === h).length, min])
+      .filter(([, n, min]) => n < min);
+    return faltan.length
+      ? { ok: false, detalle: faltan.map(([h, n, min]) => `${h} x${n} (min ${min})`).join(", ") }
+      : { ok: true };
+  },
+
+  // Alguna llamada a `herramienta` tiene `campo` y matchea `valor` (regex).
+  // Ej: la presentacion compacta lleva el saludo en el caption de la foto.
+  argumento_regex(regla, ctx) {
+    const re = new RegExp(regla.valor || ".", "i");
+    const llamadas = (ctx.llamadas || []).filter((l) => l.nombre === regla.herramienta);
+    const ok = llamadas.some((l) => typeof l.argumentos?.[regla.campo] === "string" && re.test(sa(l.argumentos[regla.campo])));
+    return ok
+      ? { ok: true }
+      : { ok: false, detalle: `ninguna llamada a ${regla.herramienta} con ${regla.campo} ~ /${regla.valor}/ (hubo ${llamadas.length})` };
+  },
 };
 
-// ctx = { textoCliente, herramientasLlamadas }
+// ctx = { textoCliente, herramientasLlamadas, llamadas: [{ nombre, argumentos }] }
 function evaluarCaso(caso, ctx) {
   const resultados = (caso.reglas || []).map((regla) => {
     const fn = REGLAS[regla.tipo];

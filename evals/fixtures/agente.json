@@ -32,6 +32,10 @@
      "bodyText": {
       "type": "string",
       "description": "Texto de la pregunta que acompana a los botones"
+     },
+     "headerImage": {
+      "type": "string",
+      "description": "Opcional: URL https de una imagen que se muestra arriba de la pregunta, en el MISMO mensaje (el testimonio en la presentacion compacta)."
      }
     }
    }
