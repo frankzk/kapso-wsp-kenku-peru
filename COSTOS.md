@@ -248,6 +248,46 @@ Lo que si se hace: el mismo contenido en menos mensajes.
   `send-presentation` lo hace solo para D) y un solo `send_text` por turno.
   ~US$13/dia.
 
+## Analisis 2026-10-02: donde se pueden acotar mensajes sin perder ventas
+
+**Cobro real.** Meta empezo a cobrar el 2026-10-01 a las ~15:05 hora Lima:
+desde ahi todo `service` sale `regular`/`billable:true`; los de anuncio siguen
+`free_entry_point`. En las primeras 5,7 h: 481 mensajes cobrados (~US$60-80/dia
+proyectado; la tarde es la hora pico). Reparto de lo cobrado: respuestas del
+bot 26%, presentacion 24%, seguimientos 41%, asesoras 6%, resto 3%.
+
+**Conversaciones que pagan, 22-28 sep** (1.603, 17,5% compro; mensajes
+seguidos por telefono entre conversaciones):
+
+| de donde salen | mensajes/dia |
+|---|---|
+| respuestas del bot | 714 |
+| presentacion | 660 |
+| seguimientos s1-s7 (+ foto del s5) | 1.016 |
+| asesoras (despues del handoff) | 206 |
+| plantillas y confirmaciones | 62 |
+
+Hallazgos, contra conversion:
+
+1. **Varios mensajes seguidos no venden mas; lo que importa es terminar con
+   pregunta.** Respuesta en <1 h al turno del bot: 1 mensaje con pregunta
+   77,9%, 2+ con pregunta 80,3%, 1 sin pregunta 62,4%. Juntar en un mensaje
+   que termine en pregunta no pierde nada.
+2. **El largo de la presentacion no mueve la respuesta.** Presentaciones sin
+   interrupcion: 5 mensajes 31,3% responde en 24 h, 7 mensajes 33,0%, 8
+   mensajes 27,2%. El largo lo fija el producto (que media tiene), asi que no
+   hay comparacion limpia dentro de producto; pero no hay ninguna senal de que
+   los mensajes extra sumen. Compactar (mismo contenido) es seguro.
+3. **Asesoras parten mensajes:** de 206/dia, 83 son el 2do, 3ro... de una
+   rafaga sin respuesta en medio ("Estas solo 2" / "Modelos" / "Hay").
+4. **Seguimientos, US$ de Meta por pedido atribuido (techo):** s1 0,94, s2
+   1,68, s3 1,87, s4 4,10, s5 3,85 (ya en 1 mensaje), s6 3,72, s7 3,57. El
+   segundo ciclo (tras una respuesta) rinde igual que el primero (2,98).
+   s4-s7 cuestan ~US$13/dia por ~3,4 pedidos/dia atribuidos; que convenga
+   depende del margen por pedido y de cuantos habrian comprado igual.
+5. **El s5 compactado funciona:** desde el 30-sep, 258 envios, todos en un
+   solo mensaje (196 foto con texto al pie, 62 texto solo).
+
 ## Como reproducirlo
 
 Los mensajes se bajan del proxy de Meta de Kapso, con cursor:
