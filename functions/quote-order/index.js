@@ -2,6 +2,14 @@ const FREE_SHIPPING_THRESHOLD = 40;
 const SHIPPING_FEE_UNDER_THRESHOLD = 10;
 const MAX_QUANTITY = 50; // tope de seguridad: evita ordenes accidentales de miles de unidades
 
+// Precio AUTORITATIVO: el agente a veces manda un unitPrice equivocado (ej. Black
+// Seed Oil cotizado a S/69 en vez de S/149, arrastrando el precio de otro
+// producto). Resolvemos el precio REAL desde el catalogo publico (kenku.pe) por
+// variantId -> handle -> titulo, y sobreescribimos el unitPrice del agente.
+const PUBLIC_SHOP_DOMAIN = "kenku.pe";
+const CATALOG_CACHE_TTL_MS = 15 * 60 * 1000;
+const MAX_CATALOG_PAGES = 20;
+
 function clampQuantity(raw) {
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n) || n < 1) return 1;
@@ -24,11 +32,17 @@ async function handleRequest(request) {
     const input = unwrapInput(payload);
     const lineItems = normalizeLineItems(input.lineItems || input.items || []);
 
-    if (!lineItems.length) {
-      return json({ ok: false, reason: "missing_items", message: "Faltan productos para calcular la cotizacion." });
+    // Sobreescribe unitPrice con el precio REAL del catalogo (best-effort). Asi el
+    // bot no cotiza un precio inventado/arrastrado. Si un item no se resuelve, se
+    // conserva el unitPrice que mando el agente (comportamiento previo).
+    await applyRealPrices(lineItems);
+
+    const priced = lineItems.filter((item) => Number.isFinite(item.unitPrice));
+    if (!priced.length) {
+      return json({ ok: false, reason: "missing_items", message: "Faltan productos (o precio) para calcular la cotizacion." });
     }
 
-    const grouped = groupByProduct(lineItems);
+    const grouped = groupByProduct(priced);
     const quotedGroups = grouped.map(quoteGroup);
     const subtotalBeforeDiscount = money(quotedGroups.reduce((sum, group) => sum + group.subtotalBeforeDiscount, 0));
     const discountTotal = money(quotedGroups.reduce((sum, group) => sum + group.discountAmount, 0));
@@ -69,12 +83,96 @@ function normalizeLineItems(items) {
     .map((item) => ({
       productId: String(item.productId || item.product_id || item.product?.id || item.handle || item.title || item.productTitle || item.product_title || "").trim(),
       productTitle: String(item.productTitle || item.product_title || item.product?.title || item.title || "").trim(),
+      handle: String(item.handle || item.productHandle || item.product_handle || item.product?.handle || "").trim(),
       variantId: String(item.variantId || item.variant_id || item.variant?.id || "").trim(),
-      variantTitle: String(item.variantTitle || item.variant_title || item.variant?.title || "").trim(),
+      variantTitle: String(item.variantTitle || item.variant_title || item.variant?.title || item.color || "").trim(),
       quantity: clampQuantity(item.quantity ?? item.qty ?? 1),
       unitPrice: Number(item.unitPrice ?? item.unit_price ?? item.price ?? item.variant?.price),
     }))
-    .filter((item) => item.productId && item.quantity > 0 && Number.isFinite(item.unitPrice));
+    // El unitPrice ya NO es obligatorio aqui: si falta, se resuelve del catalogo.
+    .filter((item) => item.productId && item.quantity > 0);
+}
+
+// --- Precio real desde el catalogo publico -------------------------------
+
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function variantNumericId(value) {
+  const m = String(value || "").match(/(\d{5,})/);
+  return m ? m[1] : "";
+}
+
+async function loadPublicPriceMaps() {
+  const now = Date.now();
+  const cached = globalThis.__KENKU_QUOTE_PRICE_CACHE;
+  if (cached && cached.expiresAt > now) return cached.maps;
+
+  const byVariant = new Map();
+  const byHandle = new Map();
+  const byTitle = new Map();
+  try {
+    for (let page = 1; page <= MAX_CATALOG_PAGES; page += 1) {
+      const res = await fetch(`https://${PUBLIC_SHOP_DOMAIN}/products.json?limit=250&page=${page}`, {
+        headers: { Accept: "application/json", "User-Agent": "Kenku-Kapso-Quote/1.0" },
+      });
+      if (!res.ok) break;
+      const payload = await res.json();
+      const products = Array.isArray(payload.products) ? payload.products : [];
+      if (!products.length) break;
+      for (const product of products) {
+        const variants = Array.isArray(product.variants) ? product.variants : [];
+        const prices = variants.map((v) => Number(v.price)).filter((n) => Number.isFinite(n) && n > 0);
+        const repPrice = prices.length ? Math.min(...prices) : null; // precio base (1 unidad) del producto
+        if (product.handle && repPrice != null) byHandle.set(String(product.handle), { repPrice, variants });
+        if (product.title && repPrice != null) byTitle.set(normalizeText(product.title), { repPrice, variants });
+        for (const v of variants) {
+          const price = Number(v.price);
+          if (Number.isFinite(price) && price > 0) byVariant.set(String(v.id), price);
+        }
+      }
+      if (products.length < 250) break;
+    }
+  } catch {
+    // best-effort: si falla la carga, no bloquea (se usa el unitPrice del agente)
+  }
+
+  const maps = { byVariant, byHandle, byTitle };
+  globalThis.__KENKU_QUOTE_PRICE_CACHE = { expiresAt: now + CATALOG_CACHE_TTL_MS, maps };
+  return maps;
+}
+
+function realPriceForItem(item, maps) {
+  const vnum = variantNumericId(item.variantId);
+  if (vnum && maps.byVariant.has(vnum)) return maps.byVariant.get(vnum);
+
+  const entry = (item.handle && maps.byHandle.get(item.handle))
+    || (item.productTitle && maps.byTitle.get(normalizeText(item.productTitle)))
+    || null;
+  if (!entry) return null;
+  // Si hay variante especifica pedida, usar su precio; si no, el precio base.
+  if (item.variantTitle) {
+    const wanted = normalizeText(item.variantTitle);
+    const match = (entry.variants || []).find((v) => normalizeText(v.title).includes(wanted) || wanted.includes(normalizeText(v.title)));
+    const p = match ? Number(match.price) : NaN;
+    if (Number.isFinite(p) && p > 0) return p;
+  }
+  return entry.repPrice;
+}
+
+async function applyRealPrices(lineItems) {
+  if (!lineItems.length) return;
+  const maps = await loadPublicPriceMaps();
+  if (!maps.byVariant.size && !maps.byHandle.size && !maps.byTitle.size) return; // catalogo no disponible
+  for (const item of lineItems) {
+    const real = realPriceForItem(item, maps);
+    if (Number.isFinite(real) && real > 0) item.unitPrice = real;
+  }
 }
 
 function unwrapInput(payload) {
