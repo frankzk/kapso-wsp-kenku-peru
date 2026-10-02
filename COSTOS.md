@@ -290,6 +290,17 @@ Hallazgos, contra conversion:
 5. **El s5 compactado funciona:** desde el 30-sep, 258 envios, todos en un
    solo mensaje (196 foto con texto al pie, 62 texto solo).
 
+## Revision de la tanda 2 (2026-10-02, 16:00 Lima)
+
+Conversaciones que pagan, presentacion: 6,5-6,9 mensajes -> 3,9 (A y D). Saludo
+al pie de la foto: A 94%, D 100%. Las de anuncio siguen igual (6,1-6,4). Turnos
+del bot con 2+ textos seguidos: 14,1% -> 5,0%. Sin saludo doble, sin textos al
+pie vacios, sin narracion. La cabecera con testimonio la acepta Meta; un caso de
+A (HGH) mando el testimonio suelto y la pregunta sin botones: la variante manual
+cumple casi siempre, no siempre. Respuesta en 1 h a la presentacion: 47% antes,
+40% A / 44% D despues (n=35/38, dentro del ruido; seguir mirando). Cobrados el
+2-oct hasta las 16:00: 1.115 mensajes (US$33), ~US$50-55/dia proyectado.
+
 ## Como reproducirlo
 
 Los mensajes se bajan del proxy de Meta de Kapso, con cursor:
