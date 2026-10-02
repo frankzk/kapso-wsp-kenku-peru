@@ -242,7 +242,9 @@ Lo que si se hace: el mismo contenido en menos mensajes.
   texto solo si no hay foto (tiene `send_text` para eso). Se borro `fu-s5` y
   `fu-g5 --enviar--> fu-p5`. Ahorra ~0,4 mensajes por conversacion. Control:
   la respuesta al s5 no deberia bajar de 3,6%.
-- **Tanda 2, pendiente de aprobacion** (`evals/fixtures/prompt-tanda2.diff`):
+- **Tanda 2, aplicada el 2026-10-01 ~23:20 hora Lima** (funciones `send-buttons` y
+  `send-presentation` desplegadas; workflow lock 29075 -> 29076; sin evals, con
+  el respaldo del analisis de abajo) (`evals/fixtures/prompt-tanda2.diff`):
   presentacion compacta solo en conversaciones sin anuncio (saludo+beneficio al
   pie de la foto, testimonio como cabecera de los botones: 8 -> 5 mensajes,
   `send-presentation` lo hace solo para D) y un solo `send_text` por turno.
