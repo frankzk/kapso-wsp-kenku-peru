@@ -11,9 +11,18 @@ const YAPE_NAME = "Grupo GF SAC";
 // un cambio real de la cuenta principal.
 const YAPE_NUMBER = "930 555 309";
 
-function shalomMessage() {
+// Shalom NO despacha los domingos. El texto decia "despacharlo hoy/mañana"
+// siempre, y un sabado de noche ese mañana es domingo. Dia en hora Lima.
+function cuandoDespacha(now = new Date()) {
+  const dia = new Date(now.getTime() - 5 * 3600 * 1000).getUTCDay();
+  if (dia === 0) return "mañana lunes"; // domingo
+  if (dia === 6) return "hoy o el lunes"; // sabado
+  return "hoy o mañana";
+}
+
+function shalomMessage(now = new Date()) {
   return "¡Listo! Lo enviamos a esa agencia Shalom 🙌\n"
-    + "Para *separarte el pedido* y despacharlo hoy/mañana con tu *código de seguimiento*, va un adelanto de *S/30* por Yape:\n"
+    + `Para *separarte el pedido* y despacharlo ${cuandoDespacha(now)} con tu *código de seguimiento*, va un adelanto de *S/30* por Yape:\n`
     + `*${YAPE_NAME}*\n📱 *${YAPE_NUMBER}*\n`
     + "Ese adelanto *se descuenta de tu total* (no es un costo extra) — el saldo lo pagas al recoger 😊\n"
     + "También necesito el *DNI del titular* que recogerá.\n"
@@ -139,4 +148,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 
-globalThis.__kenkuSendPayment = { handler, handleRequest, shalomMessage, olvaMessage };
+globalThis.__kenkuSendPayment = { handler, handleRequest, shalomMessage, olvaMessage, cuandoDespacha };
