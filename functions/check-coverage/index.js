@@ -294,6 +294,7 @@ async function handleRequest(request, env = globalThis) {
   if (cod && !selectedCourier) {
     const isLimaMetro = region === "lima" || province === "lima" || region === "callao"
       || province === "callao" || isLimaMetroDistrict(district) || isCallaoDistrict(district);
+    const calendario = calendarioEntrega();
     return json({
       cashOnDelivery: true,
       shippingMode: "contraentrega",
@@ -303,8 +304,10 @@ async function handleRequest(request, env = globalThis) {
       couriers: [],
       normalized: { district, province, region },
       sameDayUrgent: isLimaMetro ? sameDayUrgentInfo() : null,
+      calendario,
       paymentMethods: ["efectivo", "tarjeta de credito/debito", "Yape", "Plin", "transferencia bancaria"],
-      message: "Zona con pago contraentrega. Puede pagar al recibir en efectivo, tarjeta (credito/debito), Yape, Plin o transferencia bancaria (lo mas comun: efectivo y Yape).",
+      message: "Zona con pago contraentrega. Puede pagar al recibir en efectivo, tarjeta (credito/debito), Yape, Plin o transferencia bancaria (lo mas comun: efectivo y Yape)."
+        + (calendario.aviso ? ` ${calendario.aviso}` : ""),
     });
   }
 
@@ -551,8 +554,13 @@ async function readJson(request) {
 
 // Ventana de entrega urgente HOY (solo Lima Metropolitana, contraentrega).
 // Peru = UTC-5. Corte exacto en horas enteras: 10:00 y 12:00.
-function sameDayUrgentInfo() {
-  const limaHour = (new Date().getUTCHours() + 24 - 5) % 24;
+function sameDayUrgentInfo(now = new Date()) {
+  const limaHour = (now.getUTCHours() + 24 - 5) % 24;
+  // Los domingos no hay reparto: "hoy" no existe a ninguna hora. "cerrado" ya
+  // hace que el agente ofrezca el siguiente dia habil.
+  if (diaLima(now) === 0) {
+    return { limaHour, window: "cerrado", canDeliverToday: false, deliveryWindowText: null, alertTeam: false, motivo: "domingo_sin_reparto" };
+  }
   if (limaHour < 10) {
     return { limaHour, window: "antes_10", canDeliverToday: true, deliveryWindowText: "hoy", alertTeam: false };
   }
@@ -560,6 +568,44 @@ function sameDayUrgentInfo() {
     return { limaHour, window: "ventana_10_12", canDeliverToday: true, deliveryWindowText: "hoy entre las 3pm y 8pm", alertTeam: true };
   }
   return { limaHour, window: "cerrado", canDeliverToday: false, deliveryWindowText: null, alertTeam: false };
+}
+
+// Calendario de reparto contraentrega. Los motorizados NO reparten los
+// domingos, y el agente no sabe que dia es: el 2026-10-03 (sabado, 23:56) le
+// confirmo a una clienta "tu pedido para mañana antes de las 3 pm" (#KP138696)
+// y ese mañana era domingo. El aviso va dentro de `message`, que es lo que el
+// agente lee, ademas de los campos sueltos.
+const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const DIA_SIN_REPARTO = 0; // domingo
+
+function diaLima(now = new Date()) {
+  return new Date(now.getTime() - 5 * 3600 * 1000).getUTCDay();
+}
+
+function calendarioEntrega(now = new Date()) {
+  const lima = new Date(now.getTime() - 5 * 3600 * 1000);
+  const dow = lima.getUTCDay();
+  const reparte = (d) => d !== DIA_SIN_REPARTO;
+  let k = 1;
+  while (!reparte((dow + k) % 7)) k += 1;
+  const prox = new Date(lima.getTime() + k * 86400 * 1000);
+  const fecha = `${DIAS[prox.getUTCDay()]} ${prox.getUTCDate()} de ${MESES[prox.getUTCMonth()]}`;
+  const manana = DIAS[(dow + 1) % 7];
+  let aviso = null;
+  if (!reparte(dow)) {
+    aviso = `REPARTO: hoy es ${DIAS[dow]} y NO hay reparto. La entrega mas pronta es mañana ${fecha}: no prometas entrega hoy.`;
+  } else if (!reparte((dow + 1) % 7)) {
+    aviso = `REPARTO: hoy es ${DIAS[dow]}; mañana ${manana} NO hay reparto. Si pide "mañana", ofrece el ${fecha} y anotalo asi en el pedido. Nunca prometas entrega el ${manana}.`;
+  }
+  return {
+    hoy: DIAS[dow],
+    hayRepartoHoy: reparte(dow),
+    manana,
+    hayRepartoManana: reparte((dow + 1) % 7),
+    proximoDiaReparto: fecha,
+    aviso,
+  };
 }
 
 function hasCashOnDelivery({ region, province, district }) {
@@ -1288,6 +1334,8 @@ async function watchdogAdmin(payload, env) {
 }
 
 globalThis.__kenkuCheckCoverage = {
+  calendarioEntrega,
+  sameDayUrgentInfo,
   maybeRunWatchdog,
   watchdogSweep,
   watchdogConfig,
