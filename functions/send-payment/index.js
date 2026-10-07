@@ -11,18 +11,20 @@ const YAPE_NAME = "Grupo GF SAC";
 // un cambio real de la cuenta principal.
 const YAPE_NUMBER = "930 555 309";
 
-// Shalom NO despacha los domingos. El texto decia "despacharlo hoy/mañana"
-// siempre, y un sabado de noche ese mañana es domingo. Dia en hora Lima.
+// Shalom despacha al DIA SIGUIENTE habil y no despacha los domingos; ese dia se
+// le comparte a la clienta el ticket de envio. El texto decia "despacharlo
+// hoy/mañana" siempre, y un sabado de noche ese mañana es domingo. Dia en hora
+// Lima.
 function cuandoDespacha(now = new Date()) {
   const dia = new Date(now.getTime() - 5 * 3600 * 1000).getUTCDay();
   if (dia === 0) return "mañana lunes"; // domingo
-  if (dia === 6) return "hoy o el lunes"; // sabado
-  return "hoy o mañana";
+  if (dia === 6) return "el lunes"; // sabado: el dia siguiente es domingo
+  return "mañana";
 }
 
 function shalomMessage(now = new Date()) {
   return "¡Listo! Lo enviamos a esa agencia Shalom 🙌\n"
-    + `Para *separarte el pedido* y despacharlo ${cuandoDespacha(now)} con tu *código de seguimiento*, va un adelanto de *S/30* por Yape:\n`
+    + `Para *separarte el pedido* y despacharlo ${cuandoDespacha(now)} (ese día te compartimos el ticket con tu *código de seguimiento*), va un adelanto de *S/30* por Yape:\n`
     + `*${YAPE_NAME}*\n📱 *${YAPE_NUMBER}*\n`
     + "Ese adelanto *se descuenta de tu total* (no es un costo extra) — el saldo lo pagas al recoger 😊\n"
     + "También necesito el *DNI del titular* que recogerá.\n"
