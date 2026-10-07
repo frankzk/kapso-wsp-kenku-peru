@@ -610,7 +610,40 @@ function calendarioEntrega(now = new Date()) {
   };
 }
 
+// Region Lima FUERA de Lima Metropolitana: los motorizados no llegan, va por
+// agencia con adelanto (decision 2026-10-07). Antes, cualquier region/provincia
+// "lima" daba contraentrega, y "lima/huaral" pasaba por distrito de Lima Metro.
+const PROVINCIAS_LIMA_SIN_REPARTO = new Set([
+  "barranca", "cajatambo", "canta", "canete", "huaral", "huarochiri", "huaura", "oyon", "yauyos",
+]);
+// Nombres inconfundibles: se buscan como palabra dentro del texto ("lima/huaral",
+// "huacho - huaura"). "barranca" no matchea "barranco" (distrito de Lima).
+const LIMA_PROVINCIAS_PALABRAS = [
+  "huaral", "chancay", "aucallama", "huacho", "huaura", "hualmay", "vegueta", "sayan", "carquin",
+  "barranca", "paramonga", "pativilca", "canete", "san vicente de canete", "nuevo imperial",
+  "cerro azul", "lunahuana", "quilmana", "huarochiri", "matucana", "santa eulalia",
+  "cajatambo", "oyon", "yauyos",
+];
+// Nombres comunes o ambiguos ("canta": Av. Canta Callao; "mala", "asia"): solo
+// cuentan si son EXACTAMENTE el distrito o la provincia.
+const LIMA_PROVINCIAS_EXACTOS = new Set([
+  "canta", "mala", "imperial", "asia", "chilca", "supe", "supe puerto", "san antonio",
+  "ricardo palma", "santa maria", "huaura", "san mateo", "antioquia", "callahuanca",
+]);
+
+function esLimaProvincias({ region, province, district }) {
+  if (province && PROVINCIAS_LIMA_SIN_REPARTO.has(province)) return true;
+  const enRegionLima = !region || region === "lima";
+  if (enRegionLima && province !== "callao") {
+    if (district && LIMA_PROVINCIAS_EXACTOS.has(district) && !LIMA_METRO_DISTRICTS.has(district)) return true;
+  }
+  const textos = [district, province].filter(Boolean);
+  return textos.some((t) => !LIMA_METRO_DISTRICTS.has(t)
+    && LIMA_PROVINCIAS_PALABRAS.some((w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(t)));
+}
+
 function hasCashOnDelivery({ region, province, district }) {
+  if (esLimaProvincias({ region, province, district })) return false;
   const candidates = [region, province].filter(Boolean);
   const placeCandidates = [district, province, region].filter(Boolean);
 
@@ -1336,6 +1369,7 @@ async function watchdogAdmin(payload, env) {
 }
 
 globalThis.__kenkuCheckCoverage = {
+  esLimaProvincias,
   calendarioEntrega,
   sameDayUrgentInfo,
   maybeRunWatchdog,

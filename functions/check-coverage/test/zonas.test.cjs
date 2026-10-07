@@ -21,6 +21,24 @@ const AGENCIA = [
   { district: "Calleria", province: "Coronel Portillo", region: "Ucayali" },
   { district: "Yarinacocha", province: "Coronel Portillo", region: "Ucayali" },
   { district: "Pucallpa" },
+  // Region Lima fuera de Lima Metropolitana (2026-10-07): los motorizados no llegan.
+  { district: "Huaral", province: "Huaral", region: "Lima" },
+  { district: "Chancay", province: "Huaral", region: "Lima" },
+  { district: "Huacho", province: "Huaura", region: "Lima" },
+  { district: "Huacho", province: "Lima", region: "Lima" },
+  { district: "Lima/Huaral" },
+  { district: "huaral lima" },
+  { district: "Barranca", province: "Barranca", region: "Lima" },
+  { district: "Paramonga", region: "Lima" },
+  { district: "San Vicente de Cañete", province: "Cañete", region: "Lima" },
+  { district: "Mala", province: "Cañete", region: "Lima" },
+  { district: "San Luis", province: "Cañete", region: "Lima" },
+  { district: "Mala", region: "Lima" },
+  { district: "Imperial", province: "Lima", region: "Lima" },
+  { district: "Matucana", province: "Huarochiri", region: "Lima" },
+  { district: "Santa Eulalia", region: "Lima" },
+  { district: "Ricardo Palma", province: "Huarochirí", region: "Lima" },
+  { district: "Canta", province: "Canta", region: "Lima" },
 ];
 const CONTRAENTREGA = [
   { district: "San Martin de Porres", province: "Lima", region: "Lima" },
@@ -28,6 +46,18 @@ const CONTRAENTREGA = [
   { district: "Chiclayo", province: "Chiclayo", region: "Lambayeque" },
   { district: "Cerro Colorado", province: "Arequipa", region: "Arequipa" },
   { district: "Juliaca", province: "San Roman", region: "Puno" },
+  // Lima Metropolitana y Callao siguen igual, aunque el nombre se parezca.
+  { district: "Barranco", province: "Lima", region: "Lima" },
+  { district: "San Luis", province: "Lima", region: "Lima" },
+  { district: "San Luis" },
+  { district: "Santa Rosa", province: "Lima", region: "Lima" },
+  { district: "Santa Maria del Mar", province: "Lima", region: "Lima" },
+  { district: "Lurigancho-Chosica", province: "Lima", region: "Lima" },
+  { district: "Cieneguilla", region: "Lima" },
+  { district: "San Martin de Porres", address: "Av. Canta Callao 1234" },
+  { district: "Ventanilla", province: "Callao", region: "Callao" },
+  { district: "Lima", province: "Lima", region: "Lima" },
+  { district: "Ate" },
 ];
 (async () => {
   let f = 0;
