@@ -90,7 +90,7 @@ for (const place of MUST_NOT_MATCH) {
 
 // --- 4) Contraentrega en provincia (ruteo end-to-end) -------------------------
 // Regresion de los casos reales que se fueron a Shalom+adelanto por error:
-// ciudad suelta sin provincia/region, pregunta con "oficina", y Cajamarca.
+// ciudad suelta sin provincia/region y pregunta con "oficina".
 const { handleRequest } = globalThis.__kenkuCheckCoverage;
 
 async function coverageMode(input) {
@@ -105,8 +105,6 @@ async function coverageMode(input) {
     [{ province: "trujillo" }, "ciudad suelta como provincia (Trujillo)"],
     [{ district: "arequipa" }, "Arequipa suelto"],
     [{ district: "trujillo", address: "tienes oficina en trujillo?" }, "'oficina' NO fuerza agencia"],
-    [{ district: "banos del inca", province: "cajamarca" }, "Cajamarca: Banos del Inca"],
-    [{ district: "cajamarca" }, "Cajamarca ciudad suelta"],
     [{ district: "chiclayo", province: "chiclayo", region: "lambayeque" }, "Chiclayo completo"],
     [{ district: "cusco", province: "cusco", region: "cusco" }, "Cusco/Cusco/Cusco (ciudad)"],
     [{ district: "cusco" }, "Cusco ciudad suelta"],
@@ -120,6 +118,9 @@ async function coverageMode(input) {
     [{ district: "wanchaq", province: "cusco", region: "cusco" }, "otro distrito de Cusco region sigue agencia (sin validar)"],
     [{ district: "sicuani", province: "canchis", region: "cusco" }, "Sicuani (Cusco region) sigue agencia"],
     [{ district: "trujillo", courier: "shalom" }, "courier explicito Shalom gana aun con cobertura"],
+    // Cajamarca salio de contraentrega el 2026-10-07 (decision de negocio).
+    [{ district: "banos del inca", province: "cajamarca" }, "Cajamarca: Banos del Inca va por agencia"],
+    [{ district: "cajamarca" }, "Cajamarca ciudad suelta va por agencia"],
   ];
   for (const [input, label] of AGENCIA_CASES) {
     check(`agencia: ${label}`, (await coverageMode(input)) === "agencia");

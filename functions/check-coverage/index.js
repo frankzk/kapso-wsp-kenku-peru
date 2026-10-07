@@ -24,7 +24,9 @@ const CASH_ON_DELIVERY = {
   lambayeque: ["chiclayo", "jose leonardo ortiz", "la victoria", "lambayeque", "pimentel"],
   piura: ["piura", "castilla", "catacaos", "26 de octubre", "sullana", "talara"],
   puno: ["juliaca"],
-  cajamarca: ["cajamarca", "banos del inca", "los banos del inca"],
+  // Cajamarca SALIO de contraentrega el 2026-10-07 (decision de negocio): pasa a
+  // agencia con adelanto de S/30, igual que Huancayo, San Martin y Pucallpa, que
+  // nunca estuvieron en esta lista. No volver a agregarlas sin confirmarlo.
   // Solo Cusco ciudad (distrito cusco / provincia cusco). Otros distritos de la
   // region (Wanchaq, San Sebastian, etc.) requieren validacion antes de agregarse.
   cusco: ["cusco"],
