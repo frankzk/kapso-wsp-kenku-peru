@@ -62,6 +62,52 @@ const AD_PRODUCT_MAP = {
   "120252904020210120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (asignacion TEMPORAL por el dueno mientras corrige el anuncio)
   "120253082365500120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (el creativo es el serum de hongos; el titular del enlace es de otro producto)
   "120252904445640120": "nails-repairing-suero-reparador-de-unas",                    // Energia Sin Estimulantes (4a variante; creativo del serum de hongos, confirmado por el dueno)
+  // Agregados 2026-10-08, confirmados por el dueno: el texto de cada anuncio nombra el producto.
+  "120248951609020250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120248951696410250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120248951851310250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120248951896670250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249015480410250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249015486920250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249130662500250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249131804010250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249131806310250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249131849470250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120249131869370250": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120254375108560066": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120254375115900066": "astaxantina-antioxidante-de-alta-potencia-120-capsulas", // 🔥 2 Unidades GRATIS (Astaxantina)
+  "120248946823740056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120248946833320056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249262339190056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249262661240056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249262677660056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249279846750056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249279848360056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249279864460056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249279881130056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249279884230056": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz", // 🌙 Noches Más Tranquilas (Happy Kids)
+  "120249263905810056": "magnesio-puro-spray-mineral-de-magnesio-para-alivio-muscular-sueno-y-estres-frasco-de-237-ml", // 🌙 Tu Ritual Antes De Dormir (Magnesio Puro Spray)
+  "120249263966720056": "magnesio-puro-spray-mineral-de-magnesio-para-alivio-muscular-sueno-y-estres-frasco-de-237-ml", // 🌙 Tu Ritual Antes De Dormir (Magnesio Puro Spray)
+  "120249283314910056": "magnesio-puro-spray-mineral-de-magnesio-para-alivio-muscular-sueno-y-estres-frasco-de-237-ml", // 🌙 Tu Ritual Antes De Dormir (Magnesio Puro Spray)
+  "120249283327990056": "magnesio-puro-spray-mineral-de-magnesio-para-alivio-muscular-sueno-y-estres-frasco-de-237-ml", // 🌙 Tu Ritual Antes De Dormir (Magnesio Puro Spray)
+  "120249283329120056": "magnesio-puro-spray-mineral-de-magnesio-para-alivio-muscular-sueno-y-estres-frasco-de-237-ml", // 🌙 Tu Ritual Antes De Dormir (Magnesio Puro Spray)
+  "120253849488180120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120253987302850120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120253987455850120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120253987459770120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120253987463280120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120253987472460120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120253987482180120": "nails-repairing-suero-reparador-de-unas", // ⚡ Energía Sin Estimulantes (creativo del serum de hongos (Terbifin))
+  "120243731623590120": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas", // 🚨 Frena la Caída Hoy (Pumpkin Seed Oil)
+  "120243732511910120": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas", // 🚨 Frena la Caída Hoy (Pumpkin Seed Oil)
+  "120244024658540120": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas", // 🚨 Frena la Caída Hoy (Pumpkin Seed Oil)
+  "120254259840760120": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas", // 🚨 Frena la Caída Hoy (Pumpkin Seed Oil)
+  "120254260439500120": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas", // 🚨 Frena la Caída Hoy (Pumpkin Seed Oil)
+  "120254261056690120": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas", // 🚨 Frena la Caída Hoy (Pumpkin Seed Oil)
+  "120249084384400056": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™", // 🌿 ¿Quieres fortalecer tus defensas naturalmente? (Vital Moo Calostro)
+  "120249084404830056": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™", // 🌿 ¿Quieres fortalecer tus defensas naturalmente? (Vital Moo Calostro)
+  // OJO: 120254274798910120 y 120254275289330120 tambien se titulan "Energia Sin
+  // Estimulantes" pero su texto es de Oxido Nitrico: NO son el serum.
 };
 
 // Respaldo por TITULAR del anuncio. Meta genera variantes del mismo creativo con
@@ -95,6 +141,12 @@ const AD_HEADLINE_MAP = {
   // suplementos masculinos a quien venia por la presion.
   "si tienes la presion alta": "nattokinase-mejora-la-circulacion-arterial-90-capsulas",
   "equilibrio de azucar": "sugar-control-gotas-liquidas-de-berberina-y-curcuma-30-ml",
+  // 2026-10-08 (confirmado por el dueno). "2 Unidades GRATIS" queda FUERA: es una
+  // promo generica que puede reusarse con otro producto.
+  "quieres fortalecer tus defensas naturalmente": "vital-moo™-calostro-bovino-en-polvo-con-30-inmunoglobulinas-igg-para-un-mejor-sistema-inmunologico-y-salud-digestiva-100-puro-y-natural-108-g-superhuman™",
+  "tu ritual antes de dormir": "magnesio-puro-spray-mineral-de-magnesio-para-alivio-muscular-sueno-y-estres-frasco-de-237-ml",
+  "noches mas tranquilas": "happy-kids™-roll-on-calmante-con-magnesio-natural-3-oz",
+  "frena la caida hoy": "pumpkin-seed-oil-crecimiento-y-densidad-capilar-semillas-de-calabaza-120-capsulas-blandas",
 };
 
 // Normaliza un titular para comparar: sin acentos, sin emojis ni signos, en
@@ -776,4 +828,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead };
+globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead };
