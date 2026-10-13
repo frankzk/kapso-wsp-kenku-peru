@@ -479,18 +479,34 @@ async function hasLiveUnansweredInbound(payload, env) {
     let lastInbound = 0;
     let lastOutbound = 0;
     let lastInboundText = "";
+    let lastInboundMsg = null;
     for (const message of body?.data || []) {
       const timestamp = Number(message?.timestamp || 0);
       if (message?.kapso?.direction === "inbound" && timestamp >= lastInbound) {
         lastInbound = timestamp;
         lastInboundText = inboundText(message);
+        lastInboundMsg = message;
       }
       if (message?.kapso?.direction === "outbound") lastOutbound = Math.max(lastOutbound, timestamp);
     }
     // El silencio del bot ante un boton de cobro Shalom es deliberado (lo
     // contesta el dashboard): no es un cliente esperando respuesta.
     if (lastInbound > lastOutbound && isShalomPaymentButton(lastInboundText)) return false;
-    return lastInbound > lastOutbound;
+    if (lastInbound <= lastOutbound) return false;
+    // Cierre trivial (sticker, reaccion, "ok gracias", 👍) que el agente ya vio
+    // y decidio no contestar. Sin esto, fu-terminal lo devolvia al agente, el
+    // agente volvia a callar, y a la 5a vuelta loop-guard cortaba con
+    // "rebote_control_flow": la conversacion terminaba en loop_detectado y SIN
+    // seguimientos aunque la clienta hubiera dicho "yo les aviso" (44 de 47
+    // loop_detectado del 12-13 oct). La PRIMERA vez se devuelve al agente igual
+    // (un "ok" puede necesitar respuesta); si vuelve sin mensaje nuevo, se toma
+    // como respondido y siguen los seguimientos.
+    if (env?.KV && esCierreTrivial(lastInboundMsg, lastInboundText)) {
+      const key = `fu_trivial_visto:${conversationId}:${lastInboundMsg?.id || lastInbound}`;
+      if (await env.KV.get(key)) return false;
+      await env.KV.put(key, "1", { expirationTtl: 3 * 24 * 3600 });
+    }
+    return true;
   } catch {
     return false;
   }
@@ -941,6 +957,13 @@ function isShalomPaymentButton(text) {
   return SHALOM_PAYMENT_BUTTONS.has(clean);
 }
 
+function esCierreTrivial(message, text) {
+  const tipo = String(message?.type || "");
+  if (tipo === "sticker" || tipo === "reaction") return true;
+  if (tipo && tipo !== "text") return false; // audio, imagen, boton: puede traer contenido
+  return watchdogIsTrivial(text);
+}
+
 function watchdogIsTrivial(text) {
   const clean = String(text || "")
     .toLowerCase()
@@ -1369,6 +1392,9 @@ async function watchdogAdmin(payload, env) {
 }
 
 globalThis.__kenkuCheckCoverage = {
+  hasLiveUnansweredInbound,
+  esCierreTrivial,
+  routeFollowup,
   esLimaProvincias,
   calendarioEntrega,
   sameDayUrgentInfo,
