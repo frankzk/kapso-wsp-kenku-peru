@@ -1,6 +1,30 @@
 const DEFAULT_SHOP_DOMAIN = "kenkuperu.myshopify.com";
 const DEFAULT_API_VERSION = "2026-04";
 
+// Tiempos limite (2026-10-14). El nodo init-customer corta a los 30s y, si
+// corta, la ejecucion muere y el lead se queda SIN respuesta del bot (3 leads
+// de anuncio el 2026-10-13 23:11-23:17, cuando Shopify/Kapso estaban lentos).
+// Ningun fetch tenia limite y la busqueda hace hasta 5 consultas en serie, asi
+// que cada llamada lleva su tope y la busqueda entera un presupuesto: mejor
+// tratar al lead como cliente nuevo que dejarlo sin atender.
+const SHOPIFY_TIMEOUT_MS = 6000;
+const SEARCH_BUDGET_MS = 15000;
+const REFERRAL_TIMEOUT_MS = 8000;
+const ALERT_TIMEOUT_MS = 4000;
+
+async function fetchConTiempo(url, options = {}, ms = 6000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`timeout ${ms}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Mapa deterministico anuncio (CTWA) -> handle del producto real. El titular/
 // cuerpo del anuncio NO siempre resuelve por busqueda (ej. "Adios Irritacion
 // Post-Afeitado" o "hongos en pies" caian en productos equivocados o en un set
@@ -347,7 +371,14 @@ async function searchCustomers(config, { phone, email, debugQuery }) {
   const candidates = [];
   let failures = 0;
   let lastError = null;
+  const deadline = Date.now() + SEARCH_BUDGET_MS;
   for (const query of queries) {
+    if (Date.now() + SHOPIFY_TIMEOUT_MS > deadline) {
+      // Presupuesto agotado: las consultas que faltan cuentan como fallidas.
+      failures += 1;
+      lastError = lastError || "presupuesto de busqueda agotado";
+      continue;
+    }
     let data;
     try {
       data = await shopifyGraphql(config, CUSTOMER_LOOKUP_QUERY, { query });
@@ -397,14 +428,14 @@ function getConfig(env = globalThis) {
 }
 
 async function shopifyGraphql(config, query, variables) {
-  const response = await fetch(`https://${config.shopDomain}/admin/api/${config.apiVersion}/graphql.json`, {
+  const response = await fetchConTiempo(`https://${config.shopDomain}/admin/api/${config.apiVersion}/graphql.json`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Shopify-Access-Token": config.token,
     },
     body: JSON.stringify({ query, variables }),
-  });
+  }, SHOPIFY_TIMEOUT_MS);
   const payload = await response.json();
   if (!response.ok || payload.errors?.length) {
     throw new Error(JSON.stringify(payload.errors || payload));
@@ -658,7 +689,7 @@ async function fetchAdReferral(env, payload) {
   try {
     const url = `https://api.kapso.ai/meta/whatsapp/v24.0/${phoneNumberId}/messages`
       + `?conversation_id=${encodeURIComponent(conversationId)}&limit=100`;
-    const response = await fetch(url, { headers: { "X-API-Key": apiKey } });
+    const response = await fetchConTiempo(url, { headers: { "X-API-Key": apiKey } }, REFERRAL_TIMEOUT_MS);
     if (!response.ok) return null;
     const data = await response.json();
     const messages = data?.data || [];
@@ -720,7 +751,7 @@ async function alertUnmappedAd(env, adReferral, phone) {
     const note = covered
       ? `Anuncio "${headline}" (adId ${adId}) sin adId en el mapa, PERO el respaldo por titular lo resolvio a "${fallback.handle}": el cliente si fue atendido con el producto correcto. Agrega el adId al mapa cuando puedas (no es urgente).`
       : `Anuncio "${headline}" (adId ${adId}) SIN producto asignado y el titular tampoco lo resuelve. El bot NO puede reconocer el producto y el cliente queda mal atendido. Pasale a Claude el adId + producto.`;
-    await fetch("https://api.kapso.ai/platform/v1/functions/00dd67bd-df4b-4477-af5c-2530c44a5b60/invoke", {
+    await fetchConTiempo("https://api.kapso.ai/platform/v1/functions/00dd67bd-df4b-4477-af5c-2530c44a5b60/invoke", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
       body: JSON.stringify({
@@ -732,7 +763,7 @@ async function alertUnmappedAd(env, adReferral, phone) {
           note,
         },
       }),
-    });
+    }, ALERT_TIMEOUT_MS);
   } catch {
     // best-effort: nunca bloquea el lookup del cliente
   }
