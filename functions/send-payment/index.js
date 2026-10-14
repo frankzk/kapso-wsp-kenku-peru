@@ -10,6 +10,17 @@ const YAPE_NAME = "Grupo GF SAC";
 // la principal es siempre esta y el bot solo manda esta. Cambiar aqui solo ante
 // un cambio real de la cuenta principal.
 const YAPE_NUMBER = "930 555 309";
+// Cuenta bancaria para quien no usa Yape (2026-10-14): ~1 de cada 10 clientas que
+// reciben el pago pregunta por deposito, transferencia, CCI o "no uso Yape". El
+// CCI sirve desde cualquier banco. Misma titular que el Yape (Grupo GF SAC).
+const BCP_CUENTA = "191-2434540-0-12";
+const BCP_CCI = "00219100243454001251";
+
+function lineasPago() {
+  return `*${YAPE_NAME}*\n📱 Yape: *${YAPE_NUMBER}*\n`
+    + `🏦 O transferencia BCP (Cta. Cte. Soles): *${BCP_CUENTA}*\n`
+    + `   CCI (desde otros bancos): *${BCP_CCI}*\n`;
+}
 
 // Shalom despacha al DIA SIGUIENTE habil y no despacha los domingos; ese dia se
 // le comparte a la clienta el ticket de envio. El texto decia "despacharlo
@@ -24,8 +35,8 @@ function cuandoDespacha(now = new Date()) {
 
 function shalomMessage(now = new Date()) {
   return "¡Listo! Lo enviamos a esa agencia Shalom 🙌\n"
-    + `Para *separarte el pedido* y despacharlo ${cuandoDespacha(now)} (ese día te compartimos el ticket con tu *código de seguimiento*), va un adelanto de *S/30* por Yape:\n`
-    + `*${YAPE_NAME}*\n📱 *${YAPE_NUMBER}*\n`
+    + `Para *separarte el pedido* y despacharlo ${cuandoDespacha(now)} (ese día te compartimos el ticket con tu *código de seguimiento*), va un adelanto de *S/30* por Yape o transferencia:\n`
+    + lineasPago()
     + "Ese adelanto *se descuenta de tu total* (no es un costo extra) — el saldo lo pagas al recoger 😊\n"
     + "También necesito el *DNI del titular* que recogerá.\n"
     + "Envíame el voucher o captura y lo dejo encaminado ✅";
@@ -34,8 +45,8 @@ function shalomMessage(now = new Date()) {
 function olvaMessage() {
   return "Perfecto 😊\n"
     + "Por Olva Courier el pago es anticipado completo.\n"
-    + "Puedes realizarlo al Yape:\n"
-    + `*${YAPE_NAME}*\n📱 *${YAPE_NUMBER}*\n`
+    + "Puedes realizarlo por Yape o transferencia:\n"
+    + lineasPago()
     + "Cuando lo realices, envíame el voucher o captura para continuar con la confirmación ✅";
 }
 
@@ -150,4 +161,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 
-globalThis.__kenkuSendPayment = { handler, handleRequest, shalomMessage, olvaMessage, cuandoDespacha };
+globalThis.__kenkuSendPayment = { handler, handleRequest, shalomMessage, olvaMessage, cuandoDespacha, BCP_CUENTA, BCP_CCI };

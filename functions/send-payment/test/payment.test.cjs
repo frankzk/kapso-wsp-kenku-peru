@@ -32,6 +32,19 @@ caso("el mensaje de Shalom nunca dice 'mañana' un sabado ni 'hoy' un domingo", 
 caso("el mensaje menciona el ticket de envio", () => {
   assert.ok(P.shalomMessage(lima("2026-10-06T10:00:00")).includes("despacharlo mañana (ese día te compartimos el ticket con tu *código de seguimiento*)"));
 });
+caso("Shalom y Olva traen la cuenta BCP con su CCI, despues del Yape", () => {
+  for (const m of [P.shalomMessage(lima("2026-10-14T10:00:00")), P.olvaMessage()]) {
+    assert.ok(m.includes("*191-2434540-0-12*") && m.includes("*00219100243454001251*"));
+    assert.ok(m.indexOf("930 555 309") < m.indexOf("191-2434540-0-12"), "el Yape va primero");
+  }
+});
+caso("el CCI es el de la cuenta BCP (002 + 191 + 00 + 2434540012 + 51)", () => {
+  const cuenta = P.BCP_CUENTA.replace(/\D/g, "");
+  assert.strictEqual(P.BCP_CCI.length, 20);
+  assert.strictEqual(P.BCP_CCI.slice(0, 3), "002");
+  assert.strictEqual(P.BCP_CCI.slice(3, 6), cuenta.slice(0, 3));
+  assert.strictEqual(P.BCP_CCI.slice(8, 18), cuenta.slice(3));
+});
 caso("el Yape sigue fijo en el mensaje", () => {
   const m = P.shalomMessage(lima("2026-10-05T10:00:00"));
   assert.ok(m.includes("*Grupo GF SAC*") && m.includes("930 555 309") && m.includes("*S/30*"));

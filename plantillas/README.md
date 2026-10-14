@@ -153,6 +153,13 @@ tiene otras cuentas validas (BCP, BBVA, Scotiabank, Interbank, Lukita/Plin de
 Frankz Kastner, Yape 2 de Gabriela Reaño) que entrega el dashboard o una asesora,
 pero el bot solo manda la principal, via `send_payment`.
 
+**Desde el 2026-10-14 el bot tambien ofrece la cuenta BCP de Grupo GF SAC**
+(Cta. Cte. Soles 191-2434540-0-12, CCI 00219100243454001251) en el mensaje de
+pago de Shalom y Olva, debajo del Yape: ~1 de cada 10 clientas preguntaba por
+deposito, transferencia o CCI. El BBVA 0011-0179-0200429111 es de **Frankz
+Kastner** (personal) y no se ofrece. `verify-payment-account` tiene el Yape
+principal y la BCP (cuenta y CCI) fijos en codigo, ademas del secret.
+
 ## El bug que habia
 
 El prompt decia que el 930 555 309 era **el UNICO numero valido**, que cualquier

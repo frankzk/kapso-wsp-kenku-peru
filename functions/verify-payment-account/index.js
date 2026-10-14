@@ -19,6 +19,18 @@
 // Si no hay ninguna, se responde sin_lista.
 const FETCH_TIMEOUT_MS = 4000;
 
+// Cuentas que el BOT MISMO entrega (send-payment). Fijas en codigo: si el secret
+// quedara viejo o faltara, el bot nunca le diria a una clienta que la cuenta que
+// el mismo le paso "no le figura". Solo SUMAN coincidencias: si un numero no
+// esta aca y no hay lista, sigue siendo sin_lista, nunca desconocida.
+// BBVA 0011-0179-0200429111 es de Frankz Kastner (personal): esta en el secret,
+// no se ofrece.
+const CUENTAS_FIJAS = [
+  { number: "930555309", name: "Yape", holder: "Grupo GF SAC", type: "yape", principal: true },
+  { number: "1912434540012", name: "BCP Cta. Cte. Soles", holder: "Grupo GF SAC", type: "banco", principal: false },
+  { number: "00219100243454001251", name: "BCP (CCI)", holder: "Grupo GF SAC", type: "banco", principal: false },
+];
+
 function cfg(env = globalThis) {
   const g = (a, b) => env?.[a] || env?.[b] || globalThis[a] || globalThis[b];
   return {
@@ -101,6 +113,18 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
+    const fija = CUENTAS_FIJAS.find((a) => sameNumber(a.number, asked));
+    if (fija) {
+      return json({
+        ok: true,
+        status: fija.principal ? "principal" : "nuestra",
+        source: "codigo", account: label(fija),
+        message: fija.principal
+          ? "Es la cuenta PRINCIPAL de Kenku. Podes seguir el flujo normal de voucher."
+          : `Es una cuenta valida de Kenku (${label(fija)}). NO le digas que se equivoco. Segui el flujo normal de voucher.`,
+      });
+    }
+
     const { accounts, source } = await loadAccounts(env);
 
     // Sin lista NO se afirma nada. Nunca "desconocida" por falta de datos.
@@ -152,4 +176,4 @@ function isPlainObject(v) { return v !== null && typeof v === "object" && !Array
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
-globalThis.__kenkuVerifyAccount = { handler, handleRequest, sameNumber, digits, normalizeAccounts };
+globalThis.__kenkuVerifyAccount = { handler, handleRequest, sameNumber, digits, normalizeAccounts, CUENTAS_FIJAS };
