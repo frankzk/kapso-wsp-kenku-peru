@@ -46,6 +46,8 @@ const PRODUCT_STOPWORDS = new Set([
   "talla",
   "tallas",
   "tengo",
+  "tiene",
+  "tienen",
   "tienes",
   "una",
   "unas",
@@ -178,9 +180,63 @@ const SYNONYM_GROUPS = [
   // el producto equivalente es el serum Nails Repairing. Mapear hasta que el
   // producto tenga el tag "terbifin" en Shopify (los tags son buscables).
   ["terbifin", "terbinafina", "nails repairing"],
+  // Los clientes nombran el ACTIVO en vez del producto ("deseo informacion de
+  // la timoquinona"). El titulo del Black Seed Oil no trae ninguna de estas
+  // palabras, asi que sin el grupo la consulta muere en not_found.
+  // Ojo: el matcher parte la consulta en palabras, asi que los terminos de una
+  // sola palabra son los que puede nombrar el cliente ("negro" ademas es
+  // stopword de color); los de varias palabras sirven para encontrar el
+  // producto en el catalogo.
+  ["timoquinona", "thymoquinone", "nigella", "sativa", "comino", "kalonji", "nigella sativa", "comino negro", "black seed oil"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
+// Indice fonetico de las claves de sinonimos. SYNONYM_MAP.get() es exacto, asi
+// que un sinonimo escrito de oido ("kimokimona" por "timoquinona") no entraba
+// al grupo y la consulta terminaba en not_found aunque el activo estuviera
+// mapeado. Los sinonimos mal escritos son la norma, no la excepcion.
+const SYNONYM_FOLD_KEYS = buildSynonymFoldKeys(SYNONYM_MAP);
+const TOKEN_VARIANTS_CACHE = new Map();
+
+function buildSynonymFoldKeys(map) {
+  const folded = new Map();
+  for (const key of map.keys()) {
+    if (key.length < 5) continue;
+    const fold = phoneticFold(key);
+    if (!folded.has(fold)) folded.set(fold, key);
+  }
+  return folded;
+}
+
+// Clave de sinonimo mas parecida al token: mismo fold fonetico, o a 1-2 letras
+// de distancia. Si dos grupos distintos quedan igual de cerca no adivina.
+function nearestSynonymKey(token) {
+  if (!token || token.length < 5) return null;
+
+  const fold = phoneticFold(token);
+  const sameSound = SYNONYM_FOLD_KEYS.get(fold);
+  if (sameSound) return sameSound;
+
+  const maxDistance = token.length >= 9 ? 2 : 1;
+  let best = null;
+  let bestDistance = maxDistance + 1;
+  let ambiguous = false;
+
+  for (const [candidateFold, key] of SYNONYM_FOLD_KEYS) {
+    if (Math.abs(candidateFold.length - fold.length) > maxDistance) continue;
+    const distance = editDistance(candidateFold, fold, maxDistance);
+    if (distance > maxDistance) continue;
+    if (distance < bestDistance) {
+      best = key;
+      bestDistance = distance;
+      ambiguous = false;
+    } else if (distance === bestDistance && best && !SYNONYM_MAP.get(key).has(best)) {
+      ambiguous = true;
+    }
+  }
+
+  return ambiguous ? null : best;
+}
 
 function buildSynonymMap(groups) {
   const map = new Map();
@@ -196,8 +252,24 @@ function buildSynonymMap(groups) {
 }
 
 function tokenVariants(token) {
-  const set = SYNONYM_MAP.get(token);
-  return set ? [...set] : [token];
+  const cached = TOKEN_VARIANTS_CACHE.get(token);
+  if (cached) return cached;
+
+  const exact = SYNONYM_MAP.get(token);
+  // En el match difuso el token propio se conserva: si la correccion fonetica
+  // se equivoca, la palabra original sigue pudiendo encontrar su producto.
+  const near = exact ? null : nearestSynonymKey(token);
+  const variants = exact
+    ? [...exact]
+    : near
+      ? [...new Set([token, ...SYNONYM_MAP.get(near)])]
+      : [token];
+
+  // El cache vive en el worker entre invocaciones: las claves son texto del
+  // cliente, asi que se vacia al crecer en vez de acumular sin limite.
+  if (TOKEN_VARIANTS_CACHE.size > 500) TOKEN_VARIANTS_CACHE.clear();
+  TOKEN_VARIANTS_CACHE.set(token, variants);
+  return variants;
 }
 
 function searchableHasToken(searchable, token) {
@@ -967,20 +1039,66 @@ function catalogMatchSummary(item) {
   };
 }
 
+// Alternativas para un producto AGOTADO. Antes se elegian por "categorias"
+// inferidas de palabras clave del titulo, y el catalogo no tiene tags ni tipo:
+// la mayoria de los agotados quedaba sin categoria (cero alternativas) y otros
+// caian en una absurda (el Compeed Stick anti-ampollas era "cocina" y se ofrecia
+// un shampoo). Ahora: parecido de texto (titulo x3 + descripcion) con pesos
+// TF-IDF sobre el mismo catalogo, y SOLO si el parecido es claro. Medido sobre el
+// catalogo real (14-oct): con umbral 0,25 las sugerencias tienen sentido
+// (mascarilla de cabello grueso -> acondicionador de la misma linea,
+// ashwagandha en gomitas -> ashwagandha en capsulas); por debajo aparecen
+// disparates. Sin alternativa clara, ninguna: mejor que una que no tiene nada que
+// ver.
+const ALT_MIN_SIMILITUD = 0.25;
+const ALT_STOP = new Set(("de la el los las un una unos unas y o a en con para por sin su sus tu tus que se es al del lo le les mas muy como "
+  + "este esta estos estas ese esa eso cada desde hasta entre sobre tambien ya no si pero porque cual cuando donde mientras ser son fue hay "
+  + "tiene tienen puede pueden ayuda ayudar ayudan producto productos natural naturales formula capsulas capsula ml gr mg oz unidad "
+  + "unidades pack frasco superhuman kenku original premium calidad nuevo nueva dia dias diario diaria uso usar todo toda todos todas forma "
+  + "mejor mejora mejorar apoyo apoya salud bienestar cuerpo efecto efectos resultados resultado ideal tipo piel").split(" "));
+
+function altTokens(text) {
+  return (normalizeSearchText(String(text || "").replace(/<[^>]+>/g, " ")).match(/[a-z]{3,}/g) || [])
+    .filter((w) => !ALT_STOP.has(w));
+}
+
+function altTermFreq(product) {
+  const tf = new Map();
+  for (const w of altTokens(product.title)) tf.set(w, (tf.get(w) || 0) + 3);
+  for (const w of altTokens(product.description)) tf.set(w, (tf.get(w) || 0) + 1);
+  return tf;
+}
+
 function findInStockAlternatives(catalog, product, limit = 2) {
-  const targetCategories = new Set(product.categories || []);
-  if (targetCategories.size === 0 || !Array.isArray(catalog)) return [];
-
+  if (!Array.isArray(catalog) || catalog.length === 0 || !product) return [];
   const currentKeys = new Set(handleKeys(product.handle || ""));
-
-  return catalog
-    .filter((candidate) => !isProductOutOfStock(candidate))
-    .filter((candidate) => !handleKeys(candidate.handle || "").some((key) => currentKeys.has(key)))
-    .map((candidate) => ({
-      product: candidate,
-      score: (candidate.categories || []).filter((category) => targetCategories.has(category)).length,
-    }))
-    .filter((item) => item.score > 0)
+  const docs = catalog.map((p) => ({ p, tf: altTermFreq(p) }));
+  const df = new Map();
+  for (const { tf } of docs) for (const w of tf.keys()) df.set(w, (df.get(w) || 0) + 1);
+  const n = docs.length;
+  const vec = (tf) => {
+    const v = new Map();
+    for (const [w, c] of tf) {
+      const d = df.get(w) || 1;
+      if (d >= n * 0.3) continue; // palabras de casi todo el catalogo no distinguen
+      v.set(w, (1 + Math.log(c)) * Math.log(n / d));
+    }
+    const norm = Math.sqrt([...v.values()].reduce((a, x) => a + x * x, 0)) || 1;
+    for (const [w, x] of v) v.set(w, x / norm);
+    return v;
+  };
+  const target = vec(altTermFreq(product));
+  if (target.size === 0) return [];
+  return docs
+    .filter(({ p }) => !isProductOutOfStock(p))
+    .filter(({ p }) => !handleKeys(p.handle || "").some((key) => currentKeys.has(key)))
+    .map(({ p, tf }) => {
+      const v = vec(tf);
+      let score = 0;
+      for (const [w, x] of target) score += x * (v.get(w) || 0);
+      return { product: p, score: Math.round(score * 100) / 100 };
+    })
+    .filter((item) => item.score >= ALT_MIN_SIMILITUD)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map(catalogMatchSummary);
@@ -1564,4 +1682,4 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-globalThis.__kenkuProductLookup = { extractHandleCandidates, handleRequest, handler, loadPublicCatalog };
+globalThis.__kenkuProductLookup = { extractHandleCandidates, handleRequest, handler, loadPublicCatalog, findInStockAlternatives };
