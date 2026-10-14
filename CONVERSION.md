@@ -59,3 +59,47 @@ orden creada por el bot).
 Preguntar antes de presentar (variante B, ago) e invitar la duda (variante C,
 sep) no movieron la venta: la menor caida de quien "conversa antes" es del
 tipo de clienta, no del orden de los mensajes.
+
+# Por que se caen los pedidos — 2da parte (2026-10-14)
+
+Base: 8.845 conversaciones nuevas del 1 al 13-oct (numeros 981 y 451), texto
+completo. Compra = confirmacion #KP o "pedido generado/confirmado" (bot o
+asesora): 968 = 10,9% (IC95 10,3-11,6). Derivaciones: solo desde el 8-oct
+(ejecuciones disponibles). Script: `caidas.py` / `caidas2.py` (scratchpad).
+
+## A. Derivaciones a asesora (673 en 6 dias, ~112/dia)
+| Primera respuesta humana | Conv. | % | Compra |
+|---|---|---|---|
+| < 15 min | 314 | 47% | 61,1% |
+| 15-60 min | 42 | 6% | 42,9% |
+| 1-6 h | 65 | 10% | 38,5% |
+| > 6 h | 85 | 13% | 21,2% |
+| nunca | 167 | 25% | 4,2% |
+<15 min vs >6h/nunca: z=12,5. Respondidas en <1 h segun la hora de la
+derivacion: 00-08 h 8%, 08-13 h 64%, 13-19 h 65%, 19-24 h 28%.
+Derivadas con voucher/imagen: respondidas <1 h 78% compra vs >1 h 41%.
+
+## B. Despues del mensaje de pago (675: Shalom 643, Olva 32)
+- 56% nunca manda voucher: 115 desaparecen en seco; de las que escriben,
+  20% desconfia del adelanto, 16% "lo hago despues", 9% no tiene Yape.
+- Con voucher (296) -> pedido 84,5%. Segun demora en responderle: <15 min
+  91,5%, 15-60 min 88,9%, 1-6 h 80%, >6 h o nunca 62,3% (n=53).
+- Etapa de datos: contraentrega 51,5% (n=839) vs Shalom 41,5% (n=643), z=3,8.
+- Huancayo/Cajamarca/San Martin/Pucallpa: 31,6% antes del 7-oct vs 25,0%
+  despues (p=0,26, aun no significativo).
+
+## C. Hora y dia
+- Solo leads de anuncio: 00-07 h 5,6%, 07-13 h 10,3%, 13-19 h 9,6%,
+  19-24 h 7,7% (madrugada vs mañana z=4,5).
+- Sabado 8,8% y domingo 9,5% vs jueves 14,1%.
+
+## D. Producto (familia, 1-13 oct)
+Biru 2,0% (n=1.095), Vital Moo 2,1%, Magnesio spray 2,5%, Aceite Magic 3,0%:
+1.714 conversaciones (19% del total, ~100% anuncio) y 38 pedidos. Mejores:
+Pulsera 21%, Nattokinase 17%, Black Seed 16,6%, Magnesio 12 en 1 16%,
+Cayenne 14,8%. NAD+ solo se presento 5 veces. "Agotado": 62 conv., 9,7%.
+
+## E. Tipo de contacto
+- Sin telefono (usuario de WhatsApp) de anuncio 3,0% vs con telefono 8,9%
+  (z=3,9); si el bot llego a pedirle el celular, 31,9% (n=69).
+- Recurrente (direccion guardada) 25,7% vs 9,2%.
