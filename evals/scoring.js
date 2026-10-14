@@ -148,6 +148,20 @@ const REGLAS = {
       : { ok: true };
   },
 
+  // Largo maximo de cada mensaje que redacta el modelo (regla del 2026-10-14:
+  // 350 objetivo, 400 tope). {"valor": 400}. Mira send_text, captions y bodyText.
+  max_caracteres(regla, ctx) {
+    const max = Number(regla.valor || 400);
+    const largos = [];
+    for (const l of ctx.llamadas || []) {
+      for (const campo of ["text", "bodyText", "body_text", "caption"]) {
+        const t = l.argumentos?.[campo];
+        if (typeof t === "string" && t.length > max) largos.push(`${l.nombre}.${campo}=${t.length}`);
+      }
+    }
+    return largos.length ? { ok: false, detalle: `mensajes de mas de ${max}: ${largos.join(", ")}` } : { ok: true };
+  },
+
   // Alguna llamada a `herramienta` tiene `campo` y matchea `valor` (regex).
   // Ej: la presentacion compacta lleva el saludo en el caption de la foto.
   argumento_regex(regla, ctx) {

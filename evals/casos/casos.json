@@ -813,5 +813,304 @@
     "tipo": "sin_narracion"
    }
   ]
+ },
+ {
+  "id": "saludo-pregunta-necesidad",
+  "origen": "Regla del 2026-10-14: un saludo sin producto abre con la pregunta de necesidad (Defensas -> Black Seed, Energia -> NAD+), no con 'lo mas pedido'.",
+  "producto": null,
+  "variables": {
+   "ab_variant": "D",
+   "entry_type": "otro",
+   "promo_variant": "P1"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Hola buenas tardes"
+   }
+  ],
+  "herramientas_grabadas": {},
+  "reglas": [
+   {
+    "tipo": "herramienta_esperada",
+    "valor": [
+     "send_buttons"
+    ]
+   },
+   {
+    "tipo": "argumento_regex",
+    "herramienta": "send_buttons",
+    "campo": "bodyText",
+    "valor": "beneficio",
+    "porque": "pregunta de necesidad"
+   },
+   {
+    "tipo": "prohibido_regex",
+    "valor": [
+     "lo mas (pedido|vendido)"
+    ]
+   },
+   {
+    "tipo": "herramienta_prohibida",
+    "valor": [
+     "send_presentation"
+    ]
+   },
+   {
+    "tipo": "max_caracteres",
+    "valor": 400
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "objecion-precio-agencia",
+  "origen": "Regla del 2026-10-14: ante 'esta caro' se ancla el 3x2 con el precio por unidad real; en provincia por agencia NO se promete pagar al recibir.",
+  "producto": "purely-nutrient-ethiopian-black-seed-oil",
+  "variables": {
+   "ab_variant": "D",
+   "entry_type": "consulta",
+   "promo_variant": "P1",
+   "last_product_title": "Black Seed Oil Etíope",
+   "last_product_handle": "purely-nutrient-ethiopian-black-seed-oil"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Info del black seed"
+   },
+   {
+    "rol": "asistente",
+    "texto": "*Black Seed Oil Etíope* queda en *S/ 149* por unidad con *envío gratis* 📦 ¿Te encuentras en *Lima* o en *provincia*?"
+   },
+   {
+    "rol": "cliente",
+    "texto": "Huancayo"
+   },
+   {
+    "rol": "asistente",
+    "texto": "¡Genial! A Huancayo lo enviamos por agencia Shalom 📦 ¿Te llevas 1 por *S/ 149* o el *3x2* por *S/ 298*?"
+   },
+   {
+    "rol": "cliente",
+    "texto": "Está muy caro"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "purely-nutrient-ethiopian-black-seed-oil",
+     "title": "SUPER HUMAN Ethiopian Black Seed Oil (60 Cápsulas)",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "Aceite de semilla negra etíope prensado en frío. 60 cápsulas blandas por frasco.",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "check_coverage": {
+    "cashOnDelivery": false,
+    "shippingMode": "agencia",
+    "message": "Huancayo va por agencia Shalom con adelanto de S/30."
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "requerido_texto",
+    "valor": [
+     "3x2"
+    ]
+   },
+   {
+    "tipo": "precio_valido",
+    "valor": [
+     149,
+     298,
+     99.33,
+     99
+    ]
+   },
+   {
+    "tipo": "prohibido_regex",
+    "valor": [
+     "(pagas|pagues|paga) (recien )?al recibir",
+     "no pagas nada"
+    ],
+    "porque": "en agencia hay adelanto de S/30"
+   },
+   {
+    "tipo": "max_llamadas",
+    "valor": {
+     "send_text": 1
+    }
+   },
+   {
+    "tipo": "max_caracteres",
+    "valor": 400
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "duda-estafa-zona-desconocida",
+  "origen": "Regla del 2026-10-14: ante duda de estafa sin zona conocida, contraentrega = no pagas nada antes + pregunta Lima/provincia.",
+  "producto": "purely-nutrient-ethiopian-black-seed-oil",
+  "variables": {
+   "ab_variant": "D",
+   "entry_type": "consulta",
+   "promo_variant": "P1",
+   "last_product_title": "Black Seed Oil Etíope",
+   "last_product_handle": "purely-nutrient-ethiopian-black-seed-oil"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Info del black seed"
+   },
+   {
+    "rol": "asistente",
+    "texto": "*Black Seed Oil Etíope* queda en *S/ 149* por unidad con *envío gratis* 📦 ¿Te encuentras en *Lima* o en *provincia*?"
+   },
+   {
+    "rol": "cliente",
+    "texto": "Cómo sé que no es estafa? ya me estafaron una vez"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "purely-nutrient-ethiopian-black-seed-oil",
+     "title": "SUPER HUMAN Ethiopian Black Seed Oil (60 Cápsulas)",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "Aceite de semilla negra etíope prensado en frío. 60 cápsulas blandas por frasco.",
+     "tags": []
+    },
+    "outOfStock": false
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "requerido_regex",
+    "valor": [
+     "contraentrega|al recibir|te entrega"
+    ]
+   },
+   {
+    "tipo": "requerido_regex",
+    "valor": [
+     "lima"
+    ]
+   },
+   {
+    "tipo": "max_llamadas",
+    "valor": {
+     "send_text": 1
+    }
+   },
+   {
+    "tipo": "max_caracteres",
+    "valor": 400
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
+ },
+ {
+  "id": "duda-estafa-agencia",
+  "origen": "Regla del 2026-10-14: en zona por agencia NUNCA se dice 'no pagas nada por adelantado'; se responde con empresa formal, registro, garantia y codigo de seguimiento.",
+  "producto": "purely-nutrient-ethiopian-black-seed-oil",
+  "variables": {
+   "ab_variant": "D",
+   "entry_type": "consulta",
+   "promo_variant": "P1",
+   "last_product_title": "Black Seed Oil Etíope",
+   "last_product_handle": "purely-nutrient-ethiopian-black-seed-oil"
+  },
+  "turnos": [
+   {
+    "rol": "cliente",
+    "texto": "Info del black seed"
+   },
+   {
+    "rol": "asistente",
+    "texto": "*Black Seed Oil Etíope* queda en *S/ 149* por unidad con *envío gratis* 📦 ¿Te encuentras en *Lima* o en *provincia*?"
+   },
+   {
+    "rol": "cliente",
+    "texto": "Huancayo"
+   },
+   {
+    "rol": "asistente",
+    "texto": "¡Genial! A Huancayo lo enviamos por agencia Shalom 📦 ¿Te llevas 1 por *S/ 149* o el *3x2* por *S/ 298*?"
+   },
+   {
+    "rol": "cliente",
+    "texto": "y si les adelanto y no me llega? cómo sé que no es estafa"
+   }
+  ],
+  "herramientas_grabadas": {
+   "shopify_product_lookup": {
+    "found": true,
+    "product": {
+     "handle": "purely-nutrient-ethiopian-black-seed-oil",
+     "title": "SUPER HUMAN Ethiopian Black Seed Oil (60 Cápsulas)",
+     "priceRange": {
+      "min": 149,
+      "max": 149,
+      "currencyCode": "PEN"
+     },
+     "description": "Aceite de semilla negra etíope prensado en frío. 60 cápsulas blandas por frasco.",
+     "tags": []
+    },
+    "outOfStock": false
+   },
+   "check_coverage": {
+    "cashOnDelivery": false,
+    "shippingMode": "agencia",
+    "message": "Huancayo va por agencia Shalom con adelanto de S/30."
+   }
+  },
+  "reglas": [
+   {
+    "tipo": "prohibido_regex",
+    "valor": [
+     "no pagas nada",
+     "(pagas|pagues) (recien )?al recibir"
+    ]
+   },
+   {
+    "tipo": "requerido_regex",
+    "valor": [
+     "registro sanitario|garantia|formal|codigo de seguimiento"
+    ]
+   },
+   {
+    "tipo": "max_llamadas",
+    "valor": {
+     "send_text": 1
+    }
+   },
+   {
+    "tipo": "max_caracteres",
+    "valor": 400
+   },
+   {
+    "tipo": "sin_narracion"
+   }
+  ]
  }
 ]
