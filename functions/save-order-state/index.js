@@ -40,7 +40,8 @@ const ALIASES = {
   receiver_name: ["receiver_name", "receiverName", "nombre", "nombre_envio", "shipping_name",
     "delivery_name", "customer_receiver_name", "customer_name", "a_nombre_de"],
   phone: ["phone", "telefono", "celular", "delivery_phone", "confirmed_phone", "contact_phone",
-    "known_phone", "known_customer_phone"],
+    "known_phone", "known_customer_phone", "customer_phone", "customerPhone", "phone_number",
+    "phoneNumber", "numero", "numero_celular", "movil", "whatsapp_phone", "telefono_contacto"],
   dni: ["dni", "customer_dni", "documento"],
   product_handle: ["product_handle", "productHandle", "handle", "last_product_handle"],
   product_title: ["product_title", "productTitle", "titulo", "last_product_title"],
@@ -50,6 +51,25 @@ function pick(input, field) {
   for (const alias of ALIASES[field]) {
     const v = input[alias];
     if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  if (field === "phone") return pickPhoneLoose(input);
+  return undefined;
+}
+
+// Red de seguridad para el telefono: si el agente lo manda con un nombre que no
+// esta en ALIASES, antes se perdia en silencio y el estado quedaba con
+// missing=[phone]. El agente leia eso como "el numero no vale" y se lo repetia
+// al cliente. Aca se acepta cualquier clave que hable de telefono SIEMPRE que el
+// valor sea un celular peruano de verdad (nunca un *_id ni un phone_number_id).
+const PHONE_KEY_RE = /(phone|telefono|celular|movil|numero|whatsapp)/i;
+const PHONE_KEY_BLOCK_RE = /(id|number_id|numberid)$/i;
+
+function pickPhoneLoose(input) {
+  for (const [key, value] of Object.entries(input || {})) {
+    if (!PHONE_KEY_RE.test(key)) continue;
+    if (PHONE_KEY_BLOCK_RE.test(key)) continue;
+    if (value === undefined || value === null || String(value).trim() === "") continue;
+    if (isPeruMobile(value)) return value;
   }
   return undefined;
 }
@@ -85,6 +105,16 @@ function isPeruMobile(value) {
 
 function normalizePhone(value) {
   return String(value == null ? "" : value).replace(/\D/g, "").replace(/^51/, "");
+}
+
+// El celular del cliente tal como lo expone el chat. Viene por el contexto de
+// ejecucion (nodo del workflow) o por whatsapp_context (herramienta del agente);
+// wa_id es el mismo dato con otro nombre segun el canal.
+function chatPhone(payload) {
+  const context = payload?.execution_context?.context || {};
+  const contact = context.contact || {};
+  const wa = payload?.whatsapp_context || {};
+  return context.phone_number || contact.wa_id || wa.conversation?.phone_number || wa.contact?.wa_id || "";
 }
 
 // "3x2" -> 3 unidades, "5x3" -> 5. Es la fuente de mas confusion de precios,
@@ -205,6 +235,28 @@ async function handleRequest(request, env = globalThis) {
     }
 
     const { state, rejected } = buildState(previous, input);
+
+    // El telefono ya lo tenemos: es el numero del chat, salvo en los leads que
+    // entran por username de WhatsApp (esos si hay que pedirlo, y para eso esta
+    // needs_phone). Sembrarlo aca evita el peor bug posible en la zona de
+    // cierre: como `phone` estaba en REQUIRED y nadie lo sembraba, el estado
+    // salia con missing=[phone], el agente se lo pedia al cliente y, cuando el
+    // cliente respondia con el numero de su propio chat, le contestaba que no
+    // era valido. Paso de verdad el 31/08/2026 (Javier, Huancayo): tres vueltas
+    // del mismo numero, alerta al equipo y la conversacion cortada por
+    // loop-guard con el pedido a medio hacer.
+    const fromChat = chatPhone(payload);
+    if (!state.phone && isPeruMobile(fromChat)) state.phone = normalizePhone(fromChat);
+
+    // Un numero rechazado deja de ser un problema si el del chat ya esta: el
+    // agente no debe pedirlo de nuevo ni decirle nada al cliente.
+    const phoneRejected = rejected.findIndex((r) => r.field === "phone");
+    let phoneNote = "";
+    if (phoneRejected !== -1 && state.phone) {
+      rejected.splice(phoneRejected, 1);
+      phoneNote = `El numero alternativo que mandaste no es un celular peruano, asi que se mantiene el del chat (${state.phone}). NO le digas al cliente que su numero es invalido ni se lo vuelvas a pedir.`;
+    }
+
     const missing = REQUIRED.filter((f) => state[f] === undefined || state[f] === null || state[f] === "");
 
     if (kv && key) {
@@ -216,6 +268,7 @@ async function handleRequest(request, env = globalThis) {
     }
 
     const parts = [];
+    if (phoneNote) parts.push(phoneNote);
     if (rejected.length) {
       parts.push("NO se guardaron estos datos: "
         + rejected.map((r) => `${r.field} ("${r.value}") ${r.reason}`).join("; ")
@@ -265,4 +318,4 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-globalThis.__kenkuSaveOrderState = { buildState, isPlaceholder, isPeruMobile, normalizePromo, toVars, handleRequest, handler };
+globalThis.__kenkuSaveOrderState = { buildState, chatPhone, isPlaceholder, isPeruMobile, normalizePhone, normalizePromo, pickPhoneLoose, toVars, handleRequest, handler };
