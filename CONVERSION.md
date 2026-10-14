@@ -103,3 +103,23 @@ Cayenne 14,8%. NAD+ solo se presento 5 veces. "Agotado": 62 conv., 9,7%.
 - Sin telefono (usuario de WhatsApp) de anuncio 3,0% vs con telefono 8,9%
   (z=3,9); si el bot llego a pedirle el celular, 31,9% (n=69).
 - Recurrente (direccion guardada) 25,7% vs 9,2%.
+
+## F. Por que se deriva a una asesora (720 derivaciones, 8-14 oct)
+Fuente: el evento de cambio a "handoff" de cada ejecucion (motivo y resumen
+que escribe el bot). Script `handoff_cat.py` (scratchpad).
+
+| Motivo | n | % | de noche (19-08 h) | sin respuesta en 1 h | compra |
+|---|---|---|---|---|---|
+| Asesora toma el chat a mano (no lo deriva el bot) | 261 | 36% | 4% | - | 60% |
+| Voucher / ya pago, validar | 120 | 17% | 51% | 45% | 76% |
+| Pedido anterior: estado, entrega, clave Shalom | 108 | 15% | 23% | 76% | (postventa) |
+| Reclamo / postventa | 62 | 9% | 39% | 76% | (postventa) |
+| Consulta de salud | 57 | 8% | 39% | 78% | 7% |
+| Otro (producto que no vendemos, etc.) | 48 | 7% | 33% | 81% | 10% |
+| Foto sin nombre, agotado, dato tecnico | 26 | 4% | 35% | 69% | 8% |
+| Pide llamada / persona | 22 | 3% | 32% | 71% | 10% |
+| Otra forma de pago / sin Yape | 10 | 1% | 60% | 50% | 40% |
+
+CORRECCION a la tabla A: incluia las 261 tomas manuales, que son casi todas
+respuestas inmediatas. Solo derivaciones del bot: voucher respondido <15 min
+88% compra, >6 h 58%; sin voucher <15 min 29%, nunca 1%.
