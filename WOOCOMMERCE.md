@@ -34,6 +34,11 @@ Sigue las reglas de Kapta (el sistema de operaciones lee los pedidos de la tiend
   `utm_medium`.
 - La fecha u hora de entrega pedida va en la nota del cliente; el resumen interno del bot, como nota privada.
 - Respuesta igual que antes: `order.name` = `#KP2…` (el número del pedido), `order.id` el de WooCommerce.
+- Lo que hace la tienda con el pedido (probado el 24-10 en local con un pedido creado por la API): **no** manda
+  Purchase a Meta ni a TikTok (no hay datos del navegador; queda la nota «Tracking: no se envía el Purchase») y
+  **no** manda el aviso de venta (ntfy/correo), que es solo para pedidos de la web. Sí lo lee Kapta como cualquier
+  otro pedido, y sale al webhook del CRM si hay uno configurado.
+- En la nota interna, la provincia y la región salen de la cobertura (`coverage.normalized`) si el agente no las manda.
 
 ## Configuración de `create-shopify-order` (secretos de la función en Kapso, nunca en git ni en el chat)
 

@@ -1205,6 +1205,9 @@ function buildTags(input) {
 function buildNote(input, customerLookup) {
   const customer = input.customer || {};
   const quote = input.quote || {};
+  // Si el agente no mando provincia/region, salen de la cobertura (check-coverage).
+  const normalized = input.coverage?.normalized || {};
+  const place = (value) => (value ? titleCasePlace(String(value)) : "");
   const lines = [
     "Pedido creado desde WhatsApp/Kapso.",
     `Producto(s): ${summaryLine(input.lineItems || input.items || [])}`,
@@ -1213,8 +1216,8 @@ function buildNote(input, customerLookup) {
     `Cliente: ${customer.name || customer.fullName || ""}`,
     `Telefono: ${customer.phone || input.phone || ""}`,
     `Distrito: ${customer.district || customer.distrito || ""}`,
-    `Provincia: ${customer.province || customer.provincia || ""}`,
-    `Region: ${customer.region || customer.departamento || ""}`,
+    `Provincia: ${customer.province || customer.provincia || place(normalized.province)}`,
+    `Region: ${customer.region || customer.departamento || place(normalized.region)}`,
     `Direccion: ${customer.address || customer.direccion || ""}`,
     `Referencia: ${customer.reference || customer.referencia || ""}`,
   ];

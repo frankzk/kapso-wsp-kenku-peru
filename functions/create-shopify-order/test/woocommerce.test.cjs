@@ -71,6 +71,7 @@ const call = async (input, e = env) => (await api.handleRequest(new Request("htt
   assert.ok(!calls.some((c) => c.method === "POST"), "dryRun no crea nada");
   assert.ok(dry.internalNote.includes("3 x Bividi Camiseta de Alta Compresión - L"), dry.internalNote);
   assert.ok(dry.internalNote.includes("Total cotizado: S/ 273.00"), dry.internalNote);
+  assert.ok(dry.internalNote.includes("Provincia: Lima\nRegion: Lima"), dry.internalNote);
 
   const res = await call(input);
   assert.ok(res.ok, JSON.stringify(res));
