@@ -46,6 +46,8 @@ const PRODUCT_STOPWORDS = new Set([
   "talla",
   "tallas",
   "tengo",
+  "tiene",
+  "tienen",
   "tienes",
   "una",
   "unas",
@@ -171,9 +173,70 @@ const CATEGORY_RULES = [
 // Synonyms so customer terms match catalog wording (e.g. "medias" == "calcetines" in Peru).
 const SYNONYM_GROUPS = [
   ["medias", "media", "calcetines", "calcetin", "calceta", "calcetas", "soquetes", "soquete"],
+  ["nattokinase", "natokinase", "nattokinasa", "natokinasa", "nattoquinasa", "natoquinasa", "natto"],
+  ["shampoo", "shampu", "champu", "champoo", "sampoo", "shanpu"],
+  ["shilajit", "silajit", "chilajit", "shilayit", "shilagit"],
+  // El anuncio "Elimina Hongos en Pies" vende la marca Terbifin; en la tienda
+  // el producto equivalente es el serum Nails Repairing. Mapear hasta que el
+  // producto tenga el tag "terbifin" en Shopify (los tags son buscables).
+  ["terbifin", "terbinafina", "nails repairing"],
+  // Los clientes nombran el ACTIVO en vez del producto ("deseo informacion de
+  // la timoquinona"). El titulo del Black Seed Oil no trae ninguna de estas
+  // palabras, asi que sin el grupo la consulta muere en not_found.
+  // Ojo: el matcher parte la consulta en palabras, asi que los terminos de una
+  // sola palabra son los que puede nombrar el cliente ("negro" ademas es
+  // stopword de color); los de varias palabras sirven para encontrar el
+  // producto en el catalogo.
+  ["timoquinona", "thymoquinone", "nigella", "sativa", "comino", "kalonji", "nigella sativa", "comino negro", "black seed oil"],
 ];
 
 const SYNONYM_MAP = buildSynonymMap(SYNONYM_GROUPS);
+// Indice fonetico de las claves de sinonimos. SYNONYM_MAP.get() es exacto, asi
+// que un sinonimo escrito de oido ("kimokimona" por "timoquinona") no entraba
+// al grupo y la consulta terminaba en not_found aunque el activo estuviera
+// mapeado. Los sinonimos mal escritos son la norma, no la excepcion.
+const SYNONYM_FOLD_KEYS = buildSynonymFoldKeys(SYNONYM_MAP);
+const TOKEN_VARIANTS_CACHE = new Map();
+
+function buildSynonymFoldKeys(map) {
+  const folded = new Map();
+  for (const key of map.keys()) {
+    if (key.length < 5) continue;
+    const fold = phoneticFold(key);
+    if (!folded.has(fold)) folded.set(fold, key);
+  }
+  return folded;
+}
+
+// Clave de sinonimo mas parecida al token: mismo fold fonetico, o a 1-2 letras
+// de distancia. Si dos grupos distintos quedan igual de cerca no adivina.
+function nearestSynonymKey(token) {
+  if (!token || token.length < 5) return null;
+
+  const fold = phoneticFold(token);
+  const sameSound = SYNONYM_FOLD_KEYS.get(fold);
+  if (sameSound) return sameSound;
+
+  const maxDistance = token.length >= 9 ? 2 : 1;
+  let best = null;
+  let bestDistance = maxDistance + 1;
+  let ambiguous = false;
+
+  for (const [candidateFold, key] of SYNONYM_FOLD_KEYS) {
+    if (Math.abs(candidateFold.length - fold.length) > maxDistance) continue;
+    const distance = editDistance(candidateFold, fold, maxDistance);
+    if (distance > maxDistance) continue;
+    if (distance < bestDistance) {
+      best = key;
+      bestDistance = distance;
+      ambiguous = false;
+    } else if (distance === bestDistance && best && !SYNONYM_MAP.get(key).has(best)) {
+      ambiguous = true;
+    }
+  }
+
+  return ambiguous ? null : best;
+}
 
 function buildSynonymMap(groups) {
   const map = new Map();
@@ -189,12 +252,109 @@ function buildSynonymMap(groups) {
 }
 
 function tokenVariants(token) {
-  const set = SYNONYM_MAP.get(token);
-  return set ? [...set] : [token];
+  const cached = TOKEN_VARIANTS_CACHE.get(token);
+  if (cached) return cached;
+
+  const exact = SYNONYM_MAP.get(token);
+  // En el match difuso el token propio se conserva: si la correccion fonetica
+  // se equivoca, la palabra original sigue pudiendo encontrar su producto.
+  const near = exact ? null : nearestSynonymKey(token);
+  const variants = exact
+    ? [...exact]
+    : near
+      ? [...new Set([token, ...SYNONYM_MAP.get(near)])]
+      : [token];
+
+  // El cache vive en el worker entre invocaciones: las claves son texto del
+  // cliente, asi que se vacia al crecer en vez de acumular sin limite.
+  if (TOKEN_VARIANTS_CACHE.size > 500) TOKEN_VARIANTS_CACHE.clear();
+  TOKEN_VARIANTS_CACHE.set(token, variants);
+  return variants;
 }
 
 function searchableHasToken(searchable, token) {
-  return tokenVariants(token).some((variant) => variant && searchable.includes(variant));
+  const variants = tokenVariants(token);
+  if (variants.some((variant) => variant && searchable.includes(variant))) return true;
+  // Fallback fonetico para errores tipicos de escritura (solo tokens largos).
+  if (token.length >= 5) return fuzzyIncludes(searchable, variants);
+  return false;
+}
+
+// Empareja tolerando errores tipicos de escritura, en tres niveles de
+// fallback (solo tokens de 5+ letras, cuando no hubo match exacto):
+// 1) fold fonetico en ambos lados (b/v, s/z, k/qu->c, sh->s, ch->c, ph->f,
+//    w->u, y->i, h muda, letras dobles, -a por -e final);
+// 2) fold sin espacios (ej. "vitalmoo" vs "vital moo");
+// 3) distancia de edicion sobre palabras (typos de teclado: 1 letra en
+//    palabras de 6+, 2 letras en palabras de 9+).
+function fuzzyIncludes(text, variants) {
+  const folded = phoneticFold(text);
+  const foldedNoSpace = folded.replace(/ /g, "");
+  let words = null;
+  return variants.some((variant) => {
+    if (!variant || variant.length < 5) return false;
+    const foldedVariant = phoneticFold(variant);
+    if (folded.includes(foldedVariant)) return true;
+    const trimmed = foldedVariant.replace(/[aeiou]$/, "");
+    if (trimmed.length >= 5 && trimmed !== foldedVariant && folded.includes(trimmed)) return true;
+    if (foldedVariant.length >= 5 && foldedNoSpace.includes(foldedVariant.replace(/ /g, ""))) return true;
+    if (variant.length >= 6) {
+      const maxDistance = variant.length >= 9 ? 2 : 1;
+      if (words === null) words = String(text || "").split(" ").filter((w) => w.length >= 4);
+      return words.some((word) =>
+        Math.abs(word.length - variant.length) <= maxDistance && editDistance(variant, word, maxDistance) <= maxDistance);
+    }
+    return false;
+  });
+}
+
+// Levenshtein acotado con salida temprana: devuelve maxDistance+1 apenas la
+// distancia minima posible supera el limite.
+function editDistance(a, b, maxDistance) {
+  if (a === b) return 0;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(prev[j] + 1, current[j - 1] + 1, prev[j - 1] + cost);
+      if (current[j] < rowMin) rowMin = current[j];
+    }
+    if (rowMin > maxDistance) return maxDistance + 1;
+    prev = current;
+  }
+  return prev[b.length];
+}
+
+function phoneticFold(text) {
+  return String(text || "")
+    .replace(/sh/g, "s")
+    .replace(/ch/g, "c")
+    .replace(/ph/g, "f")
+    .replace(/qu|k/g, "c")
+    .replace(/w/g, "u")
+    .replace(/v/g, "b")
+    .replace(/z/g, "s")
+    .replace(/y/g, "i")
+    .replace(/h/g, "")
+    .replace(/(.)\1+/g, "$1");
+}
+
+
+// Registra en KV las busquedas que no encontraron producto, para revisarlas
+// en campaign-report ("busquedas no encontradas") y alimentar sinonimos con
+// datos reales. Best effort: si no hay KV o falla, no afecta la respuesta.
+async function logSearchMiss(env, queryText, reason) {
+  try {
+    const kv = env.KV || globalThis.KV;
+    const query = String(queryText || "").trim();
+    if (!kv || !query) return;
+    const key = `search_miss:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    await kv.put(key, JSON.stringify({ q: query.slice(0, 120), reason, at: new Date().toISOString() }), { expirationTtl: 45 * 24 * 3600 });
+  } catch {
+    // best effort
+  }
 }
 
 async function handler(request, env = globalThis) {
@@ -224,10 +384,15 @@ async function handleRequest(request, env = globalThis) {
 
     let product = null;
     let catalogSearch = null;
+    // ¿El match es CONFIABLE? true si vino por link/handle o por la busqueda de
+    // catalogo (que ya exige alta confianza). El fallback amplio del Admin
+    // (primer resultado) NO es confiable: en consultas vagas ("para el hongo")
+    // agarra un producto al azar. Se usa para no declarar "agotado" en falso.
+    let reliableMatch = false;
 
     for (const handle of handles) {
       product = await getPublicProductByHandle(config, handle);
-      if (product) break;
+      if (product) { reliableMatch = true; break; }
     }
 
     if (!product) {
@@ -235,29 +400,38 @@ async function handleRequest(request, env = globalThis) {
 
       for (const handle of handles) {
         product = getCatalogProductByHandle(catalog, handle);
-        if (product) break;
+        if (product) { reliableMatch = true; break; }
       }
 
       if (!product && queryText) {
         catalogSearch = searchCatalogProducts(catalog, queryText, handles);
         product = catalogSearch.product;
+        if (product) reliableMatch = true;
       }
     }
 
     if (!product && config.token) {
       for (const handle of handles) {
         product = await getProductByHandle(config, handle);
-        if (product) break;
+        if (product) { reliableMatch = true; break; }
       }
     }
 
-    if (!product && queryText && config.token) {
+    // Fallback amplio contra el Admin API. NO corre si el catalogo ya dijo
+    // "ambiguo": esa ambiguedad es informacion, no ausencia de informacion, y
+    // agarrar products[0] a ciegas la pisaba. Asi se cotizo el molinillo
+    // "Cofee Grindr" (S/80) a un cliente que estaba viendo el Iced Coffee
+    // (S/149): el catalogo habia detectado bien que "cafe" era ambiguo y este
+    // fallback resolvio igual, por el primero de la lista.
+    if (!product && queryText && config.token && !catalogSearch?.ambiguous) {
       const products = await searchProducts(config, queryText, handles);
       product = products[0] || null;
+      // fallback amplio: reliableMatch queda en false a proposito.
     }
 
     if (!product) {
       if (catalogSearch?.ambiguous) {
+        await logSearchMiss(env, queryText, "ambiguous");
         return json({
           found: false,
           reason: "ambiguous",
@@ -296,6 +470,7 @@ async function handleRequest(request, env = globalThis) {
         });
       }
 
+      await logSearchMiss(env, queryText, "not_found");
       return json({
         found: false,
         reason: "not_found",
@@ -305,8 +480,43 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
-    const normalizedProduct = normalizeAnyProduct(product, config.publicShopDomain);
-    const outOfStock = isProductOutOfStock(normalizedProduct);
+    let normalizedProduct = normalizeAnyProduct(product, config.publicShopDomain);
+    let outOfStock = isProductOutOfStock(normalizedProduct);
+    let stockRescued = false;
+
+    // Segunda opinion antes de declarar "agotado". El stock del catalogo PUBLICO
+    // (products.json / endpoint publico) refleja la disponibilidad del canal
+    // Tienda online y Shopify lo cachea, asi que puede ir atrasado respecto al
+    // inventario real. Paso con el Nattokinase: el bot dijo "agotado" y el
+    // cliente se fue, cuando en Shopify habia 489 unidades. Antes de matar una
+    // venta se re-verifica contra la Admin API, que si ve el inventario.
+    if (outOfStock) {
+      const rescued = await verifyStockWithAdmin(config, normalizedProduct);
+      if (rescued) {
+        normalizedProduct = rescued;
+        outOfStock = false;
+        stockRescued = true;
+        await logSearchMiss(env, queryText || normalizedProduct.handle, "public_oos_admin_ok");
+      }
+    }
+
+    // Guarda anti "agotado" en falso: si el match NO es confiable (vino del
+    // fallback amplio del Admin en una consulta vaga) y ademas esta agotado, NO
+    // declares ese producto agotado — casi seguro es un producto equivocado
+    // (ej. "para el hongo" -> "Sellador de Silicona"). Pide aclarar en vez de
+    // matar una venta de un producto que probablemente SI hay.
+    if (outOfStock && !reliableMatch) {
+      await logSearchMiss(env, queryText, "low_confidence_oos");
+      const msg = "Para no darte un dato equivocado, ¿me confirmas el nombre exacto del producto o me pasas el link/captura? Asi te doy el precio correcto al toque 😊";
+      return json({
+        found: false,
+        reason: "needs_clarification",
+        input: queryText,
+        message: msg,
+        customerMessage: msg,
+        nextAction: "ask_product",
+      });
+    }
 
     if (outOfStock) {
       // Nunca ofrecer un producto agotado como alternativa: buscar solo alternativas EN STOCK
@@ -329,8 +539,19 @@ async function handleRequest(request, env = globalThis) {
       source: normalizedProduct.__source || "shopify",
       product: normalizedProduct,
       outOfStock: false,
+      // true = el catalogo publico lo daba por agotado pero la Admin confirmo
+      // stock real. Sirve para detectar desfases del feed publico.
+      stockRescued,
+      // false = el producto NO salio de una coincidencia firme sino del fallback
+      // amplio (primer resultado del Admin API). El precio puede ser de otro
+      // producto, asi que el agente tiene que confirmar el titulo antes de
+      // cotizar en vez de leer el numero directo.
+      reliableMatch,
+      ...(reliableMatch ? {} : {
+        priceWarning: `Coincidencia DEBIL: no estoy seguro de que "${queryText}" sea *${normalizedProduct.title}*. NO des este precio todavia. Confirma primero con el cliente que es ese producto (o pedile el link), y recien entonces cotiza.`,
+      }),
       customerMessage: buildProductFoundMessage(normalizedProduct),
-      nextAction: "ask_quantity",
+      nextAction: reliableMatch ? "ask_quantity" : "confirm_product",
     });
   } catch (error) {
     return json({
@@ -541,9 +762,25 @@ function searchCatalogProducts(catalog, text, handles = []) {
   }
   const category = detectCategoryQuery(text, query);
 
-  const scored = catalog
+  // Peso por rareza (DF): el token distintivo de la consulta (el que aparece en
+  // POCOS productos, p.ej. "lengua") manda sobre palabras comunes (p.ej.
+  // "limpiador", que matchea decenas). Si la consulta tiene un token realmente
+  // distintivo presente en el catalogo, un producto que NO lo contiene queda
+  // descartado aunque matchee las palabras comunes. Los tokens que NO existen en
+  // el catalogo (marketing del anuncio, p.ej. "liposomal") no exigen nada.
+  const df = computeTokenDf(catalog, query.tokens);
+  const requiredToken = query.tokens.length >= 2
+    ? pickDistinctiveRequiredToken(query.tokens, df, catalog.length)
+    : null;
+
+  let ranked = catalog
     .map((product) => ({ product, score: scoreCatalogProduct(product, query) }))
-    .filter((item) => item.score >= 12)
+    .filter((item) => item.score >= 12);
+  if (requiredToken) {
+    const withRequired = ranked.filter((item) => productMatchesToken(item.product, requiredToken));
+    if (withRequired.length > 0) ranked = withRequired; // solo exigir si no vacia el resultado
+  }
+  const scored = ranked
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
@@ -567,7 +804,19 @@ function searchCatalogProducts(catalog, text, handles = []) {
     }
   }
 
-  const singleStrongMatch = query.tokens.length === 1 && best.score >= 12 && (!second || best.score >= second.score + 5);
+  // Una consulta de UNA sola palabra solo resuelve sola si esa palabra es
+  // DISTINTIVA (aparece en un unico producto del catalogo). Sin esa condicion,
+  // 12 puntos y 5 de ventaja alcanzaban para devolver un producto con precio:
+  // "cafe" devolvia el molinillo "Cofee Grindr" a S/80 y el bot le cotizo ese
+  // precio a un cliente que estaba viendo el Iced Coffee, que vale S/149 (las
+  // promos salieron consistentes con la base falsa: 3x2 en S/160, 5x3 en S/240).
+  // Si la palabra esta en varios productos ahora cae en `ambiguous` y el agente
+  // tiene que desambiguar en vez de cotizar a ciegas.
+  const singleTokenDf = query.tokens.length === 1 ? (df.get(query.tokens[0]) || 0) : 0;
+  const singleStrongMatch = query.tokens.length === 1
+    && best.score >= 12
+    && singleTokenDf <= 1
+    && (!second || best.score >= second.score + 5);
   const distinctiveMatch = hasDistinctiveProductToken(best.product, query)
     && best.score >= 20
     && (!second || best.score >= second.score + 5);
@@ -606,6 +855,7 @@ function scoreCatalogProduct(product, query) {
     product.handle?.replace(/-/g, " "),
     product.productType,
     product.vendor,
+    (Array.isArray(product.tags) ? product.tags : []).join(" "),
   ].filter(Boolean).join(" "));
 
   const handle = normalizeSearchText(product.handle || "");
@@ -622,13 +872,78 @@ function scoreCatalogProduct(product, query) {
     if (variants.some((variant) => title === variant || title.startsWith(`${variant} `))) score += 24;
     else if (variants.some((variant) => title.includes(variant))) score += 14;
     else if (variants.some((variant) => searchable.includes(variant))) score += 3;
+    else if (token.length >= 5 && fuzzyIncludes(title, variants)) score += 14;
+    else if (token.length >= 5 && fuzzyIncludes(searchable, variants)) score += 3;
   }
 
   const matchedTokens = query.tokens.filter((token) => searchableHasToken(searchable, token)).length;
   if (matchedTokens === query.tokens.length && query.tokens.length >= 2) score += 12;
-  if (matchedTokens < Math.min(2, query.tokens.length)) score = 0;
+  // Una palabra distintiva (6+ letras) con match fuerte en titulo/handle basta
+  // aunque el resto de la consulta sean calificadores que no estan en el
+  // catalogo (ej. "Nattokinase Liposomal": "liposomal" es marketing del anuncio).
+  const strongTokenMatch = query.tokens.some((token) => {
+    if (token.length < 6) return false;
+    const variants = tokenVariants(token);
+    return variants.some((variant) => title.includes(variant) || handle.includes(variant))
+      || fuzzyIncludes(title, variants) || fuzzyIncludes(handle, variants);
+  });
+  if (matchedTokens < Math.min(2, query.tokens.length) && !(matchedTokens >= 1 && strongTokenMatch)) score = 0;
 
   return score;
+}
+
+// Texto buscable de un producto (mismo criterio que scoreCatalogProduct).
+function productSearchable(product) {
+  return product.searchText || normalizeSearchText([
+    product.title,
+    product.handle?.replace(/-/g, " "),
+    product.productType,
+    product.vendor,
+    (Array.isArray(product.tags) ? product.tags : []).join(" "),
+  ].filter(Boolean).join(" "));
+}
+
+// Document frequency: en cuantos productos del catalogo aparece cada token.
+function computeTokenDf(catalog, tokens) {
+  const searchables = catalog.map(productSearchable);
+  const df = new Map();
+  for (const token of tokens) {
+    const variants = tokenVariants(token);
+    let count = 0;
+    for (const s of searchables) {
+      if (variants.some((variant) => s.includes(variant))) count += 1;
+    }
+    df.set(token, count);
+  }
+  return df;
+}
+
+// Elige el token "obligatorio": el mas raro de la consulta que SI existe en el
+// catalogo (df >= 1) y es distintivo (aparece en pocos productos). Devuelve null
+// si ni el mas raro es distintivo, o si ningun token existe en el catalogo (en
+// ese caso son puros calificadores de marketing y no se exige nada).
+function pickDistinctiveRequiredToken(tokens, df, catalogSize) {
+  const candidates = tokens.filter((token) => token.length >= 4 && (df.get(token) || 0) >= 1);
+  if (candidates.length === 0) return null;
+  let rare = candidates[0];
+  for (const token of candidates) {
+    if ((df.get(token) || 0) < (df.get(rare) || 0)) rare = token;
+  }
+  const distinctiveMax = Math.max(4, Math.round((catalogSize || 0) * 0.03));
+  if ((df.get(rare) || 0) > distinctiveMax) return null;
+  return rare;
+}
+
+// ¿El producto contiene el token (exacto o difuso)? Mismo criterio de match que
+// el scoring, para decidir el descarte por token obligatorio.
+function productMatchesToken(product, token) {
+  if (!token) return true;
+  const title = normalizeSearchText(product.title || "");
+  const searchable = productSearchable(product);
+  const variants = tokenVariants(token);
+  if (variants.some((variant) => searchable.includes(variant))) return true;
+  if (token.length >= 5 && (fuzzyIncludes(title, variants) || fuzzyIncludes(searchable, variants))) return true;
+  return false;
 }
 
 function hasDistinctiveProductToken(product, query) {
@@ -724,20 +1039,66 @@ function catalogMatchSummary(item) {
   };
 }
 
+// Alternativas para un producto AGOTADO. Antes se elegian por "categorias"
+// inferidas de palabras clave del titulo, y el catalogo no tiene tags ni tipo:
+// la mayoria de los agotados quedaba sin categoria (cero alternativas) y otros
+// caian en una absurda (el Compeed Stick anti-ampollas era "cocina" y se ofrecia
+// un shampoo). Ahora: parecido de texto (titulo x3 + descripcion) con pesos
+// TF-IDF sobre el mismo catalogo, y SOLO si el parecido es claro. Medido sobre el
+// catalogo real (14-oct): con umbral 0,25 las sugerencias tienen sentido
+// (mascarilla de cabello grueso -> acondicionador de la misma linea,
+// ashwagandha en gomitas -> ashwagandha en capsulas); por debajo aparecen
+// disparates. Sin alternativa clara, ninguna: mejor que una que no tiene nada que
+// ver.
+const ALT_MIN_SIMILITUD = 0.25;
+const ALT_STOP = new Set(("de la el los las un una unos unas y o a en con para por sin su sus tu tus que se es al del lo le les mas muy como "
+  + "este esta estos estas ese esa eso cada desde hasta entre sobre tambien ya no si pero porque cual cuando donde mientras ser son fue hay "
+  + "tiene tienen puede pueden ayuda ayudar ayudan producto productos natural naturales formula capsulas capsula ml gr mg oz unidad "
+  + "unidades pack frasco superhuman kenku original premium calidad nuevo nueva dia dias diario diaria uso usar todo toda todos todas forma "
+  + "mejor mejora mejorar apoyo apoya salud bienestar cuerpo efecto efectos resultados resultado ideal tipo piel").split(" "));
+
+function altTokens(text) {
+  return (normalizeSearchText(String(text || "").replace(/<[^>]+>/g, " ")).match(/[a-z]{3,}/g) || [])
+    .filter((w) => !ALT_STOP.has(w));
+}
+
+function altTermFreq(product) {
+  const tf = new Map();
+  for (const w of altTokens(product.title)) tf.set(w, (tf.get(w) || 0) + 3);
+  for (const w of altTokens(product.description)) tf.set(w, (tf.get(w) || 0) + 1);
+  return tf;
+}
+
 function findInStockAlternatives(catalog, product, limit = 2) {
-  const targetCategories = new Set(product.categories || []);
-  if (targetCategories.size === 0 || !Array.isArray(catalog)) return [];
-
+  if (!Array.isArray(catalog) || catalog.length === 0 || !product) return [];
   const currentKeys = new Set(handleKeys(product.handle || ""));
-
-  return catalog
-    .filter((candidate) => !isProductOutOfStock(candidate))
-    .filter((candidate) => !handleKeys(candidate.handle || "").some((key) => currentKeys.has(key)))
-    .map((candidate) => ({
-      product: candidate,
-      score: (candidate.categories || []).filter((category) => targetCategories.has(category)).length,
-    }))
-    .filter((item) => item.score > 0)
+  const docs = catalog.map((p) => ({ p, tf: altTermFreq(p) }));
+  const df = new Map();
+  for (const { tf } of docs) for (const w of tf.keys()) df.set(w, (df.get(w) || 0) + 1);
+  const n = docs.length;
+  const vec = (tf) => {
+    const v = new Map();
+    for (const [w, c] of tf) {
+      const d = df.get(w) || 1;
+      if (d >= n * 0.3) continue; // palabras de casi todo el catalogo no distinguen
+      v.set(w, (1 + Math.log(c)) * Math.log(n / d));
+    }
+    const norm = Math.sqrt([...v.values()].reduce((a, x) => a + x * x, 0)) || 1;
+    for (const [w, x] of v) v.set(w, x / norm);
+    return v;
+  };
+  const target = vec(altTermFreq(product));
+  if (target.size === 0) return [];
+  return docs
+    .filter(({ p }) => !isProductOutOfStock(p))
+    .filter(({ p }) => !handleKeys(p.handle || "").some((key) => currentKeys.has(key)))
+    .map(({ p, tf }) => {
+      const v = vec(tf);
+      let score = 0;
+      for (const [w, x] of target) score += x * (v.get(w) || 0);
+      return { product: p, score: Math.round(score * 100) / 100 };
+    })
+    .filter((item) => item.score >= ALT_MIN_SIMILITUD)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map(catalogMatchSummary);
@@ -908,7 +1269,11 @@ function publicProductToNormalized(product, publicShopDomain, options = {}) {
     id: toShopifyGid("Product", product.id),
     handle: product.handle,
     title: product.title || product.handle,
-    description: product.description || "",
+    // El endpoint /products.json trae la descripcion en `body_html` (no en
+    // `description`); el endpoint /products/{handle}.js la trae en `description`.
+    // Sin este fallback, los productos hallados por BUSQUEDA (catalogo) llegaban
+    // SIN descripcion y el bot negaba beneficios reales (ej. hongos en el serum).
+    description: product.description || product.body_html || "",
     productType: product.type || product.product_type || "",
     vendor: product.vendor || "",
     tags: normalizePublicTags(product.tags),
@@ -1012,6 +1377,27 @@ function normalizeProduct(product) {
 function normalizeAnyProduct(product) {
   if (product?.priceRange && Array.isArray(product.variants)) return product;
   return normalizeProduct(product);
+}
+
+// Re-verifica el stock contra la Admin API cuando el catalogo publico dice que
+// no hay. Devuelve el producto normalizado de la Admin si SI hay stock (para
+// usar sus datos, que son los reales), o null si tambien esta agotado ahi.
+// Nunca lanza: ante cualquier problema devuelve null y se respeta lo que dijo
+// el catalogo publico.
+async function verifyStockWithAdmin(config, product) {
+  try {
+    if (!config.token || !product || !product.handle) return null;
+    // Si ya vino de la Admin (trae inventoryQuantity), no hay segunda fuente.
+    const fromAdmin = (product.variants || []).some((v) => typeof v.inventoryQuantity === "number");
+    if (fromAdmin) return null;
+    const admin = await getProductByHandle(config, product.handle);
+    if (!admin) return null;
+    const normalized = normalizeProduct(admin);
+    if (isProductOutOfStock(normalized)) return null;
+    return normalized;
+  } catch {
+    return null;
+  }
 }
 
 function isProductOutOfStock(product) {
@@ -1267,8 +1653,26 @@ function formatMoney(value) {
   return (Math.round((Number(value) + Number.EPSILON) * 100) / 100).toFixed(2);
 }
 
+// Elimina el byte nulo (\u0000) y demas controles C0 (menos \t \n \r) de
+// todos los strings de la respuesta. Un producto con un \u0000 en el
+// titulo/descripcion (dato sucio de Shopify) reventaba la ejecucion al
+// guardarse como variable: "PG::UntranslatableCharacter: \u0000 cannot be
+// converted to text".
+function stripControlChars(value) {
+  if (typeof value === "string") {
+    return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+  }
+  if (Array.isArray(value)) return value.map(stripControlChars);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const key of Object.keys(value)) out[key] = stripControlChars(value[key]);
+    return out;
+  }
+  return value;
+}
+
 function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify(stripControlChars(body)), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8" },
   });
@@ -1278,4 +1682,4 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-globalThis.__kenkuProductLookup = { extractHandleCandidates, handleRequest, handler, loadPublicCatalog };
+globalThis.__kenkuProductLookup = { extractHandleCandidates, handleRequest, handler, loadPublicCatalog, findInStockAlternatives };

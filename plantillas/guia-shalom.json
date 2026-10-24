@@ -1,0 +1,16 @@
+{
+  "name": "guia_shalom",
+  "language": "es",
+  "category": "UTILITY",
+  "components": [
+    { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["<HANDLE_DE_EJEMPLO>"] } },
+    {
+      "type": "BODY",
+      "text": "¡Hola {{1}}! 👋\n\nTe escribimos de Kenku por tu pedido *{{2}}*.\n\n*Tu pedido:*\n{{3}}\n\nYa salió por *Shalom* con la guía *{{4}}*. Te adjuntamos la imagen para que la tengas a mano al momento de recoger.\n\n*Saldo a pagar al recoger:* {{5}}\n*Agencia de recojo:* {{6}}\n\nLa entrega demora entre 2 y 5 días hábiles. No podemos darte una fecha y hora exactas porque dependen de la transportadora.\n\nSi tienes alguna duda, respóndenos por aquí y te ayudamos. ☺️",
+      "example": {
+        "body_text": [["Frankz", "KP132774", "Cayenne Pepper x3", "0000111a", "S/ 268", "Shalom Av. Argentina 2450, Lima"]]
+      }
+    },
+    { "type": "FOOTER", "text": "Kenku • Atención al cliente" }
+  ]
+}
