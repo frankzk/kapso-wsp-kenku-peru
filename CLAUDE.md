@@ -73,6 +73,25 @@
   Cualquier funcion nueva que envie mensajes debe resolver el BSUID igual.
 - Doc de Kapso: https://docs.kapso.ai/docs/whatsapp/business-scoped-user-ids
 
+## Recuperar conversaciones que quedaron sin respuesta (2026-10-23)
+
+- Una ejecucion fallida (sin creditos, `Rate limit exceeded` del modelo) NO se
+  reintenta: el cliente queda sin respuesta hasta que vuelva a escribir.
+- Para relanzar el bot en un chat: crear un trigger temporal
+  `POST /workflows/{id}/triggers` `{"trigger":{"trigger_type":"api_call"}}`,
+  luego `POST /workflows/{id}/executions` con
+  `{"workflow_execution":{"phone_number":"51...","phone_number_id":"...","variables":{"followup_generation":"<id del ultimo entrante>"}}}`
+  (BSUID: `recipient` en vez de `phone_number`). Sin `followup_generation`
+  loop-guard lo descarta como `inbound_duplicado`; si responde
+  `ejecucion_obsoleta`, relanzar SIN la variable. Espaciar ~8 s entre chats
+  (relanzar cientos de golpe dispara el rate limit del modelo). Al terminar,
+  borrar el trigger: `DELETE /triggers/{trigger_id}`.
+- Si la conversacion de Kapso ya estaba cerrada, la ejecucion abre otra nueva y
+  el bot responde sin historial (saludo generico).
+- 981 estuvo 2026-10-22 15:55 → 2026-10-23 ~12:00 sin webhooks (credenciales de
+  app Meta cruzadas, lo arreglo soporte de Kapso). Al volver, Meta reenvio el
+  atraso de golpe y ~450 ejecuciones cayeron por rate limit del modelo.
+
 ## Secrets de funciones (LECCION IMPORTANTE)
 
 - Las variables de entorno de las funciones se configuran como **Secrets** vía
