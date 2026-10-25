@@ -43,8 +43,15 @@
 ## Flujo de cambios
 
 1. Editar el código en este repo (rama de trabajo actual:
-   `claude/kapso-kenku-migration-8rh6g9`), commit y push a GitHub — el repo es
-   la fuente de verdad.
+   `claude/bot-kenku-woocommerce-completo`, que junta la línea más nueva
+   `claude/kenku-product-presentation-eyalnx` con el modo WooCommerce), commit y
+   push a GitHub — el repo es la fuente de verdad.
+   **No desplegar desde `claude/kapso-kenku-migration-8rh6g9`** (la rama por
+   defecto de GitHub): sale del código del 2-jul y le faltan 207 commits
+   (candado de pedidos duplicados, dirección entregable, send-presentation,
+   verify-payment-account…). Antes de desplegar cualquier función, `kapso pull`
+   y comparar con la rama: lo desplegado puede tener cambios que no están en
+   ningún commit.
 2. Aplicar a Kapso: por Platform API (PATCH del workflow / update+deploy de
    funciones), o indicar al usuario `git pull && kapso pull && kapso push`.
 3. Si se aplicó por API, avisar al usuario que antes de su próximo
