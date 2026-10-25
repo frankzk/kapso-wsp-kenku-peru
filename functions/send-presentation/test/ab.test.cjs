@@ -39,29 +39,9 @@ caso("las dos copias de promoVariant coinciden (P1 forzado en ambas)", () => {
   for (const t of TELEFONOS.slice(0, 2000)) assert.strictEqual(CL.promoVariant(t), CO.promoVariant(t));
   assert.strictEqual(CO.promoVariant("51965391481"), "P1");
 });
-caso("sin telefono: N en las dos (fuera del experimento)", () => {
-  for (const t of ["", null, undefined, "PE.948592654941065".replace(/\d/g, "")]) {
-    assert.strictEqual(CL.abVariant(t), "N"); assert.strictEqual(CO.abVariant(t), "N");
-  }
-});
-caso("solo salen A y D, ~50/50", () => {
-  const n = { A: 0, D: 0 };
-  for (const t of TELEFONOS) n[CL.abVariant(t)] += 1;
-  assert.deepStrictEqual(Object.keys(n).sort(), ["A", "D"]);
-  const share = n.D / TELEFONOS.length;
-  assert.ok(Math.abs(share - 0.5) < 0.01, `D = ${(share * 100).toFixed(2)}%`);
-});
-caso("independiente del reparto A/C viejo (los ex-C no caen en bloque en D)", () => {
-  const exC = TELEFONOS.filter((t) => viejaAC(t) === "C");
-  const share = exC.filter((t) => CL.abVariant(t) === "D").length / exC.length;
-  assert.ok(Math.abs(share - 0.5) < 0.015, `de los ex-C, ${(share * 100).toFixed(1)}% en D`);
-});
-caso("independiente del eje de promo (las 4 celdas ~25%)", () => {
-  const c = {};
-  for (const t of TELEFONOS) { const k = `${CL.abVariant(t)}/${viejaPromo(t)}`; c[k] = (c[k] || 0) + 1; }
-  for (const k of ["A/P1", "A/P2", "D/P1", "D/P2"]) {
-    const share = (c[k] || 0) / TELEFONOS.length;
-    assert.ok(Math.abs(share - 0.25) < 0.015, `${k} = ${(share * 100).toFixed(1)}%`);
+caso("A/D cerrada (2026-10-25): todos los leads nuevos van a D, con o sin telefono", () => {
+  for (const t of [...TELEFONOS.slice(0, 2000), "", null, undefined, "PE.948592654941065".replace(/\d/g, "")]) {
+    assert.strictEqual(CL.abVariant(t), "D"); assert.strictEqual(CO.abVariant(t), "D");
   }
 });
 

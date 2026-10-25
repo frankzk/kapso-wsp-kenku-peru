@@ -457,7 +457,26 @@ promo pasa el hash por un mezclador de avalancha antes de tomar el bit.
 
 ---
 
-## 4. Prueba A/D — la presentacion por `send-presentation`  ·  **PREPARADA 2026-09-26**
+## 4. Prueba A/D — la presentacion por `send-presentation`  ·  **CERRADA 2026-10-25: D al 100%**
+
+### VEREDICTO (leido el 2026-10-25): D gana, al 100%
+
+Conteo por telefono (lead = primer contacto; pedido = confirmacion #KP o "pedido
+generado/confirmado" del bot o asesora dentro de 7 dias), variante recalculada
+con el mismo `abVariant` del bot. Script `ad_final.py` (scratchpad).
+
+| Ventana | A | D | D - A | z |
+|---|---|---|---|---|
+| 27-sep a 24-oct, sin 18, 22 y 23-oct (cortes) | 12,49% (n=6.143) | 13,16% (n=6.048) | +0,68 pp (+5,4%) | +1,12 (por dias +1,17) |
+| Todos los dias | 11,39% (n=7.409) | 12,00% (n=7.258) | +0,61 pp | +1,15 |
+| Solo desde el 11-oct | 9,81% | 10,92% | +1,11 pp | +1,38 |
+
+Sin señal de daño en 4 semanas (la regla pedia 21 dias) y D es ~25% mas barato
+por conversacion: **D al 100% desde el 2026-10-25 04:47 (-03)**, incluidos los
+leads sin telefono (N). Las conversaciones que ya estaban en A siguen en A
+(`varianteDelLead`). Pendiente: sacar la presentacion manual del prompt y
+arrancar el A/B de la pregunta de cierre.
+
 
 **Que se prueba.** La presentacion de producto es la misma secuencia para todos
 (saludo, fotos, video, beneficio, precio, testimonio, botones) y el agente la
