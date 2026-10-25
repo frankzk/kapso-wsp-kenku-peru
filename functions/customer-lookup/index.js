@@ -12,6 +12,25 @@ const SEARCH_BUDGET_MS = 15000;
 const REFERRAL_TIMEOUT_MS = 8000;
 const ALERT_TIMEOUT_MS = 4000;
 
+// WooCommerce (kenku.pe desde la apertura del lunes 26-10-2026). Con
+// STORE_BACKEND=woocommerce (secreto de la funcion; para probar, storeBackend en
+// el input) el cliente se busca en los pedidos de WooCommerce por su celular
+// (billing.phone, con o sin +51) y, mientras siga SHOPIFY_ADMIN_ACCESS_TOKEN, en
+// Shopify en paralelo. Los clientes de Shopify NO se migraron: sin Shopify solo se
+// reconoce a quien compro en la tienda nueva.
+const WOO_TIMEOUT_MS = 6000;
+const WOO_SEARCH_LIMIT = 20;
+// No son compras: fallidos y borradores del checkout de bloques.
+const WOO_SKIP_STATUSES = new Set(["failed", "checkout-draft", "trash"]);
+// Codigo de departamento de WooCommerce -> nombre para el resumen de la direccion.
+const WOO_STATE_NAMES = {
+  AMA: "Amazonas", ANC: "Áncash", APU: "Apurímac", ARE: "Arequipa", AYA: "Ayacucho", CAJ: "Cajamarca",
+  CAL: "Callao", CUS: "Cusco", HUV: "Huancavelica", HUC: "Huánuco", ICA: "Ica", JUN: "Junín",
+  LAL: "La Libertad", LAM: "Lambayeque", LIM: "Lima", LMA: "Lima", LOR: "Loreto", MDD: "Madre de Dios",
+  MOQ: "Moquegua", PAS: "Pasco", PIU: "Piura", PUN: "Puno", SAM: "San Martín", TAC: "Tacna",
+  TUM: "Tumbes", UCA: "Ucayali",
+};
+
 async function fetchConTiempo(url, options = {}, ms = 6000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms);
@@ -252,6 +271,8 @@ async function handleRequest(request, env = globalThis) {
 
     const phone = normalizePhone(input.phone || "");
     const email = normalizeEmail(input.email || "");
+    const woo = getStoreBackend(env, input) === "woocommerce";
+    const tienda = woo ? "la tienda" : "Shopify";
     // La variante que ya tiene la conversacion manda sobre recalcularla: el agente
     // vuelve a llamar customer_lookup a mitad de charla, a veces con un celular que
     // el cliente recien dio, y recalcular lo cambiaria de brazo en pleno experimento.
@@ -271,7 +292,7 @@ async function handleRequest(request, env = globalThis) {
         phone: null,
         adReferral,
         vars: buildFlowVars(null, null, adReferral, "", contactIdentity(input), asignada),
-        message: "No hay telefono para buscar al cliente en Shopify; tratalo como cliente nuevo."
+        message: `No hay telefono para buscar al cliente en ${tienda}; tratalo como cliente nuevo.`
           + " ESTE LEAD NO TIENE CELULAR (entro por username de WhatsApp): no podemos contactarlo"
           + " fuera del chat ni coordinar la entrega. Pide su numero de celular JUNTO con la"
           + " direccion, en el mismo mensaje, apenas llegues a datos de envio. NO cierres el"
@@ -280,11 +301,14 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
-    const config = getConfig(env);
+    // Modo WooCommerce: sin token de Shopify no es un error (Shopify cierra el 27-10).
+    const config = woo ? getWooLookupConfig(env) : getConfig(env);
     const conversationId = payload.whatsapp_context?.conversation?.id
       || payload.execution_context?.context?.conversation_id;
     const [search, adReferral] = await Promise.all([
-      searchCustomers(config, { phone, email, debugQuery: input.debugQuery }),
+      woo
+        ? searchCustomersWoo(config, { phone, email, debugQuery: input.debugQuery })
+        : searchCustomers(config, { phone, email, debugQuery: input.debugQuery }),
       fetchAdReferral(env, payload),
     ]);
     // El tipo de entrada sale del mismo fetch del referral, asi que el registro
@@ -292,7 +316,12 @@ async function handleRequest(request, env = globalThis) {
     await logAbLead(env, conversationId, asignada.ab, adReferral?.entryType || "otro", asignada.promo, phone);
     await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
-      return json({ ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral });
+      // En modo WooCommerce van igual las vars (como cliente nuevo): sin ellas el bot
+      // pierde el producto del anuncio y la variante, no solo la direccion.
+      return json({
+        ok: false, found: false, reason: "lookup_failed", error: search.lastError, adReferral,
+        ...(woo ? { store: null, vars: buildFlowVars(null, null, adReferral, phone, contactIdentity(input), asignada) } : {}),
+      });
     }
     const match = pickBestMatch(search.candidates, { phone, email, debug: Boolean(input.debugQuery) });
 
@@ -303,8 +332,9 @@ async function handleRequest(request, env = globalThis) {
         phone: phone || null,
         email: email || null,
         adReferral,
+        ...(woo ? { store: null } : {}),
         vars: buildFlowVars(null, null, adReferral, phone, contactIdentity(input), asignada),
-        message: "Cliente nuevo: no hay registro previo en Shopify. Captura los datos normalmente."
+        message: `Cliente nuevo: no hay registro previo en ${tienda}. Captura los datos normalmente.`
           + (adReferral ? " OJO: llego desde un anuncio (adReferral); si su mensaje no deja claro el producto, deducelo del headline/body del anuncio." : ""),
       });
     }
@@ -343,6 +373,8 @@ async function handleRequest(request, env = globalThis) {
         : null,
       addressSummary,
       adReferral,
+      // Modo WooCommerce: donde se encontro ("woocommerce" o "shopify").
+      ...(woo ? { store: search.source || null } : {}),
       vars: buildFlowVars(match, addressSummary, adReferral, phone, contactIdentity(input), asignada),
       hint: (ordersCount > 0
         ? "Cliente recurrente: saludalo con cercania y, al llegar al envio, CONFIRMA la direccion guardada en vez de pedir todos los datos de nuevo."
@@ -354,7 +386,7 @@ async function handleRequest(request, env = globalThis) {
   }
 }
 
-async function searchCustomers(config, { phone, email, debugQuery }) {
+async function searchCustomers(config, { phone, email, debugQuery }, options = {}) {
   const queries = [];
   if (debugQuery) queries.push(String(debugQuery));
   const digits = phoneDigits(phone);
@@ -371,8 +403,13 @@ async function searchCustomers(config, { phone, email, debugQuery }) {
   const candidates = [];
   let failures = 0;
   let lastError = null;
-  const deadline = Date.now() + SEARCH_BUDGET_MS;
+  const deadline = options.deadline || Date.now() + SEARCH_BUDGET_MS;
   for (const query of queries) {
+    // Modo WooCommerce: si Shopify ya fallo una vez (cerrado o colgado), no se insiste.
+    if (options.stopOnFailure && failures > 0) {
+      failures += 1;
+      continue;
+    }
     if (Date.now() + SHOPIFY_TIMEOUT_MS > deadline) {
       // Presupuesto agotado: las consultas que faltan cuentan como fallidas.
       failures += 1;
@@ -425,6 +462,186 @@ function getConfig(env = globalThis) {
   const token = env.SHOPIFY_ADMIN_ACCESS_TOKEN || env.sHOPIFYADMINACCESSTOKEN || globalThis.SHOPIFY_ADMIN_ACCESS_TOKEN;
   if (!token) throw new Error("Missing SHOPIFY_ADMIN_ACCESS_TOKEN");
   return { shopDomain, apiVersion, token };
+}
+
+// ---------------------------------------------------------------------------
+// WooCommerce
+// ---------------------------------------------------------------------------
+
+function envValue(env, name) {
+  const mangled = name.replace(/_/g, "").replace(/^./, (c) => c.toLowerCase());
+  return env?.[name] || env?.[mangled] || globalThis[name] || globalThis[mangled] || "";
+}
+
+// El input (storeBackend) manda, para probar; si no, el secreto STORE_BACKEND. Sin nada: Shopify, como siempre.
+function getStoreBackend(env, input = {}) {
+  const override = String(input?.storeBackend || input?.store_backend || "").trim().toLowerCase();
+  if (override === "woocommerce" || override === "shopify") return override;
+  return String(envValue(env, "STORE_BACKEND")).trim().toLowerCase() === "woocommerce" ? "woocommerce" : "shopify";
+}
+
+function getWooLookupConfig(env = globalThis) {
+  const storeUrl = String(envValue(env, "WOO_STORE_URL")).trim().replace(/\/+$/, "");
+  const key = envValue(env, "WOO_CONSUMER_KEY");
+  const secret = envValue(env, "WOO_CONSUMER_SECRET");
+  const token = envValue(env, "SHOPIFY_ADMIN_ACCESS_TOKEN");
+  return {
+    woo: storeUrl && key && secret ? { storeUrl, key, secret } : null,
+    // Shopify sigue sumando mientras tenga token y responda (clientes de antes de la apertura).
+    shopify: token
+      ? {
+          shopDomain: envValue(env, "SHOPIFY_SHOP_DOMAIN") || DEFAULT_SHOP_DOMAIN,
+          apiVersion: envValue(env, "SHOPIFY_API_VERSION") || DEFAULT_API_VERSION,
+          token,
+        }
+      : null,
+  };
+}
+
+// WooCommerce primero (lo mas reciente) y Shopify en paralelo, con el mismo
+// presupuesto de tiempo de siempre. Si WooCommerce lo encuentra no se espera a
+// Shopify. Devuelve candidatos con la forma del cliente de Shopify, para que
+// pickBestMatch y la respuesta no cambien.
+async function searchCustomersWoo(config, { phone, email, debugQuery }) {
+  const deadline = Date.now() + SEARCH_BUDGET_MS;
+  const wooTask = config.woo
+    ? searchWooOrders(config.woo, { phone, email }, deadline).then((r) => ({ ok: true, ...r }), (error) => ({ ok: false, error: safeError(error) }))
+    : Promise.resolve({ ok: false, error: "Missing WOO_STORE_URL, WOO_CONSUMER_KEY or WOO_CONSUMER_SECRET" });
+  const shopTask = config.shopify
+    ? searchCustomers(config.shopify, { phone, email, debugQuery }, { deadline, stopOnFailure: true })
+      .catch((error) => ({ candidates: [], allFailed: true, lastError: safeError(error) }))
+    : null;
+
+  const wooResult = await wooTask;
+  if (wooResult.ok && wooResult.candidates.length) {
+    return { candidates: wooResult.candidates, allFailed: false, lastError: null, source: "woocommerce" };
+  }
+  const shopResult = shopTask ? await shopTask : null;
+  if (shopResult?.candidates?.length) {
+    return { candidates: shopResult.candidates, allFailed: false, lastError: null, source: "shopify" };
+  }
+  // Basta con que una tienda haya respondido para tratarlo como cliente nuevo.
+  const answered = wooResult.ok || Boolean(shopResult && !shopResult.allFailed);
+  return {
+    candidates: [],
+    allFailed: !answered,
+    lastError: wooResult.ok ? null : [wooResult.error, shopResult?.lastError].filter(Boolean).join(" | "),
+    source: null,
+  };
+}
+
+// Pedidos del cliente en WooCommerce. La busqueda de pedidos (?search=) mira el
+// indice de la direccion de facturacion, que incluye el celular; se busca por los 9
+// digitos para encontrarlo con o sin +51 y despues se confirma el numero exacto.
+async function searchWooOrders(woo, { phone, email }, deadline) {
+  const digits = phoneDigits(phone);
+  const national = digits.startsWith("51") && digits.length === 11 ? digits.slice(2) : digits;
+  const terms = [];
+  if (national.length >= 7) terms.push(national);
+  if (email) terms.push(email);
+  if (!terms.length) return { candidates: [] };
+
+  const matched = new Map();
+  let failures = 0;
+  let lastError = null;
+  for (const term of terms) {
+    const remaining = deadline - Date.now();
+    if (remaining < 1000) {
+      failures += 1;
+      lastError = lastError || "presupuesto de busqueda agotado";
+      continue;
+    }
+    try {
+      for (const order of await wooSearchOrders(woo, term, Math.min(WOO_TIMEOUT_MS, remaining))) {
+        if (!order?.id || !isWooPurchase(order)) continue;
+        const byPhone = phone && samePhoneDigits(order.billing?.phone, phone);
+        const byEmail = email && normalizeEmail(order.billing?.email) === email;
+        if (byPhone || byEmail) matched.set(order.id, order);
+      }
+    } catch (error) {
+      failures += 1;
+      lastError = safeError(error);
+    }
+    if (matched.size) break;
+  }
+  if (failures === terms.length) throw new Error(lastError || "WooCommerce no respondio");
+  return { candidates: matched.size ? [wooCustomerFromOrders([...matched.values()])] : [] };
+}
+
+// Cuenta como compra: no los fallidos ni los borradores, ni un pago en linea (Flow)
+// que nunca se pago. Los contra entrega cuentan siempre, como en Shopify.
+function isWooPurchase(order) {
+  if (WOO_SKIP_STATUSES.has(order.status)) return false;
+  const online = order.payment_method && order.payment_method !== "cod";
+  return !(online && !order.date_paid_gmt && (order.status === "pending" || order.status === "cancelled"));
+}
+
+async function wooSearchOrders(woo, term, ms) {
+  const query = new URLSearchParams({
+    search: term,
+    per_page: String(WOO_SEARCH_LIMIT),
+    status: "any",
+    orderby: "date",
+    order: "desc",
+    _fields: "id,number,status,total,currency,date_created_gmt,date_paid_gmt,payment_method,customer_id,billing",
+  });
+  const response = await fetchConTiempo(`${woo.storeUrl}/wp-json/wc/v3/orders?${query}`, {
+    headers: {
+      Authorization: `Basic ${btoa(`${woo.key}:${woo.secret}`)}`,
+      Accept: "application/json",
+      "User-Agent": "Kenku-Kapso-Lookup/1.0",
+    },
+  }, ms);
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`WooCommerce ${response.status}: ${text.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
+// Pedidos del mismo cliente -> el "cliente" con la forma que devuelve Shopify. La
+// direccion es la del pedido mas reciente: address_1 = direccion, address_2 =
+// referencia, city = distrito, state = codigo del departamento (LMA, ARE...).
+function wooCustomerFromOrders(orders) {
+  const sorted = [...orders].sort((a, b) => String(b.date_created_gmt || "").localeCompare(String(a.date_created_gmt || "")));
+  const last = sorted[0];
+  const billing = last.billing || {};
+  const firstName = String(billing.first_name || "").trim() || null;
+  const lastName = String(billing.last_name || "").trim() || null;
+  const spent = sorted
+    .filter((order) => order.status !== "cancelled" && order.status !== "refunded")
+    .reduce((sum, order) => sum + (Number(order.total) || 0), 0);
+  const customerId = Number(last.customer_id || 0);
+  return {
+    // Los pedidos contra entrega son de invitado (sin cuenta): sin id.
+    id: customerId > 0 ? `woo-customer-${customerId}` : null,
+    displayName: [firstName, lastName].filter(Boolean).join(" ") || null,
+    firstName,
+    lastName,
+    email: billing.email || null,
+    phone: billing.phone || null,
+    numberOfOrders: sorted.length,
+    amountSpent: { amount: spent.toFixed(2), currencyCode: last.currency || "PEN" },
+    note: null,
+    tags: [],
+    defaultAddress: {
+      firstName,
+      lastName,
+      phone: billing.phone || null,
+      address1: billing.address_1 || null,
+      address2: billing.address_2 || null,
+      city: billing.city || null,
+      province: WOO_STATE_NAMES[billing.state] || billing.state || null,
+      country: billing.country || "PE",
+      zip: billing.postcode || null,
+    },
+    lastOrder: {
+      id: String(last.id),
+      name: `#${last.number || last.id}`,
+      processedAt: last.date_created_gmt ? `${String(last.date_created_gmt).slice(0, 19)}Z` : null,
+    },
+  };
 }
 
 async function shopifyGraphql(config, query, variables) {
@@ -859,4 +1076,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead };
+globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders };

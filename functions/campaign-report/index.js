@@ -1,11 +1,16 @@
 // Dashboard de ventas por campana de WhatsApp (Click-to-WhatsApp).
 //
-// Cruza las ordenes de Shopify (atribuidas con ctwa_ad_id en los note_attributes
-// por la funcion create-shopify-order) con el gasto publicitario de Meta Marketing
-// API para reportar, por anuncio y por campana: pedidos, ingresos, gasto, CPA y ROAS.
+// Cruza las ordenes de la tienda (atribuidas con ctwa_ad_id por la funcion
+// create-shopify-order: note_attributes en Shopify, metadatos del pedido en
+// WooCommerce) con el gasto publicitario de Meta Marketing API para reportar, por
+// anuncio y por campana: pedidos, ingresos, gasto, CPA y ROAS.
+//
+// Tienda: Shopify por defecto. Con STORE_BACKEND=woocommerce (kenku.pe desde el
+// 26-10-2026) lee los pedidos de WooCommerce y, mientras siga el token de Shopify,
+// suma los de Shopify de antes de su cierre (ver la seccion WooCommerce).
 //
 // Tambien reporta la CONVERSION de WhatsApp: conversaciones nuevas (Kapso API)
-// vs pedidos del bot (Shopify, source=whatsapp-bot), con tasa por dia. La
+// vs pedidos del bot (source=whatsapp-bot), con tasa por dia. La
 // conversion se calcula para rangos cortos (<= MAX_CONV_DAYS dias).
 //
 // Endpoint PUBLICO protegido por access key (expone datos de ventas):
@@ -44,7 +49,8 @@ if (typeof addEventListener === "function") {
 async function handleRequest(request, env = globalThis) {
   const params = await readParams(request);
   const wantsJson = params.format === "json" || /application\/json/i.test(request.headers.get("accept") || "");
-  const config = getConfig(env);
+  // params: storeBackend=woocommerce|shopify sirve para probar la otra tienda sin cambiar el secreto.
+  const config = getConfig(env, params);
 
   // Fallback: permitir pasar la Kapso API key por parametro (kapso_key) cuando el
   // env del worker no la expone. Solo util para quien ya tiene la dashboard key.
@@ -66,7 +72,7 @@ async function handleRequest(request, env = globalThis) {
   // conectado, asi que la lectura del experimento va aislada aca.
   if (params.only === "ab") {
     const range = resolveRange(params);
-    const ab = await fetchAbTest(env, range);
+    const ab = await fetchAbTest(env, range, config);
     const liftOf = (v) => (ab && ab.A && ab.A.rate && ab[v] && ab[v].rate ? round2(ab[v].rate / ab.A.rate - 1) : null);
     // La C solo cambia el cierre de los leads que entran con "Tengo una
     // consulta", asi que el lift que decide es el de esa columna; el global
@@ -122,6 +128,7 @@ async function handleRequest(request, env = globalThis) {
       range: { since: range.since, until: range.until, days: range.days },
       botOrders: sales.whatsappOrders,
       attributedOrders: sales.attributedOrders,
+      ...(sales.sourceWarnings?.length ? { warnings: sales.sourceWarnings } : {}),
       ads,
     }, 200);
   }
@@ -145,6 +152,7 @@ async function handleRequest(request, env = globalThis) {
       // Los que NO cuadran con la escalera. Si viene vacio, no hubo precios
       // inventados en el rango; es la unica linea que hay que mirar.
       priceIssues: orders.filter((o) => !o.priceOk).map((o) => o.name),
+      ...(orders.nota ? { nota: orders.nota } : {}),
       orders,
     }, 200);
   }
@@ -176,7 +184,7 @@ async function handleRequest(request, env = globalThis) {
       range: { since: range.since, until: range.until, days: range.days },
       conversations, botOrders, conversionRate, botRevenue, aov,
       perDay,
-      notes: { convTruncated: conv && conv.truncated, convStatsError: conv && conv.error, salesErr, convErr },
+      notes: { convTruncated: conv && conv.truncated, convStatsError: conv && conv.error, salesErr, convErr, salesWarnings: sales?.sourceWarnings?.length ? sales.sourceWarnings : undefined },
     }, 200);
   }
 
@@ -187,7 +195,7 @@ async function handleRequest(request, env = globalThis) {
     const conv = await fetchConversationStats(config, range);
     const report = buildReport({ sales, meta, conv, range, config });
     report.searchMisses = await fetchSearchMisses(env, range);
-    report.abTest = await fetchAbTest(env, range);
+    report.abTest = await fetchAbTest(env, range, config);
 
     // Modo notificacion: empuja un resumen al Telegram del equipo (para el job diario).
     if (params.notify === "telegram") {
@@ -224,9 +232,14 @@ async function readParams(request) {
   return { ...query, ...body, ...(headerKey ? { key: headerKey } : {}) };
 }
 
-function getConfig(env = globalThis) {
+function getConfig(env = globalThis, params = {}) {
   const g = (a, b) => env[a] || env[b] || globalThis[a] || globalThis[b];
   return {
+    storeBackend: resolveStoreBackend(params.storeBackend || params.store_backend, g("STORE_BACKEND", "sTOREBACKEND")),
+    wooStoreUrl: String(g("WOO_STORE_URL", "wOOSTOREURL") || "").trim().replace(/\/+$/, ""),
+    wooKey: g("WOO_CONSUMER_KEY", "wOOCONSUMERKEY"),
+    wooSecret: g("WOO_CONSUMER_SECRET", "wOOCONSUMERSECRET"),
+    shopifyClosedAt: g("SHOPIFY_CLOSED_AT", "sHOPIFYCLOSEDAT") || DEFAULT_SHOPIFY_CLOSED_AT,
     shopDomain: g("SHOPIFY_SHOP_DOMAIN", "sHOPIFYSHOPDOMAIN") || DEFAULT_SHOP_DOMAIN,
     apiVersion: g("SHOPIFY_API_VERSION", "sHOPIFYAPIVERSION") || DEFAULT_API_VERSION,
     token: g("SHOPIFY_ADMIN_ACCESS_TOKEN", "sHOPIFYADMINACCESSTOKEN"),
@@ -243,6 +256,13 @@ function getConfig(env = globalThis) {
     telegramToken: g("TELEGRAM_BOT_TOKEN", "tELEGRAMBOTTOKEN"),
     telegramChatId: g("TELEGRAM_CHAT_ID", "tELEGRAMCHATID"),
   };
+}
+
+// El parametro de prueba manda sobre el secreto; sin ninguno (o con otro valor) queda Shopify, como siempre.
+function resolveStoreBackend(override, configured) {
+  const wanted = String(override || "").trim().toLowerCase();
+  if (wanted === "woocommerce" || wanted === "shopify") return wanted;
+  return String(configured || "").trim().toLowerCase() === "woocommerce" ? "woocommerce" : "shopify";
 }
 
 function parsePhoneIds(value) {
@@ -348,6 +368,7 @@ function clampInt(value, min, max, fallback) {
 // ---------------------------------------------------------------------------
 
 async function fetchOrderAggregates(config, range) {
+  if (config.storeBackend === "woocommerce") return fetchOrderAggregatesWoo(config, range);
   const byAd = new Map();
   let cursor = null;
   let currency = "PEN";
@@ -443,6 +464,7 @@ async function fetchOrderAggregates(config, range) {
 // ademas trae las lineas, porque sin unidades el total no se puede auditar:
 // S/298 esta bien si son 3 unidades de un producto de S/149 y esta mal si es 1.
 async function fetchBotOrders(config, range) {
+  if (config.storeBackend === "woocommerce") return fetchBotOrdersWoo(config, range);
   const out = [];
   let cursor = null;
   const queryString = `created_at:>='${range.sinceIso}' created_at:<='${range.untilIso}'`;
@@ -549,6 +571,300 @@ async function shopifyGraphql(config, query, variables) {
     throw new Error(`Shopify: ${JSON.stringify(payload.errors || payload).slice(0, 500)}`);
   }
   return payload.data;
+}
+
+// ---------------------------------------------------------------------------
+// WooCommerce (kenku.pe desde la apertura del lunes 26-10-2026)
+//
+// Con STORE_BACKEND=woocommerce (secreto de la funcion; para probar, el parametro
+// storeBackend=woocommerce) los pedidos salen de la API REST de WooCommerce
+// (GET /wp-json/wc/v3/orders con WOO_STORE_URL, WOO_CONSUMER_KEY y
+// WOO_CONSUMER_SECRET, Basic Auth; basta una clave de Lectura). create-shopify-order
+// guarda en los metadatos del pedido los mismos atributos que en Shopify
+// (source=whatsapp-bot, ctwa_ad_id, ctwa_headline...), asi que todo se cuenta igual.
+//
+// Periodo mixto: los pedidos de Shopify NO se migraron a WooCommerce, asi que cada
+// pedido vive en una sola tienda y sumar las dos no duplica nada. WooCommerce se
+// lee para todo el rango; Shopify, mientras siga SHOPIFY_ADMIN_ACCESS_TOKEN, solo
+// para la parte del rango anterior a su cierre (SHOPIFY_CLOSED_AT, por defecto
+// 2026-10-28T00:00:00Z = martes 27-10 a las 19:00 de Lima): asi cuentan tambien los
+// pedidos que entren a Shopify el lunes y el martes. Si Shopify ya no responde, el
+// reporte sale igual, con un aviso. Un rango que empieza despues del cierre no
+// llama a Shopify.
+// ---------------------------------------------------------------------------
+
+const DEFAULT_SHOPIFY_CLOSED_AT = "2026-10-28T00:00:00Z";
+const WOO_PER_PAGE = 100;
+const MAX_WOO_PAGES = 30; // 30 x 100 = 3000 pedidos por rango, el mismo tope que en Shopify
+const WOO_PARALLEL_PAGES = 4;
+const WOO_TIMEOUT_MS = 20000;
+const WOO_FIELDS = "id,number,status,total,currency,shipping_total,date_created_gmt,date_paid_gmt,payment_method,billing,meta_data,line_items,refunds";
+// No son pedidos: los fallidos y los borradores del checkout de bloques.
+const WOO_SKIP_STATUSES = new Set(["failed", "checkout-draft"]);
+
+async function fetchConTiempo(url, options = {}, ms = WOO_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`timeout ${ms}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// La parte del rango que todavia cae en Shopify (antes del cierre), o null si no
+// hay token o el rango empieza despues del cierre.
+function shopifyPart(config, range) {
+  if (!config.token) return null;
+  const closeMs = Date.parse(config.shopifyClosedAt);
+  if (!Number.isFinite(closeMs)) return range;
+  if (Date.parse(range.sinceIso) >= closeMs) return null;
+  if (Date.parse(range.untilIso) < closeMs) return range;
+  return { ...range, untilIso: new Date(closeMs - 1000).toISOString().replace(/\.\d{3}Z$/, "Z") };
+}
+
+function asShopify(config) {
+  return { ...config, storeBackend: "shopify" };
+}
+
+// Pedidos de WooCommerce del rango, normalizados. Una sola lectura por rango y por
+// llamada (el reporte completo la usa para las ventas y para el cruce A/D).
+function fetchWooOrders(config, range) {
+  if (!config.wooStoreUrl || !config.wooKey || !config.wooSecret) {
+    return Promise.reject(new Error("Falta WOO_STORE_URL, WOO_CONSUMER_KEY o WOO_CONSUMER_SECRET"));
+  }
+  config.wooCache = config.wooCache || new Map();
+  const key = `${range.sinceIso}|${range.untilIso}`;
+  if (!config.wooCache.has(key)) {
+    const pending = loadWooOrders(config, range);
+    pending.catch(() => config.wooCache.delete(key));
+    config.wooCache.set(key, pending);
+  }
+  return config.wooCache.get(key);
+}
+
+async function loadWooOrders(config, range) {
+  const auth = `Basic ${btoa(`${config.wooKey}:${config.wooSecret}`)}`;
+  // En UTC (dates_are_gmt), con la misma ventana de dias de Lima que Shopify y sin
+  // depender de la zona horaria del sitio. "after" y "before" son exclusivos.
+  const after = new Date(Date.parse(range.sinceIso) - 1000).toISOString().slice(0, 19);
+  const before = new Date(Date.parse(range.untilIso) + 1000).toISOString().slice(0, 19);
+  const readPage = async (page) => {
+    const query = new URLSearchParams({
+      after,
+      before,
+      dates_are_gmt: "true",
+      status: "any",
+      per_page: String(WOO_PER_PAGE),
+      page: String(page),
+      orderby: "date",
+      order: "asc",
+      _fields: WOO_FIELDS,
+    });
+    const response = await fetchConTiempo(`${config.wooStoreUrl}/wp-json/wc/v3/orders?${query}`, {
+      headers: { Authorization: auth, Accept: "application/json", "User-Agent": "Kenku-Kapso-Report/1.0" },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`WooCommerce ${response.status}: ${text.slice(0, 200)}`);
+    }
+    const batch = await response.json();
+    const totalPages = parseInt(response.headers.get("x-wp-totalpages") || "1", 10);
+    return { batch: Array.isArray(batch) ? batch : [], totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1 };
+  };
+
+  const first = await readPage(1);
+  const lastPage = Math.min(first.totalPages, MAX_WOO_PAGES);
+  const raw = [...first.batch];
+  for (let page = 2; page <= lastPage; page += WOO_PARALLEL_PAGES) {
+    const group = [];
+    for (let p = page; p < page + WOO_PARALLEL_PAGES && p <= lastPage; p += 1) group.push(readPage(p));
+    for (const result of await Promise.all(group)) raw.push(...result.batch);
+  }
+
+  const seen = new Set();
+  const orders = [];
+  for (const order of raw) {
+    if (!order || seen.has(order.id)) continue;
+    seen.add(order.id);
+    const normalized = normalizeWooOrder(order);
+    if (normalized) orders.push(normalized);
+  }
+  return { orders, truncated: first.totalPages > MAX_WOO_PAGES };
+}
+
+// Pedido de WooCommerce con los mismos datos que se leen de Shopify, o null si no
+// cuenta como pedido.
+function normalizeWooOrder(order) {
+  if (WOO_SKIP_STATUSES.has(order.status)) return null;
+  // Pago en linea (Flow) que nunca se pago: en Shopify seria un checkout abandonado,
+  // no un pedido. Los contra entrega cuentan siempre, como en Shopify.
+  const paid = Boolean(order.date_paid_gmt);
+  if (order.payment_method && order.payment_method !== "cod" && !paid && (order.status === "pending" || order.status === "cancelled")) return null;
+  const total = Number(order.total || 0);
+  const refunded = (order.refunds || []).reduce((sum, refund) => sum + Math.abs(Number(refund?.total || 0)), 0);
+  const cancelled = order.status === "cancelled";
+  // Como currentTotalPriceSet de Shopify: el total de hoy (0 si se cancelo o se reembolso).
+  const current = cancelled || order.status === "refunded" ? 0 : Math.max(0, total - refunded);
+  return {
+    id: order.id,
+    name: `#${order.number || order.id}`,
+    createdAt: order.date_created_gmt ? `${String(order.date_created_gmt).slice(0, 19)}Z` : null,
+    status: order.status || null,
+    amount: round2(current),
+    originalTotal: round2(total),
+    shipping: round2(Number(order.shipping_total || 0)),
+    currency: order.currency || null,
+    cancelled,
+    paid,
+    phone: order.billing?.phone || "",
+    attrs: attributesToMap(order.meta_data),
+    items: (order.line_items || []).map((line) => {
+      const quantity = Number(line.quantity || 0);
+      // subtotal = antes de la promo (precio de lista), como originalUnitPriceSet de Shopify.
+      return { title: line.name, quantity, unitPrice: quantity > 0 ? round2(Number(line.subtotal || 0) / quantity) : 0 };
+    }),
+  };
+}
+
+function emptyAggregate() {
+  return {
+    byAd: new Map(),
+    currency: "PEN",
+    ordersScanned: 0,
+    attributedOrders: 0,
+    totalRevenue: 0,
+    attributedRevenue: 0,
+    whatsappOrders: 0,
+    whatsappRevenue: 0,
+    whatsappOrdersByDay: new Map(),
+    truncated: false,
+  };
+}
+
+// La misma cuenta que fetchOrderAggregates hace con cada pedido de Shopify.
+function addOrderToAggregate(agg, order) {
+  agg.ordersScanned += 1;
+  const amount = order.amount;
+  if (order.currency) agg.currency = order.currency;
+  if (Number.isFinite(amount)) agg.totalRevenue += amount;
+  const attrs = order.attrs || {};
+  if (attrs.source === "whatsapp-bot") {
+    agg.whatsappOrders += 1;
+    if (Number.isFinite(amount)) agg.whatsappRevenue += amount;
+    const day = limaDay(order.createdAt);
+    if (day) agg.whatsappOrdersByDay.set(day, (agg.whatsappOrdersByDay.get(day) || 0) + 1);
+  }
+  const adId = attrs.ctwa_ad_id;
+  if (!adId) return;
+  agg.attributedOrders += 1;
+  if (Number.isFinite(amount)) agg.attributedRevenue += amount;
+  const entry = agg.byAd.get(adId) || {
+    adId,
+    orders: 0,
+    revenue: 0,
+    headline: attrs.ctwa_headline || null,
+    sourceType: attrs.ctwa_source_type || null,
+    sourceUrl: attrs.ctwa_source_url || null,
+  };
+  entry.orders += 1;
+  if (Number.isFinite(amount)) entry.revenue += amount;
+  if (!entry.headline && attrs.ctwa_headline) entry.headline = attrs.ctwa_headline;
+  agg.byAd.set(adId, entry);
+}
+
+function mergeAggregate(target, other) {
+  for (const field of ["ordersScanned", "attributedOrders", "totalRevenue", "attributedRevenue", "whatsappOrders", "whatsappRevenue"]) {
+    target[field] += other[field] || 0;
+  }
+  if (!target.ordersScanned && other.currency) target.currency = other.currency;
+  for (const [day, count] of other.whatsappOrdersByDay || []) {
+    target.whatsappOrdersByDay.set(day, (target.whatsappOrdersByDay.get(day) || 0) + count);
+  }
+  for (const [adId, entry] of other.byAd || []) {
+    const mine = target.byAd.get(adId);
+    if (!mine) {
+      target.byAd.set(adId, { ...entry });
+      continue;
+    }
+    mine.orders += entry.orders;
+    mine.revenue += entry.revenue;
+    if (!mine.headline && entry.headline) mine.headline = entry.headline;
+    if (!mine.sourceType && entry.sourceType) mine.sourceType = entry.sourceType;
+    if (!mine.sourceUrl && entry.sourceUrl) mine.sourceUrl = entry.sourceUrl;
+  }
+  target.truncated = target.truncated || Boolean(other.truncated);
+}
+
+async function fetchOrderAggregatesWoo(config, range) {
+  const woo = await fetchWooOrders(config, range);
+  const agg = emptyAggregate();
+  for (const order of woo.orders) addOrderToAggregate(agg, order);
+  agg.truncated = woo.truncated;
+  agg.sourceWarnings = [];
+  agg.sources = { woocommerce: woo.orders.length, shopify: null };
+  const part = shopifyPart(config, range);
+  if (part) {
+    try {
+      const shop = await fetchOrderAggregates(asShopify(config), part);
+      mergeAggregate(agg, shop);
+      agg.sources.shopify = shop.ordersScanned;
+    } catch (error) {
+      agg.sourceWarnings.push(`No se pudieron leer los pedidos de Shopify de antes del cierre (se muestran solo los de WooCommerce): ${safeError(error)}`);
+    }
+  }
+  return agg;
+}
+
+// Los pedidos del bot en detalle (modo only=orders), con la misma auditoria de
+// precios que fetchBotOrders hace en Shopify.
+async function fetchBotOrdersWoo(config, range) {
+  const woo = await fetchWooOrders(config, range);
+  const out = woo.orders.filter((order) => order.attrs.source === "whatsapp-bot").map(wooBotOrderRow);
+  let nota = null;
+  const part = shopifyPart(config, range);
+  if (part) {
+    try {
+      out.push(...await fetchBotOrders(asShopify(config), part));
+    } catch (error) {
+      nota = `pedidos de Shopify de antes del cierre sin leer: ${safeError(error)}`;
+    }
+  }
+  out.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  if (nota) out.nota = nota;
+  return out;
+}
+
+function wooBotOrderRow(order) {
+  const items = order.items;
+  const subtotal = order.originalTotal - order.shipping;
+  const units = items.reduce((n, li) => n + (li.quantity || 0), 0);
+  // Escalera del catalogo contra la MERCADERIA: unidad, 3x2 o 5x3, por producto.
+  const lista = items.reduce((n, li) => n + li.unitPrice * li.quantity, 0);
+  const esperado3x2 = items.reduce((n, li) => n + li.unitPrice * (li.quantity - Math.floor(li.quantity / 3)), 0);
+  const esperado5x3 = items.reduce((n, li) => n + li.unitPrice * (li.quantity - 2 * Math.floor(li.quantity / 5)), 0);
+  const enEscalera = [lista, esperado3x2, esperado5x3].some((v) => Math.abs(subtotal - v) < 1);
+  return {
+    name: order.name,
+    day: limaDay(order.createdAt),
+    createdAt: order.createdAt,
+    total: round2(order.amount),
+    originalTotal: round2(order.originalTotal),
+    cancelled: order.cancelled,
+    cancelledAt: null,
+    financialStatus: order.status === "refunded" ? "REFUNDED" : order.paid ? "PAID" : "PENDING",
+    status: order.status,
+    units,
+    shipping: round2(order.shipping),
+    subtotal: round2(subtotal),
+    listPrice: round2(lista),
+    priceOk: enEscalera,
+    perUnit: units > 0 ? round2(subtotal / units) : null,
+    items,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -713,7 +1029,7 @@ async function fetchSearchMisses(env, range) {
 // Prueba A/B del arranque: cruza ab_lead:* (leads asignados por customer-lookup)
 // con ab_order:* (pedidos creados) para medir conversion por variante.
 // A = presentacion completa de una (control); B = gancho + pregunta primero.
-async function fetchAbTest(env, range) {
+async function fetchAbTest(env, range, config = getConfig(env)) {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv) return { available: false };
@@ -809,7 +1125,7 @@ async function fetchAbTest(env, range) {
     // Pedidos que NO creo el bot (los cierra una asesora desde el dashboard tras
     // un handoff). Se suman aparte: `orders` sigue siendo solo del bot, igual que
     // en todo el historial, y `ordersTotal` agrega los de asesora.
-    const asesora = await pedidosDeAsesora(getConfig(env), kv, range, leadKeyOfConv);
+    const asesora = await pedidosDeAsesora(config, kv, range, leadKeyOfConv);
     for (const [variant, v] of Object.entries(asesora.porVariante)) {
       if (!tally[variant]) continue;
       tally[variant].ordersAsesora = v.orders;
@@ -930,7 +1246,9 @@ function buildReport({ sales, meta, conv, range, config }) {
   if (!conversation.configured) warnings.push("Falta KAPSO_API_KEY en la funcion: no se puede calcular la conversion (conversaciones -> pedidos).");
   if (!meta.configured) warnings.push("Meta Marketing API no esta conectada: se muestran ventas atribuidas, pero sin gasto, CPA ni ROAS. Configura META_ACCESS_TOKEN y META_AD_ACCOUNT_ID para activarlo.");
   if (meta.configured && meta.error) warnings.push(`No se pudo leer Meta Ads: ${meta.error}`);
-  if (!sameCurrency) warnings.push(`La moneda de Shopify (${sales.currency}) difiere de la de Meta (${meta.accountCurrency}); CPA y ROAS pueden no ser comparables.`);
+  for (const warning of sales.sourceWarnings || []) warnings.push(warning);
+  const tienda = config?.storeBackend === "woocommerce" ? "la tienda" : "Shopify";
+  if (!sameCurrency) warnings.push(`La moneda de ${tienda} (${sales.currency}) difiere de la de Meta (${meta.accountCurrency}); CPA y ROAS pueden no ser comparables.`);
   if (sales.truncated) warnings.push(`Se alcanzo el limite de ${MAX_ORDER_PAGES * 250} ordenes; acota el rango de fechas para ver todo.`);
 
   return {
@@ -944,6 +1262,8 @@ function buildReport({ sales, meta, conv, range, config }) {
     campaigns,
     ads,
     warnings,
+    // Solo con STORE_BACKEND=woocommerce: de que tienda salio cada parte (shopify=null: no se consulto).
+    ...(sales.sources ? { storeBackend: "woocommerce", orderSources: sales.sources } : {}),
     generatedAt: new Date(Date.now() - LIMA_OFFSET_MS).toISOString().replace("T", " ").slice(0, 16) + " (Lima)",
   };
 }
@@ -1120,7 +1440,7 @@ function renderDashboard(report) {
     </section>
     ${renderAbTest(report)}
     ${renderSearchMisses(report)}
-    <footer>Datos: Shopify (ventas atribuidas vía ctwa_ad_id) + Meta Marketing API (gasto). <a href="?key=__KEY__&days=${report.range.days || 30}&format=json">Ver JSON</a></footer>`;
+    <footer>Datos: ${report.storeBackend === "woocommerce" ? "WooCommerce y Shopify antes de su cierre" : "Shopify"} (ventas atribuidas vía ctwa_ad_id) + Meta Marketing API (gasto). <a href="?key=__KEY__&days=${report.range.days || 30}&format=json">Ver JSON</a></footer>`;
 
   return pageShell(body);
 }
@@ -1282,39 +1602,32 @@ function safeError(error) {
 //  - las claves existen desde el 2026-09-26: leads anteriores no se pueden
 //    cruzar, por eso el A/D se cuenta desde el 27.
 // Ignora el error de Shopify (sin token, etc.): devuelve vacio y lo dice en `nota`.
+// Con STORE_BACKEND=woocommerce los pedidos salen de WooCommerce y, si sigue el
+// token, tambien de Shopify para la parte del rango anterior a su cierre.
 async function pedidosDeAsesora(config, kv, range, leadKeyOfConv = new Map()) {
   const porVariante = {};
   const detalle = [];
-  if (!config?.token) return { porVariante, detalle, nota: "sin token de Shopify: no se cruzaron pedidos de asesora" };
+  const woo = config?.storeBackend === "woocommerce";
+  if (!woo && !config?.token) return { porVariante, detalle, nota: "sin token de Shopify: no se cruzaron pedidos de asesora" };
   try {
-    const queryString = `created_at:>='${range.sinceIso}' created_at:<='${range.untilIso}'`;
-    const gql = `#graphql
-      query PedidosNoBot($q: String!, $cursor: String) {
-        orders(first: 250, query: $q, after: $cursor, sortKey: CREATED_AT) {
-          nodes {
-            name
-            createdAt
-            phone
-            customer { phone }
-            shippingAddress { phone }
-            totalPriceSet { shopMoney { amount } }
-            customAttributes { key value }
-          }
-          pageInfo { hasNextPage endCursor }
-        }
-      }`;
     const candidatos = [];
-    let cursor = null;
-    for (let page = 0; page < MAX_ORDER_PAGES; page += 1) {
-      const data = await shopifyGraphql(config, gql, { q: queryString, cursor });
-      for (const o of data.orders?.nodes || []) {
-        if (attributesToMap(o.customAttributes).source === "whatsapp-bot") continue;
-        const nueve = String(o.phone || o.customer?.phone || o.shippingAddress?.phone || "").replace(/\D/g, "").slice(-9);
-        if (nueve.length === 9) candidatos.push({ o, nueve });
+    const notas = [];
+    if (woo) {
+      for (const w of (await fetchWooOrders(config, range)).orders) {
+        if (w.attrs.source === "whatsapp-bot") continue;
+        const nueve = String(w.phone || "").replace(/\D/g, "").slice(-9);
+        // Mismo formato que el pedido de Shopify, para el cruce de abajo.
+        if (nueve.length === 9) candidatos.push({ o: { name: w.name, createdAt: w.createdAt, totalPriceSet: { shopMoney: { amount: w.originalTotal } } }, nueve });
       }
-      const pi = data.orders?.pageInfo;
-      if (!pi?.hasNextPage) break;
-      cursor = pi.endCursor;
+    }
+    const parteShopify = woo ? shopifyPart(config, range) : range;
+    if (parteShopify) {
+      try {
+        candidatos.push(...await candidatosAsesoraShopify(config, parteShopify));
+      } catch (error) {
+        if (!woo) throw error;
+        notas.push(`pedidos de Shopify de antes del cierre sin cruzar: ${safeError(error)}`);
+      }
     }
     // kv.get en tandas: son decenas de pedidos, no miles.
     for (let i = 0; i < candidatos.length; i += 25) {
@@ -1341,10 +1654,44 @@ async function pedidosDeAsesora(config, kv, range, leadKeyOfConv = new Map()) {
         detalle.push({ name: c.o.name, day: dia, variant: lead.variant, total: round2(total) });
       }
     }
-    return { porVariante, detalle, nota: null };
+    return { porVariante, detalle, nota: notas.length ? notas.join("; ") : null };
   } catch (error) {
     return { porVariante, detalle, nota: `no se pudieron cruzar pedidos de asesora: ${safeError(error)}` };
   }
+}
+
+// Pedidos de Shopify del rango que no creo el bot, con el celular (9 digitos).
+async function candidatosAsesoraShopify(config, range) {
+  const queryString = `created_at:>='${range.sinceIso}' created_at:<='${range.untilIso}'`;
+  const gql = `#graphql
+    query PedidosNoBot($q: String!, $cursor: String) {
+      orders(first: 250, query: $q, after: $cursor, sortKey: CREATED_AT) {
+        nodes {
+          name
+          createdAt
+          phone
+          customer { phone }
+          shippingAddress { phone }
+          totalPriceSet { shopMoney { amount } }
+          customAttributes { key value }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`;
+  const candidatos = [];
+  let cursor = null;
+  for (let page = 0; page < MAX_ORDER_PAGES; page += 1) {
+    const data = await shopifyGraphql(config, gql, { q: queryString, cursor });
+    for (const o of data.orders?.nodes || []) {
+      if (attributesToMap(o.customAttributes).source === "whatsapp-bot") continue;
+      const nueve = String(o.phone || o.customer?.phone || o.shippingAddress?.phone || "").replace(/\D/g, "").slice(-9);
+      if (nueve.length === 9) candidatos.push({ o, nueve });
+    }
+    const pi = data.orders?.pageInfo;
+    if (!pi?.hasNextPage) break;
+    cursor = pi.endCursor;
+  }
+  return candidatos;
 }
 
 // Hora exacta del primer contacto de un lead, leida del valor de su clave
@@ -1393,4 +1740,4 @@ function zDosProporciones(a, b) {
   return { z: round2(z), zCorregida: round2(z / 1.51) };
 }
 
-globalThis.__kenkuCampaignReport = { buildReport, buildConversion, buildTelegramSummary, fetchOrderAggregates, fetchMetaInsights, fetchConversationStats, handleRequest, handler, resolveRange };
+globalThis.__kenkuCampaignReport = { buildReport, buildConversion, buildTelegramSummary, fetchOrderAggregates, fetchBotOrders, fetchMetaInsights, fetchConversationStats, handleRequest, handler, resolveRange, normalizeWooOrder, shopifyPart, getConfig };

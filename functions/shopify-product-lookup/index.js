@@ -370,7 +370,8 @@ if (typeof addEventListener === "function") {
 async function handleRequest(request, env = globalThis) {
   try {
     const input = await readJson(request);
-    const config = getConfig(env);
+    const config = getConfig(env, input);
+    stripStoreBackend(input);
     const queryText = collectInputText(input);
     const handles = extractHandleCandidates(queryText);
 
@@ -578,13 +579,49 @@ async function readJson(request) {
   }
 }
 
-function getConfig(env = globalThis) {
+// WooCommerce (kenku.pe desde la apertura del lunes 26-10-2026). La tienda nueva
+// responde /products.json y /products/<handle>.js con el formato y los IDs de
+// Shopify (plugin cod-core), asi que la busqueda es la misma. Con
+// STORE_BACKEND=woocommerce (secreto de la funcion; para probar, storeBackend en el
+// input):
+//  - el catalogo se lee de WOO_STORE_URL (sin el secreto, del dominio publico, que
+//    desde la apertura ya es WooCommerce). Los links al cliente siguen en el dominio
+//    publico (kenku.pe);
+//  - NO se usa la API de administracion de Shopify: ni los respaldos por handle y
+//    por busqueda (ofrecerian productos que quiza no existen en la tienda nueva y el
+//    pedido fallaria) ni la "segunda opinion" del stock (el inventario de Shopify ya
+//    no es el real; el de WooCommerce sale directo en el catalogo, sin cache).
+function getStoreBackend(env, input = {}) {
+  const root = isPlainObject(input?.input) ? input.input : {};
+  const override = String(input?.storeBackend || input?.store_backend || root.storeBackend || root.store_backend || "").trim().toLowerCase();
+  if (override === "woocommerce" || override === "shopify") return override;
+  const configured = env.STORE_BACKEND || env.sTOREBACKEND || globalThis.STORE_BACKEND || globalThis.sTOREBACKEND || "";
+  return String(configured).trim().toLowerCase() === "woocommerce" ? "woocommerce" : "shopify";
+}
+
+// El interruptor de prueba no es texto del cliente: fuera, antes de armar la consulta.
+function stripStoreBackend(input) {
+  for (const target of [input, isPlainObject(input?.input) ? input.input : null]) {
+    if (!target) continue;
+    delete target.storeBackend;
+    delete target.store_backend;
+  }
+}
+
+function getConfig(env = globalThis, input = {}) {
   const shopDomain = env.SHOPIFY_SHOP_DOMAIN || env.sHOPIFYSHOPDOMAIN || globalThis.SHOPIFY_SHOP_DOMAIN || globalThis.sHOPIFYSHOPDOMAIN || DEFAULT_SHOP_DOMAIN;
   const publicShopDomain = env.SHOPIFY_PUBLIC_SHOP_DOMAIN || env.sHOPIFYPUBLICSHOPDOMAIN || globalThis.SHOPIFY_PUBLIC_SHOP_DOMAIN || globalThis.sHOPIFYPUBLICSHOPDOMAIN || DEFAULT_PUBLIC_SHOP_DOMAIN;
   const apiVersion = env.SHOPIFY_API_VERSION || env.sHOPIFYAPIVERSION || globalThis.SHOPIFY_API_VERSION || globalThis.sHOPIFYAPIVERSION || DEFAULT_API_VERSION;
   const token = env.SHOPIFY_ADMIN_ACCESS_TOKEN || env.sHOPIFYADMINACCESSTOKEN || globalThis.SHOPIFY_ADMIN_ACCESS_TOKEN || globalThis.sHOPIFYADMINACCESSTOKEN;
 
-  return { apiVersion, publicShopDomain, shopDomain, token };
+  const config = { apiVersion, publicShopDomain, shopDomain, token, storeBackend: "shopify", catalogBase: `https://${publicShopDomain}` };
+  if (getStoreBackend(env, input) === "woocommerce") {
+    const wooUrl = String(env.WOO_STORE_URL || env.wOOSTOREURL || globalThis.WOO_STORE_URL || globalThis.wOOSTOREURL || "").trim().replace(/\/+$/, "");
+    config.storeBackend = "woocommerce";
+    if (wooUrl) config.catalogBase = wooUrl;
+    config.token = null; // sin Admin de Shopify (ver arriba)
+  }
+  return config;
 }
 
 function collectInputText(input) {
@@ -674,7 +711,7 @@ async function getPublicProductByHandle(config, handle) {
 
   for (const key of keys) {
     try {
-      const response = await fetch(`https://${config.publicShopDomain}/products/${key}.js`, {
+      const response = await fetch(`${config.catalogBase}/products/${key}.js`, {
         headers: publicHeaders(),
       });
       if (!response.ok) continue;
@@ -694,7 +731,8 @@ async function loadPublicCatalog(config) {
   const now = Date.now();
   const cached = globalThis.__KENKU_PUBLIC_CATALOG_CACHE;
 
-  if (cached?.expiresAt > now && Array.isArray(cached.products)) {
+  // La cache es por tienda: con storeBackend en el input se puede alternar entre las dos.
+  if (cached?.expiresAt > now && Array.isArray(cached.products) && cached.base === config.catalogBase) {
     return cached.products;
   }
 
@@ -703,7 +741,7 @@ async function loadPublicCatalog(config) {
 
   for (let page = 1; page <= MAX_CATALOG_PAGES; page += 1) {
     try {
-      const response = await fetch(`https://${config.publicShopDomain}/products.json?limit=250&page=${page}`, {
+      const response = await fetch(`${config.catalogBase}/products.json?limit=250&page=${page}`, {
         headers: publicHeaders(),
       });
       if (!response.ok) break;
@@ -726,6 +764,7 @@ async function loadPublicCatalog(config) {
   }
 
   globalThis.__KENKU_PUBLIC_CATALOG_CACHE = {
+    base: config.catalogBase,
     expiresAt: now + CATALOG_CACHE_TTL_MS,
     products,
   };
@@ -1682,4 +1721,4 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-globalThis.__kenkuProductLookup = { extractHandleCandidates, handleRequest, handler, loadPublicCatalog, findInStockAlternatives };
+globalThis.__kenkuProductLookup = { extractHandleCandidates, handleRequest, handler, loadPublicCatalog, findInStockAlternatives, getConfig, getStoreBackend };
