@@ -1606,8 +1606,12 @@ function fnv1a(text) {
 // partida a la mitad.
 function abVariant(phone) {
   const digits = String(phone || "").replace(/\D/g, "");
-  if (!digits) return "N";
-  return mix32(fnv1a(`present:${digits}`)) % 2 === 0 ? "A" : "D";
+  // Prueba A/D cerrada el 2026-10-25: D gano (27-sep a 24-oct sin los dias con
+  // cortes: A 12,49% vs D 13,16%, z +1,12, y D es ~25% mas barato). D al 100%,
+  // incluidos los leads sin telefono (send-presentation ya envia por BSUID).
+  // Reparto que se uso: if (!digits) return "N"; return mix32(fnv1a(`present:${digits}`)) % 2 === 0 ? "A" : "D";
+  void digits;
+  return "D";
 }
 
 // La variante que se le ASIGNO al lead al entrar (customer-lookup la deja en las
