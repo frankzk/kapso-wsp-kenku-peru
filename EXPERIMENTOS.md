@@ -581,3 +581,23 @@ no si el motorizado cobro. Todo el analisis economico usa un supuesto (60%
 pesimista) y la contribucion por pedido va de S/38,39 a S/96,87 segun ese numero.
 Si la entrega real esta sobre ~70%, gpt-4.1 pasa a convenir comodo y la
 conclusion del experimento 1 cambia de signo.
+
+## 5. Prueba F/R — seguimientos: el brazo R se salta el s4  ·  **CORRIENDO desde 2026-10-25 16:05 (Lima)**
+
+**Que se prueba.** Los 7 seguimientos (s1 +20 min ... s7). R no recibe el s4
+("Si algo te frenó...", el de la mañana siguiente), que en 1-17 oct fue el de
+menor rendimiento: 0,50 compras cada 100 enviados (s1 2,27; s2 1,21; s3 0,83;
+s5 0,50; s6 0,68). Asociacion, no causalidad: por eso A/B.
+
+**Reparto.** `brazoSeguimiento` en check-coverage, 50/50 por telefono con sal
+`fu4:`, independiente del A/D. Sin telefono -> F (fuera de la cuenta). Solo el
+gate `fu-g4` tiene la salida `saltar` (-> `fu-w5`, workflow lock 46975); los
+demas gates no cambian. En R el s5 llega antes (su espera arranca donde iba el s4).
+
+**Como se lee.** Conversion a 7 dias por telefono (bot + asesora), mismo metodo
+que `ad_final.py`, recalculando el brazo con `brazoSeguimiento`. Lectura el
+**2026-11-15** (3 semanas). Regla: si R no esta peor (z > -1), el s4 se elimina
+para todos; si cae, se vuelve a F. Guardarrail: solo ve caidas de ~2,4 pp o mas.
+
+**OJO al desplegar el workflow desde otra rama:** la salida `saltar` de `fu-g4`
+se agrego por API; un `kapso push` con un definition viejo la borraria.
