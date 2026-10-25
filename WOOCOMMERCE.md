@@ -138,16 +138,15 @@ en el chat.
    secretos con `STORE_BACKEND=shopify`: el bot no cambia.
 3. **Prueba sin tocar el bot real** (pestaña Test de cada función, con `WOO_STORE_URL` de prueba):
    - `create-shopify-order`: input con `"storeBackend": "woocommerce"` y `"dryRun": true` (no crea nada: devuelve el
-     pedido que mandaría); después, sin `dryRun`, un pedido de prueba real. Revisar en WooCommerce → Pedidos: «Por
-     confirmar», número `KP2…` y el cuadro «Datos para Kapta» (canal, departamento, distrito, SKU y total). Los pedidos
-     de prueba se borran antes de fijar el contador en `KP200001`.
-   - `customer-lookup`: `{"phone": "<celular del pedido de prueba>", "storeBackend": "woocommerce"}` → `found: true`,
+     pedido que mandaría, después de pasar por todas las protecciones). **Solo `dryRun`:** desde el 25-10 Kapta está
+     conectada a producción y cualquier pedido nuevo entra como real; no hay pedido de prueba sin `dryRun`.
+   - `customer-lookup`: `{"phone": "<celular de uno de los pedidos de prueba que ya hay en producción>", "storeBackend": "woocommerce"}` → `found: true`,
      `store: "woocommerce"` y la dirección del pedido en `addressSummary`.
    - `shopify-product-lookup`: `{"message": "black seed oil", "storeBackend": "woocommerce"}` → el producto con el precio
      de la tienda nueva y el link en `kenku.pe`.
    - `campaign-report`: invocar con `{"key": "<DASHBOARD_ACCESS_KEY>", "format": "json", "days": 1, "storeBackend":
-     "woocommerce"}` (o `&storeBackend=woocommerce` en la dirección del tablero) → `storeBackend: "woocommerce"` y el
-     pedido de prueba en `orderSources.woocommerce`.
+     "woocommerce"}` (o `&storeBackend=woocommerce` en la dirección del tablero) → `storeBackend: "woocommerce"` y
+     `orderSources.woocommerce` (los pedidos de prueba del 24-10 se ven con `"days": 3`).
 4. **Día de la apertura**, con kenku.pe ya en WooCommerce y Kapta conectado: `WOO_STORE_URL=https://kenku.pe` y
    `STORE_BACKEND=woocommerce` en las **cuatro** funciones. Probar `create-shopify-order` solo con `dryRun` (con Kapta
    conectado, un pedido real de prueba le llegaría).
