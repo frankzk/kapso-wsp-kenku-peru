@@ -439,6 +439,11 @@ async function routeFollowup(payload, env) {
     }
 
     if (edges.includes("esperar")) {
+      // Prueba A/B de seguimientos (2026-10-25): solo el gate que tiene la
+      // salida "saltar" (fu-g4) la usa, y solo para el brazo R.
+      if (edges.includes("saltar") && brazoSeguimiento(phoneDelPayload(payload)) === "R") {
+        return json({ next_edge: "saltar", reason: "ab_seguimientos_R" });
+      }
       return json({ next_edge: isQuietHourPeru() ? "esperar" : "enviar" });
     }
 
@@ -523,6 +528,42 @@ function inboundText(message) {
     || message?.kapso?.content
     || ""
   );
+}
+
+// Prueba A/B de seguimientos (desde 2026-10-25). F = los 7 seguimientos de
+// siempre; R = se salta el s4 ("Si algo te frenó...", el de la mañana
+// siguiente), que era el de menor rendimiento por mensaje (0,5 compras cada 100
+// enviados en 1-17 oct). Reparto 50/50 por telefono con sal propia ("fu4:"),
+// independiente del A/D. Sin telefono (BSUID) -> F, fuera de la cuenta.
+function brazoSeguimiento(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "F";
+  return mixSeg32(fnvSeg1a(`fu4:${digits}`)) % 2 === 0 ? "F" : "R";
+}
+
+function phoneDelPayload(payload) {
+  return payload?.whatsapp_context?.conversation?.phone_number
+    || payload?.execution_context?.context?.phone_number
+    || "";
+}
+
+function fnvSeg1a(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mixSeg32(value) {
+  let h = value >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
+  return h >>> 0;
 }
 
 function conversationContext(payload) {
@@ -1392,6 +1433,7 @@ async function watchdogAdmin(payload, env) {
 }
 
 globalThis.__kenkuCheckCoverage = {
+  brazoSeguimiento,
   hasLiveUnansweredInbound,
   esCierreTrivial,
   routeFollowup,
