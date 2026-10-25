@@ -67,6 +67,11 @@ const call = async (input, e = env) => (await api.handleRequest(new Request("htt
   assert.strictEqual(dry.orderPreview.billing.state, "LMA");
   assert.strictEqual(dry.orderPreview.billing.phone, "+51987654321");
   assert.ok(dry.orderPreview.meta_data.some((m) => m.key === "kapta_channel" && m.value === "whatsapp_bot"));
+  // Etiquetas en kapta_tags, el metadato que lee Kapta (promo_applied y shipping_mode salen de ahi).
+  const kaptaTags = dry.orderPreview.meta_data.find((m) => m.key === "kapta_tags");
+  assert.ok(kaptaTags, "kapta_tags");
+  for (const tag of ["kapso", "whatsapp", "contraentrega", "promo-whatsapp"]) assert.ok(kaptaTags.value.split(",").includes(tag), `${tag} en ${kaptaTags.value}`);
+  assert.ok(!dry.orderPreview.meta_data.some((m) => m.key === "kapso_tags"), "sin kapso_tags");
   assert.ok(dry.orderPreview.meta_data.some((m) => m.key === "cod_core_cupon"));
   assert.ok(!calls.some((c) => c.method === "POST"), "dryRun no crea nada");
   assert.ok(dry.internalNote.includes("3 x Bividi Camiseta de Alta Compresión - L"), dry.internalNote);

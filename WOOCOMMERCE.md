@@ -16,7 +16,7 @@ bot y cómo se pasa. Es el mismo cambio que se hizo en el bot de Aurela (`kapso-
 |---|---|
 | `shopify-product-lookup` | **Listo (25-10-2026):** con `STORE_BACKEND=woocommerce` lee el catálogo de `<WOO_STORE_URL>/products.json` y `/products/<handle>.js` (la tienda nueva los responde con el formato y los IDs de Shopify, plugin `cod-core`) y **deja de usar la API de administración de Shopify**: ni los respaldos por handle y por búsqueda (ofrecerían productos que quizá no están en la tienda nueva, y el pedido fallaría con `products_not_found`) ni la «segunda opinión» del stock (el inventario de Shopify ya no es el real). Los links al cliente siguen en `kenku.pe`. Sin la variable, como hoy |
 | `product-media-lookup` | **Nada** para las fotos (mismo catálogo público de `kenku.pe`). Los **videos** (metacampo `custom.video`, solo en la API de administración de Shopify) dejan de salir cuando Shopify cierre; queda el respaldo de `product.media` del `.js` público, si la tienda nueva lo trae. Pendiente, no bloquea la venta |
-| `create-shopify-order` | **Listo (24-10-2026):** con `STORE_BACKEND=woocommerce` crea el pedido en WooCommerce por su API REST (ver abajo). Sin esa variable sigue en Shopify, como hoy. ⚠️ **Pendiente (visto el 25-10):** el desvío a WooCommerce (`handleWooOrder`) va antes de las protecciones de octubre del camino de Shopify y se las salta: dirección entregable (`address_incomplete`), celular obligatorio para leads sin teléfono (`phone_missing`), modo de entrega verificado (`coverage_mismatch`), candado de pedidos duplicados (`duplicate_prevented`), registro A/D del pedido (`logAbOrder`) y el respaldo del anuncio desde las vars (`ctwaFromVars`) |
+| `create-shopify-order` | **Listo (24-10 y 25-10-2026):** con `STORE_BACKEND=woocommerce` crea el pedido en WooCommerce por su API REST (ver abajo), después de pasar por **las mismas protecciones que en Shopify**, en el mismo orden y con los mismos `reason` y mensajes (ver «Protecciones del pedido»). Sin esa variable sigue en Shopify, como hoy |
 | `campaign-report` | **Listo (25-10-2026):** con `STORE_BACKEND=woocommerce` lee los pedidos de WooCommerce (`GET /wp-json/wc/v3/orders`, los del bot con `source=whatsapp-bot` y `ctwa_ad_id` en los metadatos) para el tablero, `only=ads`, `only=conversion`, `only=orders` y el cruce de pedidos de asesora de la prueba A/D, y suma los de Shopify de antes de su cierre (ver «Periodo mixto»). Sin la variable, como hoy |
 | `customer-lookup` | **Listo (25-10-2026):** con `STORE_BACKEND=woocommerce` busca al cliente en los pedidos de WooCommerce por el celular (`billing.phone`, con o sin `+51`) y, mientras tenga token, en Shopify en paralelo. La dirección guardada es la del último pedido (dirección, referencia, distrito y departamento). Sin la variable, como hoy |
 | `quote-order`, `check-coverage`, `notify-team` y el resto | Nada (no usan Shopify) |
@@ -57,8 +57,12 @@ Sigue las reglas de Kapta (el sistema de operaciones lee los pedidos de la tiend
 - Envío como línea de envío, con la misma regla que hoy cotiza el bot (`quote-order`): gratis con más de S/ 40, si no
   S/ 10. (La web de Kenku da el envío gratis siempre; si el bot también, se cambia en `quote-order`.)
 - Metadatos: `kapta_channel` (`whatsapp_bot`, a confirmar con Kapta), `source=whatsapp-bot`, `kapso_conversation_id`,
-  `kapso_phone_number_id`, `kapso_tags`, `ctwa_*` y, si llegó por un anuncio, `utm_id` (el anuncio), `utm_source` y
+  `kapso_phone_number_id`, `kapta_tags`, `ctwa_*` y, si llegó por un anuncio, `utm_id` (el anuncio), `utm_source` y
   `utm_medium`.
+- `kapta_tags` (separadas por coma) son las mismas etiquetas que lleva el pedido en Shopify: `kapso`, `whatsapp`,
+  `kenku`, `contraentrega`, `promo-whatsapp`, `stock-por-validar`, `ctwa-ad`, `ab-<variante>`… Es el metadato que lee
+  Kapta (`WOO_META.tags`, MOM §38.5): de ahí saca `promo_applied` y `shipping_mode`. Hasta el 25-10 iba en
+  `kapso_tags`, que nadie lee, y Kapta solo veía el canal.
 - La fecha u hora de entrega pedida va en la nota del cliente; el resumen interno del bot, como nota privada.
 - Respuesta igual que antes: `order.name` = `#KP2…` (el número del pedido), `order.id` el de WooCommerce.
 - Lo que hace la tienda con el pedido (probado el 24-10 en local con un pedido creado por la API): **no** manda
@@ -66,6 +70,29 @@ Sigue las reglas de Kapta (el sistema de operaciones lee los pedidos de la tiend
   **no** manda el aviso de venta (ntfy/correo), que es solo para pedidos de la web. Sí lo lee Kapta como cualquier
   otro pedido, y sale al webhook del CRM si hay uno configurado.
 - En la nota interna, la provincia y la región salen de la cobertura (`coverage.normalized`) si el agente no las manda.
+
+## Protecciones del pedido (las mismas en Shopify y en WooCommerce)
+
+`handleRequest` (Shopify) y `handleWooOrder` (WooCommerce) llaman a las mismas funciones, en este orden; solo cambia el
+paso final de crear el pedido. Los `reason` y los mensajes para el agente son idénticos (la prueba los compara).
+
+| # | Protección | En modo WooCommerce |
+|---|---|---|
+| 0 | Agencia declarada por el agente → `logistics_validation_required` | Igual (va antes de elegir la tienda) |
+| 1 | Anuncio de origen: el que manda el agente, si no el de la conversación (Kapso), si no el de las vars del flujo (`ad_referral_*`, `resolveCtwaReferral`) | Igual. Va en los metadatos `ctwa_*`, `utm_id`/`utm_source`/`utm_medium` y la etiqueta `ctwa-ad`. Antes el camino de WooCommerce solo miraba la conversación y pisaba el del agente |
+| 2 | Productos y variantes: Shopify valida el `variantId` del agente y, si no existe, lo re-resuelve por handle o título | Con el catálogo de la tienda nueva (`/products.json`): por ID de variante de Shopify o de WooCommerce, handle o título. Si falta alguno → `products_not_found` (no crea un pedido incompleto) |
+| 3 | Precios, 3x2/5x3, descuento extra con tope del 15 % y envío | Mismas reglas (`computeWooPricing`), con los precios del catálogo; la promo va como cupón |
+| 4 | Dirección entregable → `address_incomplete` | Igual, sobre la misma dirección (`buildAddress`) |
+| 5 | Celular peruano real → `phone_missing` | Igual |
+| 6 | Modo de entrega re-verificado con `check-coverage` → `coverage_mismatch` | Igual (llama a la función de Kapso, no a la tienda) |
+| 7 | Stock (Shopify: `availableForSale`) | `available` del catálogo; marca `stock-por-validar` igual |
+| 8 | Pedido repetido (mismas variantes y cantidades, mismo celular, 6 h) → `duplicate_prevented` | Igual: el candado vive en el KV de Kapso (`order_lock:<9 dígitos>`) con la misma firma (IDs de variante de Shopify que conserva el catálogo), así que también frena un pedido idéntico hecho en Shopify antes del cambio |
+| 9 | Crear el pedido; guardar el candado; registrar el pedido en la prueba A/D (`abx_order:…`, con la variante del lead) | Pedido en WooCommerce (`#KP2…`); candado y registro A/D iguales |
+| — | Buscar, crear y asociar el cliente de Shopify | **No aplica:** el pedido contra entrega de WooCommerce es de invitado; Kapta y el CRM reconocen al cliente por el celular. La respuesta trae `customerLookup: {status: "skipped", reason: "woocommerce_guest"}` |
+
+`dryRun` en modo WooCommerce: corren todas las comprobaciones (también la dirección y el celular, que en Shopify se
+saltan en `dryRun`, y la consulta del candado, que devuelve `duplicate_prevented` con `dryRun: true`), sin crear el
+pedido ni escribir candados ni registros; si todo pasa, devuelve el `orderPreview` como antes.
 
 ## Configuración de `create-shopify-order` (secretos de la función en Kapso, nunca en git ni en el chat)
 
@@ -134,7 +161,13 @@ en el chat.
 Con fetch simulado (sin red), una por función:
 
 - `node functions/create-shopify-order/test/woocommerce.test.cjs`: crea el pedido con `cod-pending`, `LMA`, distrito,
-  cupón de la promo, envío y metadatos, y la respuesta con `#KP2…`.
+  cupón de la promo, envío y metadatos (`kapta_tags` con `contraentrega` y `promo-whatsapp`), y la respuesta con `#KP2…`.
+- `node functions/create-shopify-order/test/woocommerce-protecciones.test.cjs`: un caso por protección en modo
+  WooCommerce (repetido en la ventana, candado de un pedido de Shopify, otra cantidad sí pasa, dirección de relleno,
+  sin celular, cobertura distinta, anuncio desde las vars, el del agente gana, `dryRun`, agencia), con el mismo
+  `reason` y mensaje que el camino de Shopify, y el caso feliz con candado, registro A/D y `kapta_tags`. El modo
+  Shopify se comparó contra la versión anterior (a6257e8) con las mismas respuestas simuladas en 9 escenarios:
+  respuestas, llamadas y escrituras en el KV idénticas.
 - `node functions/campaign-report/test/woocommerce.test.cjs`: dos páginas de la API, Basic Auth, ventana de días de Lima
   en UTC, `status=any`; fallidos y Flow sin pagar fuera; anulado y reembolsado con S/ 0; suma con Shopify recortado al
   cierre; rango después del cierre sin Shopify; Shopify caído con aviso; sin clave, error claro; `storeBackend` por

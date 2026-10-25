@@ -42,19 +42,14 @@ async function handleRequest(request, env = globalThis) {
     }
 
     if ((await getStoreBackend(env, input)) === "woocommerce") {
-      return await handleWooOrder(input, env);
+      // Mismas protecciones que abajo; solo cambia el paso final (ver handleWooOrder).
+      return await handleWooOrder(input, env, payload);
     }
 
     const config = await getConfig(env);
     const dryRun = Boolean(input.dryRun || input.dry_run);
-    // Referral del anuncio para atribucion CTWA. Orden de preferencia: (1) el que
-    // ya paso el agente, (2) fetch en vivo por conversation_id, (3) respaldo desde
-    // las vars del flujo (ad_referral_*) que dejo customer-lookup al inicio. El (3)
-    // es clave: como tool de agente, el payload a veces NO trae conversation_id/
-    // phone y el fetch en vivo devuelve null, dejando el pedido sin etiquetar.
-    input.ctwaReferral = input.ctwaReferral
-      || (await fetchCtwaReferral(env, input))
-      || ctwaFromVars(payload);
+    // Referral del anuncio para atribucion CTWA (ver resolveCtwaReferral).
+    input.ctwaReferral = await resolveCtwaReferral(env, input, payload);
 
     const build = await buildOrderInput(config, input, {
       createMissingCustomer: !dryRun,
@@ -63,53 +58,23 @@ async function handleRequest(request, env = globalThis) {
     const orderInput = build.orderInput;
     const customerLookup = build.customerLookup;
 
-    // Requisito duro para CONTRAENTREGA: direccion realmente entregable. Un pedido
-    // contraentrega necesita ciudad/distrito real Y (calle+numero O una referencia
-    // clara). Si falta, NO lo creamos con "Por coordinar" (eso genero ordenes
-    // basura como #KP126229, Camana sin direccion): pedimos la direccion. Cuando la
-    // haya, check_coverage decide contraentrega vs agencia (Shalom + adelanto).
+    // Requisito duro para CONTRAENTREGA: direccion realmente entregable (ver
+    // addressIncompleteResponse).
     if (!dryRun) {
-      const addr = orderInput.shippingAddress || {};
-      const isPlaceholder = isAddressPlaceholder;
-      const noCity = isPlaceholder(addr.city);
-      const noStreet = isPlaceholder(addr.address1);
-      const noReference = isPlaceholder(addr.address2);
-      if (noCity || (noStreet && noReference)) {
-        return json({
-          ok: false,
-          reason: "address_incomplete",
-          message: "No registro el pedido: falta la direccion completa. Pide al cliente su *distrito* y su *direccion exacta* (calle y numero, o una referencia clara). Cuando la tengas, corre check_coverage con ese distrito: si da contraentrega, crea el pedido; si da agencia (Shalom), sigue la ruta de agencia con el adelanto de S/30. NUNCA registres un pedido contraentrega con la direccion en 'Por coordinar'.",
-          customerLookup,
-        });
-      }
+      const rejected = addressIncompleteResponse(orderInput.shippingAddress, customerLookup);
+      if (rejected) return rejected;
     }
 
-    // Requisito duro: telefono de contacto REAL. Los leads que entran por
-    // username de WhatsApp no traen numero, y el flujo llegaba a crear el
-    // pedido con phone vacio: quedaba un cliente con direccion completa al que
-    // era IMPOSIBLE contactar para coordinar la entrega. Sin celular valido no
-    // hay pedido; se pide y despues se reintenta.
-    if (!dryRun && !isPeruMobile(orderInput.phone || input.phone)) {
-      return json({
-        ok: false,
-        reason: "phone_missing",
-        message: "No registro el pedido: falta el numero de celular del cliente. Este chat NO expone telefono (entro por username de WhatsApp), asi que no podemos coordinar la entrega ni contactarlo si se corta la conversacion. Pideselo de forma natural y directa: \"Para coordinar la entrega necesito tu *numero de celular* 📱 ¿Cual es?\". Debe ser un celular peruano de 9 digitos que empiece con 9. Cuando lo tengas, vuelve a llamar create_shopify_order incluyendo ese numero en el campo phone.",
-        customerLookup,
-      });
+    // Requisito duro: telefono de contacto REAL (ver phoneMissingResponse).
+    if (!dryRun) {
+      const rejected = phoneMissingResponse(orderInput.phone || input.phone, customerLookup);
+      if (rejected) return rejected;
     }
 
-    // Defensa anti-contraentrega en zona equivocada: re-verifica la cobertura con
-    // check-coverage (fuente de verdad). Si la zona NO es contraentrega, no crea
-    // la orden de pago-al-recibir; deriva a validacion logistica (Shalom/adelanto).
-    const verifiedMode = await verifyDeliveryMode(env, input, orderInput.shippingAddress);
-    if (verifiedMode === "agencia" || verifiedMode === "needs_location_confirmation") {
-      return json({
-        ok: false,
-        reason: "coverage_mismatch",
-        verifiedShippingMode: verifiedMode,
-        claimedShippingMode: input.coverage?.shippingMode || null,
-        message: "Esta zona no tiene pago contraentrega: requiere envio por agencia (Shalom) con adelanto. No se creo la orden. Corre check_coverage con el distrito y provincia reales y sigue la ruta de agencia.",
-      });
+    // Defensa anti-contraentrega en zona equivocada (ver coverageMismatchResponse).
+    {
+      const rejected = await coverageMismatchResponse(env, input, orderInput.shippingAddress);
+      if (rejected) return rejected;
     }
 
     const outOfStockVariants = await checkVariantsStock(config, orderInput.lineItems.map((li) => li.variantId));
@@ -143,26 +108,12 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
-    // Idempotencia anti-duplicado: si ya se creo un pedido IDENTICO (mismos
-    // variantes + cantidades) para este numero en las ultimas horas, NO crear
-    // otro. Cubre el caso de dos threads/ejecuciones para el mismo numero (el
-    // cliente "avanza su pedido" dos veces en conversaciones separadas y cada
-    // una llega hasta aca). Solo bloquea duplicados exactos: una compra con
-    // producto/cantidad distinta pasa igual.
+    // Idempotencia anti-duplicado (ver duplicateOrderResponse).
     const phoneKey = phoneDigits(orderInput.phone || input.phone).slice(-9);
     const orderSig = orderSignature(orderInput.lineItems);
-    const existingLock = await findRecentOrderLock(env, phoneKey, orderSig);
-    if (existingLock) {
-      return json({
-        ok: true,
-        duplicate: true,
-        reason: "duplicate_prevented",
-        stage: "orden creada",
-        conversionStatus: "already_registered",
-        message: `Ya existe un pedido reciente identico (${existingLock.orderName}) para este numero; NO se creo uno nuevo. Confirma al cliente que su pedido ${existingLock.orderName} ya quedo registrado (no se duplico) y pregunta si necesita algo mas.`,
-        order: { name: existingLock.orderName },
-        customerLookup,
-      });
+    {
+      const duplicate = await duplicateOrderResponse(env, phoneKey, orderSig, customerLookup);
+      if (duplicate) return duplicate;
     }
 
     const data = await shopifyGraphql(config, ORDER_CREATE_MUTATION, {
@@ -218,6 +169,101 @@ async function handleRequest(request, env = globalThis) {
   } catch (error) {
     return json({ ok: false, reason: "order_create_error", error: safeError(error) });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Protecciones del pedido (octubre), las mismas para Shopify y WooCommerce y en
+// este orden: direccion entregable, celular, modo de entrega verificado, stock,
+// pedido repetido. Cada una devuelve la respuesta de rechazo (mismo reason y mismo
+// mensaje para el agente) o null si el pedido puede seguir.
+// ---------------------------------------------------------------------------
+
+// Referral del anuncio para atribucion CTWA. Orden de preferencia: (1) el que
+// ya paso el agente, (2) fetch en vivo por conversation_id, (3) respaldo desde
+// las vars del flujo (ad_referral_*) que dejo customer-lookup al inicio. El (3)
+// es clave: como tool de agente, el payload a veces NO trae conversation_id/
+// phone y el fetch en vivo devuelve null, dejando el pedido sin etiquetar.
+async function resolveCtwaReferral(env, input, payload) {
+  return input.ctwaReferral
+    || (await fetchCtwaReferral(env, input))
+    || ctwaFromVars(payload);
+}
+
+// Requisito duro para CONTRAENTREGA: direccion realmente entregable. Un pedido
+// contraentrega necesita ciudad/distrito real Y (calle+numero O una referencia
+// clara). Si falta, NO lo creamos con "Por coordinar" (eso genero ordenes
+// basura como #KP126229, Camana sin direccion): pedimos la direccion. Cuando la
+// haya, check_coverage decide contraentrega vs agencia (Shalom + adelanto).
+function addressIncompleteResponse(shippingAddress, customerLookup) {
+  const addr = shippingAddress || {};
+  const isPlaceholder = isAddressPlaceholder;
+  const noCity = isPlaceholder(addr.city);
+  const noStreet = isPlaceholder(addr.address1);
+  const noReference = isPlaceholder(addr.address2);
+  if (noCity || (noStreet && noReference)) {
+    return json({
+      ok: false,
+      reason: "address_incomplete",
+      message: "No registro el pedido: falta la direccion completa. Pide al cliente su *distrito* y su *direccion exacta* (calle y numero, o una referencia clara). Cuando la tengas, corre check_coverage con ese distrito: si da contraentrega, crea el pedido; si da agencia (Shalom), sigue la ruta de agencia con el adelanto de S/30. NUNCA registres un pedido contraentrega con la direccion en 'Por coordinar'.",
+      customerLookup,
+    });
+  }
+  return null;
+}
+
+// Requisito duro: telefono de contacto REAL. Los leads que entran por
+// username de WhatsApp no traen numero, y el flujo llegaba a crear el
+// pedido con phone vacio: quedaba un cliente con direccion completa al que
+// era IMPOSIBLE contactar para coordinar la entrega. Sin celular valido no
+// hay pedido; se pide y despues se reintenta.
+function phoneMissingResponse(phone, customerLookup) {
+  if (isPeruMobile(phone)) return null;
+  return json({
+    ok: false,
+    reason: "phone_missing",
+    message: "No registro el pedido: falta el numero de celular del cliente. Este chat NO expone telefono (entro por username de WhatsApp), asi que no podemos coordinar la entrega ni contactarlo si se corta la conversacion. Pideselo de forma natural y directa: \"Para coordinar la entrega necesito tu *numero de celular* 📱 ¿Cual es?\". Debe ser un celular peruano de 9 digitos que empiece con 9. Cuando lo tengas, vuelve a llamar create_shopify_order incluyendo ese numero en el campo phone.",
+    customerLookup,
+  });
+}
+
+// Defensa anti-contraentrega en zona equivocada: re-verifica la cobertura con
+// check-coverage (fuente de verdad). Si la zona NO es contraentrega, no crea
+// la orden de pago-al-recibir; deriva a validacion logistica (Shalom/adelanto).
+async function coverageMismatchResponse(env, input, shippingAddress) {
+  const verifiedMode = await verifyDeliveryMode(env, input, shippingAddress);
+  if (verifiedMode === "agencia" || verifiedMode === "needs_location_confirmation") {
+    return json({
+      ok: false,
+      reason: "coverage_mismatch",
+      verifiedShippingMode: verifiedMode,
+      claimedShippingMode: input.coverage?.shippingMode || null,
+      message: "Esta zona no tiene pago contraentrega: requiere envio por agencia (Shalom) con adelanto. No se creo la orden. Corre check_coverage con el distrito y provincia reales y sigue la ruta de agencia.",
+    });
+  }
+  return null;
+}
+
+// Idempotencia anti-duplicado: si ya se creo un pedido IDENTICO (mismos
+// variantes + cantidades) para este numero en las ultimas horas, NO crear
+// otro. Cubre el caso de dos threads/ejecuciones para el mismo numero (el
+// cliente "avanza su pedido" dos veces en conversaciones separadas y cada
+// una llega hasta aca). Solo bloquea duplicados exactos: una compra con
+// producto/cantidad distinta pasa igual. El candado vive en el KV de Kapso
+// (order_lock:<9 digitos>), no en la tienda.
+async function duplicateOrderResponse(env, phoneKey, orderSig, customerLookup, extra = {}) {
+  const existingLock = await findRecentOrderLock(env, phoneKey, orderSig);
+  if (!existingLock) return null;
+  return json({
+    ok: true,
+    duplicate: true,
+    reason: "duplicate_prevented",
+    ...extra,
+    stage: "orden creada",
+    conversionStatus: "already_registered",
+    message: `Ya existe un pedido reciente identico (${existingLock.orderName}) para este numero; NO se creo uno nuevo. Confirma al cliente que su pedido ${existingLock.orderName} ya quedo registrado (no se duplico) y pregunta si necesita algo mas.`,
+    order: { name: existingLock.orderName },
+    customerLookup,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +515,7 @@ function wooLocation(input) {
   return { state, district, province, region };
 }
 
-function wooMeta(input, woo, discountTotal) {
+function wooMeta(input, woo, discountTotal, options = {}) {
   const meta = [];
   const add = (key, value) => {
     const v = String(value ?? "").trim();
@@ -477,7 +523,13 @@ function wooMeta(input, woo, discountTotal) {
   };
   add("kapta_channel", woo.kaptaChannel);
   for (const attr of buildCustomAttributes(input, null)) add(attr.key, attr.value);
-  add("kapso_tags", buildTags(input).join(","));
+  // Las mismas etiquetas que el pedido de Shopify (variante A/D del lead, stock por validar, promo, contraentrega),
+  // en kapta_tags: es el metadato que lee Kapta (WOO_META.tags, MOM §38.5); de ahi saca promo_applied y shipping_mode.
+  // Antes iba en kapso_tags, que nadie lee, y Kapta solo veia el canal.
+  const tags = buildTags(input, options.abVariant || null);
+  if (options.stockToValidate && !tags.includes("stock-por-validar")) tags.push("stock-por-validar");
+  if (discountTotal > 0 && !tags.includes("promo-whatsapp")) tags.push("promo-whatsapp");
+  add("kapta_tags", tags.join(","));
   const ref = input.ctwaReferral;
   if (ref?.source_id) {
     // Atribucion para Kapta (pedido sin checkout): los utm visibles, con el anuncio de origen.
@@ -489,10 +541,29 @@ function wooMeta(input, woo, discountTotal) {
   return meta;
 }
 
-async function handleWooOrder(input, env) {
+// El pedido de WooCommerce pasa por las MISMAS protecciones que el de Shopify (handleRequest), en el mismo orden y
+// con los mismos reason y mensajes; solo el paso final (crear el pedido) cambia de tienda:
+//  1. referral del anuncio: el del agente, el de la conversacion o el de las vars del flujo (resolveCtwaReferral);
+//  2. productos y variantes contra el catalogo de la tienda nueva (equivale a re-resolver variantes en Shopify);
+//     precios, promos y envio con las mismas reglas (computeWooPricing);
+//  3. direccion entregable (address_incomplete), celular (phone_missing) y modo de entrega verificado con
+//     check-coverage (coverage_mismatch);
+//  4. stock: el "available" del catalogo (equivale a checkVariantsStock);
+//  5. pedido repetido: el mismo candado del KV de Kapso (order_lock:<celular>, misma firma con los IDs de variante de
+//     Shopify que conserva el catalogo), asi que tambien frena un pedido identico hecho en Shopify en las 6 h previas;
+//  6. crear el pedido, guardar el candado y registrar el pedido en la prueba A/D (logAbOrder).
+// No aplica: buscar, crear y asociar el cliente de Shopify (resolveOrderCustomer). El pedido contra entrega de
+// WooCommerce es de invitado; Kapta y el CRM reconocen al cliente por el celular.
+// dryRun: corren todas las comprobaciones (tambien la direccion y el celular, que en Shopify se saltan en dryRun, y
+// la consulta del candado), sin crear el pedido ni escribir candados ni registros.
+const WOO_CUSTOMER_LOOKUP = Object.freeze({ searched: false, status: "skipped", reason: "woocommerce_guest" });
+
+async function handleWooOrder(input, env, payload = {}) {
   const woo = await getWooConfig(env);
   const dryRun = Boolean(input.dryRun || input.dry_run);
-  input.ctwaReferral = await fetchCtwaReferral(env, input);
+  const customerLookup = { ...WOO_CUSTOMER_LOOKUP };
+  input.ctwaReferral = await resolveCtwaReferral(env, input, payload);
+  const abVariantDelLead = varianteAsignada(payload, input.phone || input.customer?.phone);
 
   const catalog = await loadWooCatalog(woo);
   const { lines, unresolved } = resolveWooLineItems(catalog, normalizeLineItems(input.lineItems || input.items || []));
@@ -510,14 +581,25 @@ async function handleWooOrder(input, env) {
     shippingFee = money(computed.subtotalBeforeDiscount - discountTotal) > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE_UNDER_THRESHOLD;
   }
 
+  const customer = input.customer || {};
+  const address = buildAddress(customer, input);
+  const phone = normalizePhone(customer.phone || input.phone || address.phone);
+
+  // 3. Las mismas protecciones que en Shopify, en el mismo orden (tambien en dryRun: solo leen).
+  {
+    const rejected = addressIncompleteResponse(address, customerLookup)
+      || phoneMissingResponse(phone || input.phone, customerLookup)
+      || (await coverageMismatchResponse(env, input, address));
+    if (rejected) return rejected;
+  }
+
+  // 4. Stock del catalogo de la tienda nueva.
   const outOfStockVariants = lines
     .filter((line) => line.variant.available === false)
     .map((line) => ({ id: String(line.variant.id), title: [line.product.title, line.variant.title].filter((t) => t && t !== "Default Title").join(" - ") }));
   const stockToValidate = outOfStockVariants.length > 0
     || Boolean(input.stockPorValidar || input.stock_por_validar || input.stockValidationRequired || input.stock_validation_required);
 
-  const customer = input.customer || {};
-  const address = buildAddress(customer, input);
   const location = wooLocation(input);
   const email = normalizeEmail(customer.email || input.email);
   const totals = spreadWooDiscount(lines, discountTotal);
@@ -531,7 +613,7 @@ async function handleWooOrder(input, env) {
     billing: {
       first_name: address.firstName,
       last_name: address.lastName,
-      phone: normalizePhone(customer.phone || input.phone || address.phone),
+      phone,
       country: "PE",
       state: location.state,
       city: location.district,
@@ -550,7 +632,7 @@ async function handleWooOrder(input, env) {
       ? { method_id: "flat_rate", method_title: "Envio", total: money(shippingFee).toFixed(2) }
       : { method_id: "free_shipping", method_title: "Envío gratis", total: "0.00" }],
     customer_note: specialNote ? `Fecha/hora solicitada: ${specialNote}` : "",
-    meta_data: wooMeta(input, woo, discountTotal),
+    meta_data: wooMeta(input, woo, discountTotal, { abVariant: abVariantDelLead, stockToValidate }),
   };
   // La nota con los productos ya resueltos (nombre y talla) y el total calculado, aunque el agente solo haya mandado
   // el handle o el ID de la variante.
@@ -567,6 +649,14 @@ async function handleWooOrder(input, env) {
     ? `\nSTOCK POR VALIDAR: ${outOfStockVariants.map((v) => v.title || v.id).join("; ") || "lo pidio el agente"}`
     : "");
 
+  // 5. Pedido repetido: mismo candado y misma firma que en Shopify (IDs de variante de Shopify del catalogo).
+  const phoneKey = phoneDigits(phone || input.phone).slice(-9);
+  const orderSig = orderSignature(lines.map((line) => ({ variantId: line.variant.id || line.variant.woo_id, quantity: line.quantity })));
+  {
+    const duplicate = await duplicateOrderResponse(env, phoneKey, orderSig, customerLookup, dryRun ? { dryRun: true, backend: "woocommerce" } : { backend: "woocommerce" });
+    if (duplicate) return duplicate;
+  }
+
   if (dryRun) {
     return json({
       ok: true,
@@ -581,17 +671,26 @@ async function handleWooOrder(input, env) {
     });
   }
 
+  // 6. Crear el pedido (lo unico distinto de Shopify), candado y registro A/D.
   let created;
   try {
     created = await wooApi(woo, "/orders", { method: "POST", body: order });
   } catch (error) {
     return json({ ok: false, reason: "woocommerce_error", status: error.status || null, error: safeError(error) });
   }
+  const orderName = `#${created.number}`;
+  await recordOrderLock(env, phoneKey, orderSig, orderName);
   try {
     await wooApi(woo, `/orders/${created.id}/notes`, { method: "POST", body: { note, customer_note: false } });
   } catch {
     // La nota interna es un extra: el pedido ya quedo creado.
   }
+  const abPhone = phone || input.phone;
+  await logAbOrder(env, orderName, varianteAsignada(payload, abPhone), input.conversationId || input.conversation_id, {
+    promo: promoAsignada(payload, abPhone),
+    total: Number(created.total ?? orderTotal),
+    units: lines.reduce((n, line) => n + (Number(line.quantity) || 0), 0),
+  });
 
   return json({
     ok: true,
@@ -602,10 +701,10 @@ async function handleWooOrder(input, env) {
     conversionTotal: Number(created.total ?? quote.total ?? 0),
     stockToValidate,
     outOfStockVariants,
-    customerLookup: { searched: false, status: "skipped", reason: "woocommerce_guest" },
+    customerLookup,
     order: {
       id: created.id,
-      name: `#${created.number}`,
+      name: orderName,
       number: created.number,
       legacyResourceId: String(created.id),
       total: created.total,
