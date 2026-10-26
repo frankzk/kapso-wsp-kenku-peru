@@ -1,0 +1,186 @@
+{
+ "cayenne": {
+  "id": 10330940440871,
+  "woo_id": 2012,
+  "title": "Cayenne Pepper – Suplemento Botánico para Circulación Saludable (60 Cápsulas) SuperHuman",
+  "handle": "sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas",
+  "vendor": "Kenku Perú",
+  "tags": [],
+  "created_at": "2026-10-24T17:20:16-05:00",
+  "updated_at": "2026-10-25T16:31:51-05:00",
+  "published_at": "2026-10-24T17:20:16-05:00",
+  "options": [
+   {
+    "name": "Title",
+    "position": 1,
+    "values": [
+     "Default Title"
+    ]
+   }
+  ],
+  "variants": [
+   {
+    "id": 51794337235239,
+    "woo_id": 2012,
+    "product_id": 10330940440871,
+    "title": "Default Title",
+    "option1": "Default Title",
+    "option2": null,
+    "option3": null,
+    "options": [
+     "Default Title"
+    ],
+    "sku": "63603555",
+    "requires_shipping": true,
+    "taxable": false,
+    "available": true,
+    "price": 14900,
+    "compare_at_price": 25000,
+    "grams": 0,
+    "position": 1,
+    "featured_image": null,
+    "created_at": "2026-10-24T17:20:16-05:00",
+    "updated_at": "2026-10-25T16:31:51-05:00"
+   }
+  ],
+  "type": "",
+  "url": "/products/sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas",
+  "available": true,
+  "price": 14900,
+  "price_min": 14900,
+  "price_max": 14900,
+  "price_varies": false,
+  "compare_at_price": 25000,
+  "featured_image": "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_41p.m.jpg",
+  "images": [
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_41p.m.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_27p.m.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_30p.m.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_33p.m.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_35p.m.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_36p.m.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPTImage6ago2026_07_07_39p.m.jpg"
+  ],
+  "media": [],
+  "extras": [
+   {
+    "clave": "antes_y_despues",
+    "nombre": "Antes y después",
+    "tipo": "foto",
+    "src": "https://kenku.pe/wp-content/uploads/2026/10/sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas-antes-y-despues.png",
+    "width": 1122,
+    "height": 1402
+   },
+   {
+    "clave": "testimonio",
+    "nombre": "Testimonio",
+    "tipo": "foto",
+    "src": "https://kenku.pe/wp-content/uploads/2026/10/sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas-testimonio.png",
+    "width": 941,
+    "height": 1672
+   },
+   {
+    "clave": "ingredientes_nutrititon_facts",
+    "nombre": "Ingredientes (Nutrition Facts)",
+    "tipo": "foto",
+    "src": "https://kenku.pe/wp-content/uploads/2026/10/sovexa-cayenne-pepper-suplemento-botanico-para-circulacion-saludable-60-capsulas-ingredientes-nutrititon-facts.png",
+    "width": 1122,
+    "height": 1402
+   }
+  ]
+ },
+ "biru": {
+  "id": 9865128542503,
+  "woo_id": 1805,
+  "title": "Shampoo Biru™ Anticaspa con Menta y Té Verde – Purifica y Refresca el Cuero Cabelludo - IdeasLabCo™",
+  "handle": "shampoo-biru-anticaspa-ideaslabco",
+  "vendor": "Kenku Perú",
+  "tags": [],
+  "created_at": "2026-10-24T17:18:05-05:00",
+  "updated_at": "2026-10-25T16:31:51-05:00",
+  "published_at": "2026-10-24T17:18:05-05:00",
+  "options": [
+   {
+    "name": "Title",
+    "position": 1,
+    "values": [
+     "Default Title"
+    ]
+   }
+  ],
+  "variants": [
+   {
+    "id": 50156674613543,
+    "woo_id": 1805,
+    "product_id": 9865128542503,
+    "title": "Default Title",
+    "option1": "Default Title",
+    "option2": null,
+    "option3": null,
+    "options": [
+     "Default Title"
+    ],
+    "sku": "46582541",
+    "requires_shipping": true,
+    "taxable": false,
+    "available": true,
+    "price": 8500,
+    "compare_at_price": 15000,
+    "grams": 0,
+    "position": 1,
+    "featured_image": null,
+    "created_at": "2026-10-24T17:18:05-05:00",
+    "updated_at": "2026-10-25T16:31:51-05:00"
+   }
+  ],
+  "type": "",
+  "url": "/products/shampoo-biru-anticaspa-ideaslabco",
+  "available": true,
+  "price": 8500,
+  "price_min": 8500,
+  "price_max": 8500,
+  "price_varies": false,
+  "compare_at_price": 15000,
+  "featured_image": "https://kenku.pe/wp-content/uploads/2026/10/afc4a049-b840-4809-81c4-8d673f9b39c0_1.jpg",
+  "images": [
+   "https://kenku.pe/wp-content/uploads/2026/10/afc4a049-b840-4809-81c4-8d673f9b39c0_1.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/102531b9-aee2-4248-8877-d5adcdaa8627.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/eccccfb4-8ad5-477f-b39d-03df26c91690.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/5384a449-75b3-4381-b28a-0667e9ec2f10.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/fff68ed0-4d8c-40b1-9d70-7f0d3f115e7e.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/efde64c8-2177-4c9b-813b-0afd529965ed.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/4eeef9d5-0cfa-4620-b896-acaaaab538ab.jpg",
+   "https://kenku.pe/wp-content/uploads/2026/10/ChatGPT_Image_27_jun_2025_01_07_43_p.m._1.png"
+  ],
+  "media": [
+   {
+    "id": 2690,
+    "media_type": "video",
+    "position": 1,
+    "alt": "Shampoo Biru™ Anticaspa con Menta y Té Verde – Purifica y Refresca el Cuero Cabelludo - IdeasLabCo™",
+    "preview_image": {
+     "src": "https://kenku.pe/wp-content/uploads/2026/10/afc4a049-b840-4809-81c4-8d673f9b39c0_1.jpg"
+    },
+    "sources": [
+     {
+      "format": "mp4",
+      "mime_type": "video/mp4",
+      "url": "https://kenku.pe/wp-content/uploads/2026/10/shampoo-biru-anticaspa-ideaslabco-video.mp4",
+      "width": 266,
+      "height": 480
+     }
+    ]
+   }
+  ],
+  "extras": [
+   {
+    "clave": "antes_y_despues",
+    "nombre": "Antes y después",
+    "tipo": "foto",
+    "src": "https://kenku.pe/wp-content/uploads/2026/10/shampoo-biru-anticaspa-ideaslabco-antes-y-despues.png",
+    "width": 1254,
+    "height": 1254
+   }
+  ]
+ }
+}

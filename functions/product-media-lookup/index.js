@@ -1036,6 +1036,10 @@ async function fetchProductVideo(config, product) {
     urlPicked: false,
     error: null,
   };
+  if (isWooProduct(product)) {
+    const item = findInlineProductVideo(product);
+    return { item, debug: { ...debug, source: "woocommerce", urlPicked: Boolean(item) } };
+  }
   if (!config.adminToken || !product?.id) return { item: null, debug };
 
   try {
@@ -1092,8 +1096,33 @@ async function fetchProductVideo(config, product) {
 // despues) via Admin API: son referencias a archivo y NO vienen en el
 // products.json publico. Las keys se detectan por patron (testimoni... /
 // antes|despues|before|after) para tolerar variantes como antes_y_despues.
+// Tienda WooCommerce (kenku.pe desde el 26-10-2026): el catalogo publico lo
+// sirve el plugin cod-core con el formato de Shopify y trae `woo_id`. Ahi todo
+// sale de la tienda nueva: las fotos de los metacampos vienen en `extras`
+// (clave antes_y_despues / testimonio) y el video en `media`. NO se usa la API
+// de administracion de Shopify: sus archivos estan en cdn.shopify.com y dejan
+// de servir cuando Shopify cierra (27-10 19:00 Lima).
+function isWooProduct(product) {
+  return product?.woo_id !== undefined && product?.woo_id !== null;
+}
+
+function extrasImages(product) {
+  const result = { testimonial: null, beforeAfter: null };
+  for (const extra of Array.isArray(product?.extras) ? product.extras : []) {
+    if (!extra || (extra.tipo && extra.tipo !== "foto")) continue;
+    const url = normalizeImageUrl(extra.src || extra.url);
+    if (!url) continue;
+    const key = normalizeSearchText(extra.clave || extra.nombre || "").replace(/\s+/g, "_");
+    if (!result.testimonial && /testimoni/.test(key)) result.testimonial = url;
+    else if (!result.beforeAfter && /antes.*despues/.test(key)) result.beforeAfter = url;
+  }
+  return result;
+}
+
 async function fetchPresentationMetafieldImages(config, product) {
   const result = { testimonial: null, beforeAfter: null };
+  if (Array.isArray(product?.extras) && product.extras.length) return extrasImages(product);
+  if (isWooProduct(product)) return result;
   if (!config.adminToken || !product?.id) return result;
 
   try {
@@ -1182,6 +1211,8 @@ function json(body, status = 200) {
 }
 
 globalThis.__kenkuProductMediaLookup = {
+  isWooProduct,
+  extrasImages,
   buildMediaItems,
   buildPresentationResponse,
   classifyPresentationImages,
