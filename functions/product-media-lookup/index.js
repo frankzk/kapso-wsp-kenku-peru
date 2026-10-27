@@ -798,8 +798,17 @@ function normalizeTags(tags) {
 
 function normalizeImageUrl(value) {
   if (!value) return "";
-  const text = String(value);
-  if (text.startsWith("//")) return `https:${text}`;
+  let text = String(value).trim();
+  if (text.startsWith("//")) text = `https:${text}`;
+  // Meta no descarga URLs con caracteres fuera de ASCII: los archivos de
+  // WooCommerce traen "™" en el nombre y el video fallaba con 131053 (400).
+  if (/[^\x21-\x7e]/.test(text)) {
+    try {
+      text = encodeURI(decodeURI(text));
+    } catch {
+      text = encodeURI(text);
+    }
+  }
   return text;
 }
 
