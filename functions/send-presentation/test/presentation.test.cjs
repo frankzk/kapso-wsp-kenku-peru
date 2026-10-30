@@ -19,6 +19,7 @@ const SendText = globalThis.__kenkuSendText;
 
 const LOOKUP_FN = "21cd24f1-ed57-4303-988c-043bf4bc8069";
 const MEDIA_FN = "d4e6365e-4736-4e92-872a-259adb6634f2";
+const COVERAGE_FN = "05a6107d-6488-4bb3-8088-9f2fce140b5e";
 
 // --- Fixtures: la forma real que devuelven las dos funciones (capturada 2026-09-26) ---
 const producto = (over = {}) => ({
@@ -43,8 +44,9 @@ const MEDIA_MINIMA = { ok: true, found: true, media: [{ type: "image", role: "pr
 // Reloj simulado: dormir y cada envio lo avanzan, asi se puede probar el tope de
 // tiempo sin esperar de verdad.
 let enviados, pausas, falloEnvioN, reloj, latencia;
-function mock({ lookup = producto(), media = MEDIA_COMPLETA, latenciaMs = 1700, lookupMs = 0 } = {}) {
-  enviados = []; pausas = []; falloEnvioN = null; reloj = 0; latencia = latenciaMs;
+let coberturas;
+function mock({ lookup = producto(), media = MEDIA_COMPLETA, latenciaMs = 1700, lookupMs = 0, cobertura = null } = {}) {
+  enviados = []; pausas = []; falloEnvioN = null; reloj = 0; latencia = latenciaMs; coberturas = [];
   P.deps.dormir = async (ms) => { pausas.push({ ms, antesDelEnvio: enviados.length }); reloj += ms; };
   P.deps.azar = () => 0.5;
   P.deps.ahora = () => reloj;
@@ -53,6 +55,10 @@ function mock({ lookup = producto(), media = MEDIA_COMPLETA, latenciaMs = 1700, 
     const u = String(url);
     if (u.includes(`/functions/${LOOKUP_FN}/invoke`)) { reloj += lookupMs; return resp(lookup); }
     if (u.includes(`/functions/${MEDIA_FN}/invoke`)) return resp(media);
+    if (u.includes(`/functions/${COVERAGE_FN}/invoke`)) {
+      coberturas.push(JSON.parse(opts.body).input);
+      return cobertura ? resp(cobertura) : resp({ error: "caido" }, 500);
+    }
     if (u.endsWith("/messages")) {
       reloj += latencia;
       const n = intentos; intentos += 1;
@@ -128,6 +134,53 @@ caso("pregunta final con direccion conocida: la confirma", async () => {
   const i = enviados.at(-1).interactive;
   assert.ok(i.body.text.includes("Av. Arequipa 123, Lince"));
   assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["Si, la misma", "Cambiar direccion"]);
+});
+
+// --- Zona del boton de la web: no se pregunta Lima/provincia, se pide la promo ---
+const WEB = "Hola, quiero pedir Magnesio. Soy de La Libertad / Sánchez Carrión / Huamachuco. https://kenku.pe/products/magnesio-12-en-1";
+const COD = { cashOnDelivery: true, shippingMode: "contraentrega", advanceAmount: 0, courier: null };
+const SHALOM = { cashOnDelivery: false, shippingMode: "agencia", advanceAmount: 30, courier: "Shalom" };
+caso("zona contraentrega: cierra pidiendo la promo y promete pagar al recibir", async () => {
+  mock({ cobertura: COD });
+  const r = await correr({ input: { ubicacion: "Lima / Lima / San Juan de Lurigancho" } });
+  assert.deepStrictEqual(coberturas[0], { region: "Lima", province: "Lima", district: "San Juan de Lurigancho" });
+  const i = enviados.at(-1).interactive;
+  assert.strictEqual(i.body.text, "¡Genial! A *San Juan de Lurigancho* te lo llevamos a tu puerta y *pagas al recibir* 🏠\n\n¿Qué promoción prefieres?");
+  assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["1 unidad (S/ 149)", "3x2 (S/ 298)", "5x3 (S/ 447)"]);
+  assert.ok(enviados.find((b) => b.text?.body.startsWith("*Magnesio")).text.body.includes("*pagas al recibir* en tu puerta"));
+  assert.ok(/NO preguntes Lima\/provincia/.test(r.message));
+});
+caso("zona por agencia: explica Shalom y el adelanto, y el precio NO promete pagar al recibir", async () => {
+  mock({ cobertura: SHALOM });
+  await correr({ input: { ubicacion: WEB } });
+  const i = enviados.at(-1).interactive;
+  assert.strictEqual(i.body.text, "Para *Huamachuco* te lo enviamos por agencia *Shalom*: separas con un adelanto de *S/ 30* y el saldo lo pagas al recoger 📦\n\n¿Qué promoción prefieres?");
+  const precio = enviados.find((b) => b.text?.body.startsWith("*Magnesio")).text.body;
+  assert.ok(!precio.includes("pagas al recibir"), precio);
+});
+caso("zona con check-coverage caido: pide la promo sin prometer forma de pago", async () => {
+  mock({ cobertura: null });
+  await correr({ input: { ubicacion: WEB } });
+  assert.strictEqual(enviados.at(-1).interactive.body.text, "¿Qué promoción prefieres para tu envío a *Huamachuco*? 😊");
+});
+caso("ubicacion incompleta: Lima/provincia de siempre y sin consultar cobertura", async () => {
+  mock({ cobertura: COD });
+  await correr({ input: { ubicacion: "La Libertad / Huamachuco" } });
+  assert.strictEqual(coberturas.length, 0);
+  assert.deepStrictEqual(enviados.at(-1).interactive.action.buttons.map((b) => b.reply.title), ["Lima", "Provincia"]);
+});
+caso("compacta con zona: promo en la pregunta final con el testimonio arriba", async () => {
+  mock({ cobertura: SHALOM });
+  await correr({ vars: { ab_variant: "D" }, input: { ubicacion: WEB } });
+  const i = enviados.at(-1).interactive;
+  assert.strictEqual(i.header.type, "image");
+  assert.ok(i.body.text.includes("¿Qué promoción prefieres?"));
+  assert.deepStrictEqual(i.action.buttons.map((b) => b.reply.title), ["1 unidad (S/ 149)", "3x2 (S/ 298)", "5x3 (S/ 447)"]);
+});
+caso("zona de la web manda sobre la direccion guardada", async () => {
+  mock({ cobertura: COD });
+  await correr({ vars: { ab_variant: "D", ...DE_ANUNCIO, known_address: "Av. Arequipa 123, Lince" }, input: { ubicacion: "Lima / Lima / Ate" } });
+  assert.ok(enviados.at(-1).interactive.body.text.includes("*Ate*"));
 });
 
 // --- Compacta: conversacion que Meta cobra (sin anuncio) ---
