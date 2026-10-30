@@ -32,7 +32,10 @@
   campaign-report=e7c39748-c57c-4322-b532-a31d9ac5949b,
   send-buttons=2620cfb9-b8c9-48b0-bed8-b8f2f9ac16a1,
   loop-guard=b2aebd00-2661-46e4-8946-419e4b8df13b,
-  pause=738279fc-0263-4eef-8afa-1e084e17521e.
+  pause=738279fc-0263-4eef-8afa-1e084e17521e,
+  send-presentation=82d42ab6-6e45-4dc0-be20-ffec6de9b44b,
+  send-reminder=828f06f7-8b7f-4a42-87e1-cb2fbb7b42e3 (nodo fu-p5),
+  send-followup-envio=ccb4ba77-0302-4d63-a15f-b6d31539b4e6 (nodo fu-s2).
 - **NO usar el MCP de Kapso para mutaciones**: el conector MCP de Kapso de las
   sesiones está autenticado contra el proyecto de AURELA. Solo sirve
   `search_docs` (documentación, es neutral). Nada de escribir por MCP.
