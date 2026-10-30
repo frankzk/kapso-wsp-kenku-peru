@@ -43,19 +43,23 @@ async function handleRequest(request, env = globalThis) {
 
   const handle = String(ctx.vars.last_product_handle || "").trim();
   const titulo = String(ctx.vars.last_product_title || "").trim();
-  const foto = handle || titulo ? await primeraFoto({ handle, product: titulo || handle }, ctx.apiKey) : "";
+  const busqueda = { motivo: "" };
+  const foto = handle || titulo ? await primeraFoto({ handle, product: titulo || handle }, ctx.apiKey, busqueda) : "";
+  // Para auditar en los eventos de la ejecucion por que salio solo el texto.
+  const diag = { producto: Boolean(handle || titulo), busqueda: busqueda.motivo || (foto ? "ok" : "sin_producto") };
 
   if (foto) {
     const res = await enviar({ type: "image", image: { link: foto, caption: TEXTO } }, ctx);
-    if (res.ok) return json({ ok: true, sent: "image", messageId: res.messageId });
+    if (res.ok) return json({ ok: true, sent: "image", messageId: res.messageId, diag });
+    diag.fotoRechazada = res.error;
   }
   const res = await enviar({ type: "text", text: { body: TEXTO } }, ctx);
   return json(res.ok
-    ? { ok: true, sent: "text", messageId: res.messageId, conFoto: Boolean(foto) }
-    : { ok: false, sent: false, reason: "envio_fallido", error: res.error });
+    ? { ok: true, sent: "text", messageId: res.messageId, diag }
+    : { ok: false, sent: false, reason: "envio_fallido", error: res.error, diag });
 }
 
-async function primeraFoto(input, apiKey) {
+async function primeraFoto(input, apiKey, busqueda = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
   try {
@@ -65,15 +69,17 @@ async function primeraFoto(input, apiKey) {
       body: JSON.stringify({ input: { ...input, limit: 1 } }),
       signal: controller.signal,
     });
-    if (!response.ok) return "";
+    if (!response.ok) { busqueda.motivo = `http_${response.status}`; return ""; }
     const body = await response.json().catch(() => ({}));
     let data = body?.data ?? body;
     if (typeof data?.result === "string") data = JSON.parse(data.result);
     else if (data?.result && typeof data.result === "object") data = data.result;
     const item = (Array.isArray(data?.media) ? data.media : [])
       .find((m) => m && (m.mediaType || m.type || "image") === "image" && (m.mediaUrl || m.url));
+    if (!item) busqueda.motivo = `sin_foto:${data?.reason || data?.found === false ? "no_encontrado" : (Array.isArray(data?.media) ? data.media.length : "sin_media")}`;
     return item ? String(item.mediaUrl || item.url) : "";
-  } catch {
+  } catch (error) {
+    busqueda.motivo = error?.name === "AbortError" ? "timeout" : "error";
     return "";
   } finally {
     clearTimeout(timer);
