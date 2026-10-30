@@ -302,7 +302,7 @@ function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, pr
     if (antesDespuesC) pasos.push({ paso: "foto_antes_despues", tipo: "image", body: { link: url(antesDespuesC) } });
     const videoC = porRol("video");
     if (videoC) pasos.push({ paso: "video", tipo: "video", body: { link: url(videoC), caption: `Mira este video corto del *${nombre}* 🎬` } });
-    pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad, cobertura }) } });
+    pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad, zona, cobertura }) } });
     const sinCabecera = botones(pregunta.texto, pregunta.botones);
     pasos.push(testimonio
       ? {
@@ -327,7 +327,7 @@ function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, pr
   if (video) pasos.push({ paso: "video", tipo: "video", body: { link: url(video), caption: `Mira este video corto del *${nombre}* 🎬` } });
 
   pasos.push({ paso: "beneficio", tipo: "text", body: { body: beneficio } });
-  pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad, cobertura }) } });
+  pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad, zona, cobertura }) } });
 
   if (testimonio) pasos.push({ paso: "testimonio", tipo: "image", body: { link: url(testimonio), caption: "Lo que dicen nuestros clientes 💬" } });
 
@@ -349,17 +349,19 @@ function conversacionPaga(vars) {
 
 // Msg 6 del prompt. El ladder es el mismo que calcula quote-order: 3 unidades
 // pagan 2, 5 pagan 3 (ver countFreeUnits).
-function lineaPrecio({ nombre, precio, antes, unidad, cobertura = null }) {
+function lineaPrecio({ nombre, precio, antes, unidad, zona = null, cobertura = null }) {
   let cabeza = `*${nombre}* queda en *${soles(precio)}* por ${unidad.sing}`;
   if (antes && antes > precio) cabeza += ` (antes *${soles(antes)}*)`;
   if (precio > FREE_SHIPPING_THRESHOLD) cabeza += " con *envío gratis* 📦";
-  // Con la zona conocida no se promete "pagas al recibir" a quien va por agencia
-  // (paga adelanto): eso lo explica la pregunta final.
-  if (cobertura?.cod) cabeza += ", *pagas al recibir* en tu puerta y con *garantía de 30 días* 🛡️ 😊.";
-  else if (cobertura) cabeza += " y con *garantía de 30 días* 🛡️ 😊.";
+  // Con la zona y su cobertura conocidas, la forma de pago va dicha aca mismo
+  // (contraentrega o adelanto por agencia) y la pregunta final solo pide la promo.
+  // Sin cobertura confirmada se mantiene la frase general.
+  const envio = zona && cobertura ? lineaEnvio(zona, cobertura) : "";
+  if (envio) cabeza += " y *garantía de 30 días* 🛡️ 😊.";
   else cabeza += ", en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.";
   return [
     cabeza,
+    ...(envio ? ["", envio] : []),
     "",
     "🔥 Promociones disponibles:",
     `• 1 ${unidad.sing}: *${soles(precio)}*`,
@@ -394,17 +396,20 @@ function leerCobertura(res) {
   return { cod: false, courier: String(res.courier || "Shalom"), adelanto: Number(res.advanceAmount) || 0 };
 }
 
-function preguntaPromo({ zona, cobertura, precio, unidad }) {
+function lineaEnvio(zona, cobertura) {
   const lugar = `*${zona.distrito}*`;
-  let texto;
-  if (cobertura?.cod) {
-    texto = `¡Genial! A ${lugar} te lo llevamos a tu puerta y *pagas al recibir* 🏠\n\n¿Qué promoción prefieres?`;
-  } else if (cobertura) {
-    const adelanto = cobertura.adelanto > 0 ? `separas con un adelanto de *${soles(cobertura.adelanto)}* y ` : "";
-    texto = `Para ${lugar} te lo enviamos por agencia *${cobertura.courier}*: ${adelanto}el saldo lo pagas al recoger 📦\n\n¿Qué promoción prefieres?`;
-  } else {
-    texto = `¿Qué promoción prefieres para tu envío a ${lugar}? 😊`;
-  }
+  if (cobertura.cod) return `🏠 A ${lugar} te lo llevamos a tu puerta y *pagas al recibir*.`;
+  const adelanto = cobertura.adelanto > 0
+    ? `separas tu pedido con un adelanto de *${soles(cobertura.adelanto)}* (se descuenta del total) y el saldo lo pagas al recoger`
+    : "lo pagas al recoger";
+  return `📦 A ${lugar} lo enviamos por agencia *${cobertura.courier}*: ${adelanto}.`;
+}
+
+// La forma de pago ya va en el mensaje del precio; aca solo se pide la promo. Si
+// la cobertura no se pudo confirmar, se nombra la zona para que no parezca que se
+// ignoro lo que dijo el cliente.
+function preguntaPromo({ zona, cobertura, precio, unidad }) {
+  const texto = cobertura ? "¿Qué promoción prefieres? 😊" : `¿Qué promoción prefieres para tu envío a *${zona.distrito}*? 😊`;
   return {
     texto,
     botones: [`1 ${unidad.sing} (${soles(precio)})`, `3x2 (${soles(precio * 2)})`, `5x3 (${soles(precio * 3)})`],
