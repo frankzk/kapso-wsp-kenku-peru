@@ -301,6 +301,27 @@ cumple casi siempre, no siempre. Respuesta en 1 h a la presentacion: 47% antes,
 40% A / 44% D despues (n=35/38, dentro del ruido; seguir mirando). Cobrados el
 2-oct hasta las 16:00: 1.115 mensajes (US$33), ~US$50-55/dia proyectado.
 
+## Medicion 2026-10-29: el p5 de seguimiento gastaba el 36% del modelo
+
+Gasto de modelo del flujo en 24 h: US$36,45 (6.897 llamadas). El `sales-agent`
+se lleva US$23,39 (6,5 llamadas por turno, ~23.000 tokens de entrada por
+llamada, 66% en cache). El otro 36%, US$13,06, era `fu-p5`: un nodo agente cuyo
+prompt solo decia "manda este TEXTO exacto, con la primera foto del producto si
+hay". 782 recordatorios al dia x ~4,8 llamadas cada uno, para un mensaje fijo.
+
+Cambio 2026-10-30: `fu-p5` pasa a ser un nodo `function` que llama a
+`functions/send-reminder` (sin modelo): lee `last_product_handle` /
+`last_product_title`, pide la primera foto a product-media-lookup y manda la foto
+con el texto al pie, o el texto solo. Mismo contrato: un mensaje, nunca dos.
+Ahorro esperado ~US$13/dia. Tests: `node functions/send-reminder/test/reminder.test.cjs`.
+
+Siguientes candidatos (medidos el mismo dia, sin aplicar):
+- `save_variable` desde el agente: 1.296 llamadas/dia (`stage` 519,
+  `followup_hint` 385, `last_product_title`/`handle` 174 c/u) + 152 errores de
+  argumentos invalidos. Las pueden guardar las funciones que ya conocen el dato.
+- El agente se activa (~25.000 tokens) solo para callar ante los botones del
+  aviso de Shalom, reacciones y "ok/gracias": un filtro antes del agente lo evita.
+
 ## Como reproducirlo
 
 Los mensajes se bajan del proxy de Meta de Kapso, con cursor:
