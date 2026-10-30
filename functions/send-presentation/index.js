@@ -24,6 +24,7 @@
 // del mismo catalogo publico que usa quote-order para cotizar.
 const PRODUCT_LOOKUP_FN = "21cd24f1-ed57-4303-988c-043bf4bc8069";
 const MEDIA_LOOKUP_FN = "d4e6365e-4736-4e92-872a-259adb6634f2";
+const CHECK_COVERAGE_FN = "05a6107d-6488-4bb3-8088-9f2fce140b5e";
 const KAPSO = "https://api.kapso.ai";
 
 const VARIANTE_TRATAMIENTO = "D";
@@ -117,10 +118,16 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
       "El `beneficio` no puede traer precio, promos ni links: es una linea sobre el RESULTADO para el cliente. Reescribela y vuelve a llamar.");
   }
 
-  const [lookup, medios] = await Promise.all([
+  // El boton de la web (desde 2026-10-30) ya trae "Soy de Region / Provincia /
+  // Distrito": con la zona conocida no se pregunta Lima/provincia; se consulta la
+  // cobertura junto con los lookups y la presentacion cierra pidiendo la promo.
+  const zona = parseUbicacion(input.ubicacion ?? input.zona);
+  const [lookup, medios, coberturaRaw] = await Promise.all([
     invocar(PRODUCT_LOOKUP_FN, { product: producto, message: producto }, ctx.apiKey),
     invocar(MEDIA_LOOKUP_FN, { product: producto, presentation: true, includeVideo: true }, ctx.apiKey),
+    zona ? invocar(CHECK_COVERAGE_FN, { region: zona.region, province: zona.provincia, district: zona.distrito }, ctx.apiKey) : null,
   ]);
+  const cobertura = zona ? leerCobertura(coberturaRaw) : null;
 
   const precio = precioUnico(lookup);
   if (!precio.ok) return rechazo(precio.reason, precio.message);
@@ -143,6 +150,8 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
     antes: precio.antes,
     unidad,
     knownAddress: String(ctx.vars.known_address || "").trim(),
+    zona,
+    cobertura,
   });
 
   // Si los lookups ya se comieron el tiempo, no se arranca: no hay que dejar
@@ -183,7 +192,10 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
       pasos: pasos.map((p) => p.paso),
       message: "Presentacion en curso: el saludo ya salio y el resto (fotos, video, beneficio, precio, testimonio"
         + " y la pregunta final con botones) se esta enviando solo en los proximos segundos. NO mandes nada mas"
-        + " en este turno ni repitas nada de eso. Guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task.",
+        + " en este turno ni repitas nada de eso. Guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+        + notaZona(zona, cobertura),
+      zona: zona || undefined,
+      cobertura: cobertura || undefined,
     });
   }
 
@@ -199,7 +211,7 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
     duracionTotalMs: deps.ahora() - inicio,
     message: r.ok
       ? "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso."
-        + " Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+        + " Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task." + notaZona(zona, cobertura)
       : `Se enviaron ${r.enviados.join(", ")} y fallo "${r.fallo.paso}". Manda a mano SOLO lo que falta (campo pendientes), en ese orden, y sigue normal. No repitas lo que ya se envio.`,
   });
 }
@@ -266,13 +278,15 @@ async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
 // material; los de texto van siempre.
 // ---------------------------------------------------------------------------
 
-function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, precio, antes, unidad, knownAddress }) {
+function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, precio, antes, unidad, knownAddress, zona = null, cobertura = null }) {
   const porRol = (rol) => media.find((m) => m && m.role === rol && (m.url || m.mediaUrl));
   const url = (m) => m.url || m.mediaUrl;
   const pasos = [];
   const principal = porRol("principal");
   const testimonio = porRol("testimonio");
-  const pregunta = knownAddress
+  const pregunta = zona
+    ? preguntaPromo({ zona, cobertura, precio, unidad })
+    : knownAddress
     ? { texto: `¿Te lo enviamos a ${knownAddress}, como la vez pasada? 😊`, botones: ["Si, la misma", "Cambiar direccion"] }
     : { texto: "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?", botones: ["Lima", "Provincia"] };
 
@@ -288,7 +302,7 @@ function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, pr
     if (antesDespuesC) pasos.push({ paso: "foto_antes_despues", tipo: "image", body: { link: url(antesDespuesC) } });
     const videoC = porRol("video");
     if (videoC) pasos.push({ paso: "video", tipo: "video", body: { link: url(videoC), caption: `Mira este video corto del *${nombre}* 🎬` } });
-    pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad }) } });
+    pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad, cobertura }) } });
     const sinCabecera = botones(pregunta.texto, pregunta.botones);
     pasos.push(testimonio
       ? {
@@ -313,7 +327,7 @@ function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, pr
   if (video) pasos.push({ paso: "video", tipo: "video", body: { link: url(video), caption: `Mira este video corto del *${nombre}* 🎬` } });
 
   pasos.push({ paso: "beneficio", tipo: "text", body: { body: beneficio } });
-  pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad }) } });
+  pasos.push({ paso: "precio", tipo: "text", body: { body: lineaPrecio({ nombre, precio, antes, unidad, cobertura }) } });
 
   if (testimonio) pasos.push({ paso: "testimonio", tipo: "image", body: { link: url(testimonio), caption: "Lo que dicen nuestros clientes 💬" } });
 
@@ -335,11 +349,15 @@ function conversacionPaga(vars) {
 
 // Msg 6 del prompt. El ladder es el mismo que calcula quote-order: 3 unidades
 // pagan 2, 5 pagan 3 (ver countFreeUnits).
-function lineaPrecio({ nombre, precio, antes, unidad }) {
+function lineaPrecio({ nombre, precio, antes, unidad, cobertura = null }) {
   let cabeza = `*${nombre}* queda en *${soles(precio)}* por ${unidad.sing}`;
   if (antes && antes > precio) cabeza += ` (antes *${soles(antes)}*)`;
   if (precio > FREE_SHIPPING_THRESHOLD) cabeza += " con *envío gratis* 📦";
-  cabeza += ", en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.";
+  // Con la zona conocida no se promete "pagas al recibir" a quien va por agencia
+  // (paga adelanto): eso lo explica la pregunta final.
+  if (cobertura?.cod) cabeza += ", *pagas al recibir* en tu puerta y con *garantía de 30 días* 🛡️ 😊.";
+  else if (cobertura) cabeza += " y con *garantía de 30 días* 🛡️ 😊.";
+  else cabeza += ", en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.";
   return [
     cabeza,
     "",
@@ -348,6 +366,56 @@ function lineaPrecio({ nombre, precio, antes, unidad }) {
     `• 3x2: Lleva 3 ${unidad.plur} por *${soles(precio * 2)}* (pagas solo 2)`,
     `• 5x3: Lleva 5 ${unidad.plur} por *${soles(precio * 3)}* (pagas solo 3)`,
   ].join("\n");
+}
+
+// "Soy de La Libertad / Sánchez Carrión / Huamachuco." (texto del boton de la
+// web) o un objeto {region, provincia, distrito}. Sin las tres partes no hay zona:
+// mejor preguntar Lima/provincia que adivinar.
+function parseUbicacion(valor) {
+  if (!valor) return null;
+  let partes;
+  if (isPlainObject(valor)) {
+    partes = [valor.region || valor.departamento, valor.provincia || valor.province, valor.distrito || valor.district];
+  } else {
+    const texto = String(valor).replace(/https?:\/\/\S+/g, "").replace(/^.*\bsoy de\s+/i, "");
+    partes = texto.split("/");
+  }
+  partes = partes.map((p) => String(p || "").replace(/[.\s]+$/, "").trim());
+  if (partes.length !== 3 || partes.some((p) => !p || p.length > 60)) return null;
+  const [region, provincia, distrito] = partes;
+  return { region, provincia, distrito };
+}
+
+// La respuesta de check-coverage, reducida a lo que decide el mensaje. Si la
+// consulta fallo, null: se pregunta la promo sin prometer forma de pago.
+function leerCobertura(res) {
+  if (!res || typeof res.cashOnDelivery !== "boolean") return null;
+  if (res.cashOnDelivery) return { cod: true };
+  return { cod: false, courier: String(res.courier || "Shalom"), adelanto: Number(res.advanceAmount) || 0 };
+}
+
+function preguntaPromo({ zona, cobertura, precio, unidad }) {
+  const lugar = `*${zona.distrito}*`;
+  let texto;
+  if (cobertura?.cod) {
+    texto = `¡Genial! A ${lugar} te lo llevamos a tu puerta y *pagas al recibir* 🏠\n\n¿Qué promoción prefieres?`;
+  } else if (cobertura) {
+    const adelanto = cobertura.adelanto > 0 ? `separas con un adelanto de *${soles(cobertura.adelanto)}* y ` : "";
+    texto = `Para ${lugar} te lo enviamos por agencia *${cobertura.courier}*: ${adelanto}el saldo lo pagas al recoger 📦\n\n¿Qué promoción prefieres?`;
+  } else {
+    texto = `¿Qué promoción prefieres para tu envío a ${lugar}? 😊`;
+  }
+  return {
+    texto,
+    botones: [`1 ${unidad.sing} (${soles(precio)})`, `3x2 (${soles(precio * 2)})`, `5x3 (${soles(precio * 3)})`],
+  };
+}
+
+function notaZona(zona, cobertura) {
+  if (!zona) return "";
+  const modo = cobertura ? (cobertura.cod ? "contraentrega" : `agencia ${cobertura.courier}, adelanto S/${cobertura.adelanto}`) : "cobertura no confirmada";
+  return ` La zona ya vino en el mensaje (${zona.region} / ${zona.provincia} / ${zona.distrito}; ${modo}) y la pregunta`
+    + " final ya pidio la promo: guarda region, provincia y distrito con save_order_state. NO preguntes Lima/provincia ni el distrito.";
 }
 
 function botones(bodyText, titulos) {
@@ -629,5 +697,5 @@ function json(body, status = 200) {
 }
 
 globalThis.__kenkuSendPresentation = {
-  handler, handleRequest, armarSecuencia, conversacionPaga, lineaPrecio, precioUnico, unidadDe, nombreCorto, sanitize, deps,
+  handler, handleRequest, armarSecuencia, conversacionPaga, parseUbicacion, leerCobertura, preguntaPromo, lineaPrecio, precioUnico, unidadDe, nombreCorto, sanitize, deps,
 };
