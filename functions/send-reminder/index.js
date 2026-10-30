@@ -19,10 +19,18 @@ const KAPSO = "https://api.kapso.ai";
 const TEXTO = "Aquí sigo por si lo quieres retomar 🙌 Me escribes y te lo dejo listo en un toque.";
 
 // La busqueda de la foto no puede comerse el invoke (Kapso corta a los 30 s):
-// si tarda, se manda el texto solo.
-const LOOKUP_TIMEOUT_MS = 12000;
+// tiene 22 s en total y quedan ~8 s para el envio. Si falla, se reintenta una
+// vez mientras quede tiempo. Medido 2026-10-30: a las 07:00 salen juntos los
+// recordatorios retenidos por el horario nocturno (~150) y con un solo intento
+// de 12 s la mitad se quedaba sin foto; la misma busqueda, en calma, tarda ~1 s.
+const LOOKUP_BUDGET_MS = 22000;
+const PAUSA_REINTENTO_MS = 1000;
 
-const deps = { fetch: (...a) => fetch(...a) };
+const deps = {
+  fetch: (...a) => fetch(...a),
+  ahora: () => Date.now(),
+  dormir: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
 
 async function handler(request, env = globalThis) {
   return handleRequest(request, env);
@@ -60,8 +68,23 @@ async function handleRequest(request, env = globalThis) {
 }
 
 async function primeraFoto(input, apiKey, busqueda = {}) {
+  const limite = deps.ahora() + LOOKUP_BUDGET_MS;
+  for (let intento = 1; intento <= 2; intento += 1) {
+    const restante = limite - deps.ahora();
+    if (restante < 2000) break;
+    const foto = await buscarFoto(input, apiKey, busqueda, restante);
+    if (foto) return foto;
+    // Si la busqueda respondio bien pero el producto no tiene foto, no hay que reintentar.
+    if (String(busqueda.motivo || "").startsWith("sin_foto")) break;
+    busqueda.intentos = intento;
+    if (intento === 1) await deps.dormir(PAUSA_REINTENTO_MS);
+  }
+  return "";
+}
+
+async function buscarFoto(input, apiKey, busqueda, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await deps.fetch(`${KAPSO}/platform/v1/functions/${MEDIA_LOOKUP_FN}/invoke`, {
       method: "POST",

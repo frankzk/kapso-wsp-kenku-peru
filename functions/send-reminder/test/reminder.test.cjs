@@ -8,11 +8,15 @@ require(path.join(__dirname, "..", "index.js"));
 const R = globalThis.__kenkuSendReminder;
 const env = { KAPSO_API_KEY: "k" };
 
-function red({ media = [], lookupOk = true, imagenFalla = false } = {}) {
+R.deps.dormir = async () => {};
+function red({ media = [], lookupOk = true, imagenFalla = false, fallasLookup = 0 } = {}) {
   const enviados = [];
+  let lookups = 0;
   R.deps.fetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
     if (url.includes("/invoke")) {
+      lookups += 1;
+      if (lookups <= fallasLookup) return { ok: false, status: 500, json: async () => ({}) };
       return { ok: lookupOk, json: async () => ({ data: { ok: true, media } }) };
     }
     enviados.push(body);
@@ -55,6 +59,19 @@ const foto = { mediaType: "image", url: "https://kenku.pe/wp-content/uploads/fot
       assert.strictEqual(r.sent, "text");
       assert.strictEqual(enviados.length, 1);
     }
+  });
+  await caso("la busqueda falla una vez (rafaga de las 07:00): se reintenta y sale la foto", async () => {
+    const enviados = red({ media: [foto], fallasLookup: 1 });
+    const r = await leer(await R.handleRequest(req({ last_product_handle: "cayenne" }), env));
+    assert.strictEqual(r.sent, "image");
+    assert.strictEqual(enviados.length, 1);
+  });
+  await caso("producto sin foto: no reintenta y sale el texto", async () => {
+    const enviados = red({ media: [] });
+    const r = await leer(await R.handleRequest(req({ last_product_handle: "cayenne" }), env));
+    assert.strictEqual(r.sent, "text");
+    assert.ok(r.diag.busqueda.startsWith("sin_foto"));
+    assert.strictEqual(enviados.length, 1);
   });
   await caso("si Meta rechaza la foto, sale el texto (el cliente recibe uno)", async () => {
     const enviados = red({ media: [foto], imagenFalla: true });
