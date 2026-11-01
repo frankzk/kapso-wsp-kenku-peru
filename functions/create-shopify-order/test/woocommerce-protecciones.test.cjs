@@ -17,6 +17,9 @@ const CATALOG = { products: [
 let calls = [];
 let coverageMode = "contraentrega";
 let orderNumber = 200123;
+// Pedidos que devuelve la busqueda de la tienda (GET /orders?search=): los que hacen las vendedoras a mano.
+let storeOrders = [];
+let storeFails = false;
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const body = opts.body ? JSON.parse(opts.body) : null;
@@ -25,6 +28,10 @@ globalThis.fetch = async (url, opts = {}) => {
   if (u === "https://tienda.test/wp-json/wc/v3/orders" && opts.method === "POST") {
     const n = orderNumber++;
     return new Response(JSON.stringify({ id: n - 199600, number: `KP${n}`, total: "273.00" }), { status: 201 });
+  }
+  if (u.startsWith("https://tienda.test/wp-json/wc/v3/orders?") && (opts.method || "GET") === "GET") {
+    if (storeFails) return new Response(JSON.stringify({ message: "boom" }), { status: 500 });
+    return new Response(JSON.stringify(storeOrders));
   }
   if (/\/wp-json\/wc\/v3\/orders\/\d+\/notes$/.test(u)) return new Response("{}", { status: 201 });
   if (u.includes("/functions/05a6107d-6488-4bb3-8088-9f2fce140b5e/invoke")) return new Response(JSON.stringify({ shippingMode: coverageMode }));
@@ -53,7 +60,7 @@ function fakeKV(init = {}) {
 require("../index.js");
 const api = globalThis.__kenkuCreateShopifyOrder;
 const WOO = { WOO_STORE_URL: "https://tienda.test/", WOO_CONSUMER_KEY: "ck_x", WOO_CONSUMER_SECRET: "cs_y", KAPSO_API_KEY: "kap" };
-const envWoo = (kv = fakeKV()) => ({ ...WOO, STORE_BACKEND: "woocommerce", KV: kv });
+const envWoo = (kv = fakeKV(), extra = { STORE_DUPLICATE_CHECK: "on" }) => ({ ...WOO, STORE_BACKEND: "woocommerce", KV: kv, ...extra });
 const call = async (body, env) => (await api.handleRequest(new Request("https://x/", { method: "POST", body: JSON.stringify(body) }), env)).json();
 const posts = () => calls.filter((c) => c.method === "POST" && c.url.endsWith("/wp-json/wc/v3/orders"));
 const meta = (order) => Object.fromEntries(order.meta_data.map((m) => [m.key, m.value]));
@@ -81,7 +88,7 @@ caso("caso feliz: crea el pedido, guarda el candado y registra el A/D (misma res
   assert.strictEqual(posts().length, 1);
   // Candado: misma clave y misma firma que en Shopify (IDs de variante de Shopify del catalogo).
   const lock = kv.puts.find((p) => p.k === "order_lock:987654321");
-  assert.deepStrictEqual([lock.v.orderName, lock.v.signature, lock.o.expirationTtl], ["#KP200123", SIG, 6 * 3600]);
+  assert.deepStrictEqual([lock.v.orderName, lock.v.signature, lock.o.expirationTtl], ["#KP200123", SIG, 48 * 3600]);
   // A/D: la variante asignada al lead (vars), el total y las unidades.
   const ab = kv.puts.find((p) => p.k.startsWith("abx_order:"));
   assert.strictEqual(ab.k, `abx_order:${limaDay}:D:conv1:#KP200123`);
@@ -193,6 +200,89 @@ caso("dryRun: corren las comprobaciones, no crea ni escribe nada y devuelve el o
   assert.deepStrictEqual([dup.reason, dup.dryRun, dup.order.name], ["duplicate_prevented", true, "#KP200001"]);
 });
 
+// --- Pedido identico ya registrado en la tienda (las vendedoras cierran a mano) ---
+const hace = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString().slice(0, 19);
+// Mismo pedido que base: Bividi L (producto 25, variacion 27) x3 + Rodillera (simple, 46) x1.
+const manual = (extra = {}) => ({
+  id: 9001, number: "KP201478", status: "cod-pending", date_created_gmt: hace(20),
+  billing: { phone: "+51 987 654 321" },
+  line_items: [{ product_id: 46, variation_id: 0, quantity: 1 }, { product_id: 25, variation_id: 27, quantity: 3 }],
+  ...extra,
+});
+
+caso("tienda: pedido identico de una vendedora hace 20 h -> no crea, avisa y pide handoff", async () => {
+  storeOrders = [manual()];
+  const kv = fakeKV();
+  const r = await call({ input: base }, envWoo(kv));
+  assert.deepStrictEqual([r.ok, r.duplicate, r.reason, r.order.name], [false, true, "duplicate_store_order", "#KP201478"]);
+  assert.ok(r.message.includes("#KP201478") && r.message.includes("handoff_to_human"), r.message);
+  assert.strictEqual(posts().length, 0, "no se crea el segundo pedido");
+  assert.strictEqual(kv.puts.length, 0, "ni candado ni registro A/D");
+  const q = new URL(calls.find((c) => c.url.includes("/wc/v3/orders?")).url).searchParams;
+  assert.deepStrictEqual([q.get("search"), q.get("dates_are_gmt"), q.get("status")], ["987654321", "true", "any"]);
+  assert.ok(Math.abs(Date.parse(q.get("after") + "Z") - (Date.now() - 48 * 3600 * 1000)) < 60000, "ventana de 48 h");
+});
+
+caso("tienda: misma cantidad pero en otro orden de lineas -> igual es duplicado", async () => {
+  storeOrders = [manual({ line_items: [{ product_id: 25, variation_id: 27, quantity: 3 }, { product_id: 46, variation_id: 0, quantity: 1 }] })];
+  const r = await call({ input: base }, envWoo());
+  assert.strictEqual(r.reason, "duplicate_store_order");
+});
+
+for (const [n, extra] of [
+  ["otra cantidad", { line_items: [{ product_id: 46, variation_id: 0, quantity: 1 }, { product_id: 25, variation_id: 27, quantity: 1 }] }],
+  ["otra talla (otra variacion)", { line_items: [{ product_id: 46, variation_id: 0, quantity: 1 }, { product_id: 25, variation_id: 26, quantity: 3 }] }],
+  ["un producto de mas", { line_items: [{ product_id: 46, variation_id: 0, quantity: 1 }, { product_id: 25, variation_id: 27, quantity: 3 }, { product_id: 99, variation_id: 0, quantity: 1 }] }],
+  ["un producto de menos", { line_items: [{ product_id: 25, variation_id: 27, quantity: 3 }] }],
+  ["hace 49 h (fuera de la ventana)", { date_created_gmt: hace(49) }],
+  ["pedido cancelado", { status: "cancelled" }],
+  ["otro celular (la busqueda trae coincidencias parciales)", { billing: { phone: "+51 987 654 329" } }],
+]) {
+  caso(`tienda: ${n} -> no es duplicado y se crea`, async () => {
+    storeOrders = [manual(extra)];
+    const r = await call({ input: base }, envWoo());
+    assert.strictEqual(r.ok, true, JSON.stringify(r));
+    assert.ok(!r.duplicate);
+    assert.strictEqual(posts().length, 1);
+  });
+}
+
+caso("tienda: si la busqueda falla, el pedido se crea igual (no se bloquea a ciegas)", async () => {
+  storeFails = true;
+  const r = await call({ input: base }, envWoo());
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(posts().length, 1);
+});
+
+caso("tienda: el candado del bot va primero (reintento en el mismo chat: solo confirma)", async () => {
+  storeOrders = [manual()];
+  const kv = fakeKV({ "order_lock:987654321": JSON.stringify({ orderName: "#KP200001", signature: SIG }) });
+  const r = await call({ input: base }, envWoo(kv));
+  assert.deepStrictEqual([r.reason, r.order.name], ["duplicate_prevented", "#KP200001"]);
+});
+
+caso("tienda: en dryRun tambien se detecta, y sin duplicado lo informa en la respuesta", async () => {
+  storeOrders = [manual()];
+  const dup = await call({ input: { ...base, dryRun: true } }, envWoo());
+  assert.deepStrictEqual([dup.reason, dup.dryRun], ["duplicate_store_order", true]);
+  storeOrders = [];
+  const ok = await call({ input: { ...base, dryRun: true } }, envWoo());
+  assert.strictEqual(ok.storeDuplicateCheck, "sin_duplicado");
+  storeFails = true;
+  const err = await call({ input: { ...base, dryRun: true } }, envWoo());
+  assert.ok(err.storeDuplicateCheck.startsWith("error:"), err.storeDuplicateCheck);
+  assert.strictEqual(posts().length, 0);
+});
+
+caso("tienda: sin STORE_DUPLICATE_CHECK=on los pedidos reales no consultan la tienda (dryRun si)", async () => {
+  storeOrders = [manual()];
+  const r = await call({ input: base }, envWoo(fakeKV(), {}));
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.ok(!calls.some((c) => c.url.includes("/wc/v3/orders?")), "no consulto la tienda");
+  const dry = await call({ input: { ...base, dryRun: true } }, envWoo(fakeKV(), {}));
+  assert.strictEqual(dry.reason, "duplicate_store_order");
+});
+
 caso("agencia declarada por el agente: logistics_validation_required antes de todo (igual que Shopify)", async () => {
   const r = await call({ input: { ...base, coverage: { shippingMode: "agencia" } } }, envWoo());
   assert.strictEqual(r.reason, "logistics_validation_required");
@@ -205,6 +295,8 @@ caso("agencia declarada por el agente: logistics_validation_required antes de to
     calls = [];
     coverageMode = "contraentrega";
     orderNumber = 200123;
+    storeOrders = [];
+    storeFails = false;
     try { await fn(); console.log(`ok    ${n}`); } catch (e) { fallos += 1; console.log(`FALLA ${n}\n      ${e.message}`); }
   }
   console.log(`\n${casos.length - fallos}/${casos.length}`);

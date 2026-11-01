@@ -260,8 +260,101 @@ async function duplicateOrderResponse(env, phoneKey, orderSig, customerLookup, e
     ...extra,
     stage: "orden creada",
     conversionStatus: "already_registered",
-    message: `Ya existe un pedido reciente identico (${existingLock.orderName}) para este numero; NO se creo uno nuevo. Confirma al cliente que su pedido ${existingLock.orderName} ya quedo registrado (no se duplico) y pregunta si necesita algo mas.`,
+    message: `Ya existe un pedido reciente identico (${existingLock.orderName}) para este numero; NO se creo uno nuevo. Confirma al cliente que su pedido ${existingLock.orderName} ya quedo registrado (no se duplico) y pregunta si necesita algo mas. Si quiere OTRO pedido igual, llama handoff_to_human con el resumen para que una asesora lo registre.`,
     order: { name: existingLock.orderName },
+    customerLookup,
+  });
+}
+
+// Pedido identico ya registrado EN LA TIENDA (no solo por el bot): las
+// vendedoras pausan el bot y cierran a mano, por chat o por llamada. Medido el
+// 2026-10-31: de 111 chats pausados a mano en 48 h, 64 ya tenian pedido en
+// WooCommerce creado durante esa conversacion, y el candado del KV no los ve
+// porque solo guarda los que crea esta funcion. Si el cliente vuelve a escribir
+// y el bot lo lleva al cierre, crearia un segundo pedido.
+// Regla (acordada con el negocio): mismo celular (ultimos 9 digitos), creado en
+// las ultimas 48 h, no cancelado, y EXACTAMENTE los mismos productos (misma
+// variante) con las mismas cantidades. Si cambia algo, el pedido se crea normal.
+const STORE_DUPLICATE_WINDOW_MS = 48 * 3600 * 1000;
+const STORE_DUPLICATE_TIMEOUT_MS = 6000;
+const WOO_DUPLICATE_SKIP_STATUSES = new Set(["cancelled", "failed", "trash", "checkout-draft", "refunded"]);
+
+// Firma por IDs de WooCommerce: la variacion si la hay, si no el producto.
+function wooItemsSignature(items) {
+  return (items || [])
+    .map((it) => `${Number(it.variationId) || Number(it.productId) || 0}x${Number(it.quantity) || 0}`)
+    .sort()
+    .join(",");
+}
+
+function wooLinesSignature(lines) {
+  return wooItemsSignature(lines.map((line) => ({
+    productId: line.product.woo_id,
+    variationId: line.variant.woo_id !== line.product.woo_id ? line.variant.woo_id : 0,
+    quantity: line.quantity,
+  })));
+}
+
+/**
+ * Busca en WooCommerce un pedido identico del mismo celular en las ultimas 48 h. Devuelve
+ * { found, order } o { found: false, error } si la tienda no respondio: en ese caso el pedido
+ * sigue (la creacion tambien depende de la tienda, asi que no se bloquea a ciegas).
+ */
+async function findWooDuplicateOrder(woo, phone, lines, now = Date.now()) {
+  const national = phoneDigits(phone).slice(-9);
+  if (national.length !== 9) return { found: false, error: "sin_celular" };
+  const desde = new Date(now - STORE_DUPLICATE_WINDOW_MS).toISOString().slice(0, 19);
+  const query = new URLSearchParams({
+    search: national,
+    after: desde,
+    dates_are_gmt: "true",
+    status: "any",
+    per_page: "20",
+    orderby: "date",
+    order: "desc",
+    _fields: "id,number,status,date_created_gmt,billing,line_items",
+  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STORE_DUPLICATE_TIMEOUT_MS);
+  let orders;
+  try {
+    orders = await wooApi(woo, `/orders?${query}`, { signal: controller.signal });
+  } catch (error) {
+    return { found: false, error: safeError(error) };
+  } finally {
+    clearTimeout(timer);
+  }
+  const wanted = wooLinesSignature(lines);
+  for (const order of Array.isArray(orders) ? orders : []) {
+    if (WOO_DUPLICATE_SKIP_STATUSES.has(order.status)) continue;
+    if (!samePhoneDigits(order.billing?.phone, phone)) continue;
+    const created = Date.parse(`${String(order.date_created_gmt || "").replace(/Z$/, "")}Z`);
+    if (!(created >= now - STORE_DUPLICATE_WINDOW_MS)) continue;
+    const sig = wooItemsSignature((order.line_items || []).map((li) => ({
+      productId: li.product_id,
+      variationId: li.variation_id,
+      quantity: li.quantity,
+    })));
+    if (sig === wanted) {
+      return {
+        found: true,
+        order: { name: `#${order.number}`, status: order.status, createdAt: new Date(created).toISOString() },
+      };
+    }
+  }
+  return { found: false };
+}
+
+function storeDuplicateResponse(existing, customerLookup, extra = {}) {
+  const horas = Math.max(1, Math.round((Date.now() - Date.parse(existing.createdAt)) / 3600000));
+  return json({
+    ok: false,
+    duplicate: true,
+    reason: "duplicate_store_order",
+    ...extra,
+    existingOrder: existing,
+    order: { name: existing.name },
+    message: `NO se creo el pedido: este celular ya tiene el pedido ${existing.name} (registrado hace ~${horas} h) con exactamente los mismos productos y cantidades. Dile al cliente que su pedido ${existing.name} ya esta registrado y no se duplico, y llama handoff_to_human con el resumen para que una asesora confirme si quiere un pedido adicional. NO vuelvas a llamar create_shopify_order para este pedido.`,
     customerLookup,
   });
 }
@@ -342,6 +435,7 @@ async function wooApi(woo, path, options = {}) {
       "User-Agent": "Kenku-Kapso-Order/1.0",
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
+    signal: options.signal,
   });
   const text = await response.text();
   let body = null;
@@ -656,6 +750,14 @@ async function handleWooOrder(input, env, payload = {}) {
     const duplicate = await duplicateOrderResponse(env, phoneKey, orderSig, customerLookup, dryRun ? { dryRun: true, backend: "woocommerce" } : { backend: "woocommerce" });
     if (duplicate) return duplicate;
   }
+  // 5b. Pedido identico ya registrado en la tienda (incluye los que hacen las vendedoras a mano). Se
+  // activa con el secreto STORE_DUPLICATE_CHECK=on; en dryRun corre siempre, para probarlo con pedidos
+  // reales antes de activarlo.
+  const storeCheckOn = dryRun || (await getEnvValue(env, "STORE_DUPLICATE_CHECK")).toLowerCase() === "on";
+  const storeDuplicate = storeCheckOn ? await findWooDuplicateOrder(woo, phone || input.phone, lines) : { found: false, off: true };
+  if (storeDuplicate.found) {
+    return storeDuplicateResponse(storeDuplicate.order, customerLookup, dryRun ? { dryRun: true, backend: "woocommerce" } : { backend: "woocommerce" });
+  }
 
   if (dryRun) {
     return json({
@@ -666,6 +768,7 @@ async function handleWooOrder(input, env, payload = {}) {
       outOfStockVariants,
       location,
       pricing: { discountTotal, shippingFee, subtotal: computed?.subtotalBeforeDiscount ?? null },
+      storeDuplicateCheck: storeDuplicate.error ? `error: ${storeDuplicate.error}` : "sin_duplicado",
       orderPreview: order,
       internalNote: note,
     });
@@ -1656,9 +1759,12 @@ function promoVariant(phone) {
 
 // Ventana del candado anti-duplicado por numero (segundos). Un pedido IDENTICO
 // (mismos variantes+cantidades) al mismo numero dentro de esta ventana se
-// considera duplicado y no se vuelve a crear. 6h cubre el caso de threads
-// separados sin bloquear una re-compra genuina al dia siguiente.
-const DUPLICATE_WINDOW_SECONDS = 6 * 3600;
+// considera duplicado y no se vuelve a crear. 48h (antes 6h), la misma ventana
+// que la busqueda en la tienda (ver findWooDuplicateOrder): el caso tipico es
+// el cliente que compro y al dia siguiente vuelve a escribir. Una re-compra
+// genuina no se pierde: el bot confirma el pedido que ya existe y, si el
+// cliente quiere otro, lo pasa a una asesora.
+const DUPLICATE_WINDOW_SECONDS = 48 * 3600;
 
 // Firma determinista del pedido: variantes + cantidades ordenadas. Dos pedidos
 // con la misma firma son el mismo pedido.
@@ -1991,6 +2097,8 @@ function safeError(error) {
 }
 
 globalThis.__kenkuCreateShopifyOrder = {
+  findWooDuplicateOrder,
+  wooItemsSignature,
   abVariant,
   promoVariant,
   varianteAsignada,
