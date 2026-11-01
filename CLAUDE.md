@@ -110,6 +110,12 @@
   send-buttons (2026-07-05, para enviar botones por el proxy Meta) y
   loop-guard (2026-07-05, para leer el historial de la conversacion); Telegram en notify-team, check-coverage y campaign-report;
   DASHBOARD_ACCESS_KEY y WHATSAPP_PHONE_NUMBER_IDS en campaign-report.
+- `STORE_DUPLICATE_CHECK=on` en create-shopify-order (2026-11-01): antes de crear
+  el pedido busca en WooCommerce uno IDENTICO del mismo celular en las ultimas
+  48 h (mismos productos/variantes y cantidades, no cancelado), incluidos los que
+  crean las vendedoras a mano; si lo hay no crea y deriva a asesora. Para
+  apagarlo, borrar el secreto o ponerlo en otro valor (en dryRun corre siempre).
+  El codigo vive en la rama `claude/bot-kenku-woocommerce-completo`.
 
 ## Datos del proyecto Kenku
 
