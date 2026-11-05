@@ -35,8 +35,21 @@ caso("solo cancelados o devueltos: sin postventa", () => {
 });
 caso("sin cliente o sin pedido: las tres variables en null (no quedan valores viejos)", () => {
   for (const o of [undefined, null, {}, { name: "#KP1" }]) {
-    assert.deepStrictEqual(L.recentOrderVars(o, ahora), { recent_order_name: null, recent_order_at: null, recent_order_hours: null });
+    assert.deepStrictEqual(L.recentOrderVars(o, ahora), { recent_order_name: null, recent_order_at: null, recent_order_hours: null, recent_order_items: null });
   }
+});
+caso("recent_order_items: cantidad y nombre corto de lo que compro", () => {
+  const p = { ...pedido(202419, 37), line_items: [
+    { name: "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Etíope Alta Potencia (60 Cápsulas)", quantity: 2 },
+    { name: "Cayenne Pepper (60 cápsulas)", quantity: 1 },
+  ] };
+  const v = L.recentOrderVars(L.wooCustomerFromOrders([p]).recentOrder, ahora);
+  assert.strictEqual(v.recent_order_items, "2x SUPER HUMAN Ethiopian Black Seed Oil, 1x Cayenne Pepper");
+});
+caso("pedido sin line_items: recent_order_items null, el resto igual", () => {
+  const v = L.recentOrderVars(L.wooCustomerFromOrders([pedido(1, 5)]).recentOrder, ahora);
+  assert.strictEqual(v.recent_order_name, "#KP1");
+  assert.strictEqual(v.recent_order_items, null);
 });
 
 let fallos = 0;

@@ -583,7 +583,7 @@ async function wooSearchOrders(woo, term, ms) {
     status: "any",
     orderby: "date",
     order: "desc",
-    _fields: "id,number,status,total,currency,date_created_gmt,date_paid_gmt,payment_method,customer_id,billing",
+    _fields: "id,number,status,total,currency,date_created_gmt,date_paid_gmt,payment_method,customer_id,billing,line_items",
   });
   const response = await fetchConTiempo(`${woo.storeUrl}/wp-json/wc/v3/orders?${query}`, {
     headers: {
@@ -654,7 +654,24 @@ function wooRecentOrder(sortedOrders) {
     name: `#${order.number || order.id}`,
     processedAt: `${String(order.date_created_gmt).slice(0, 19)}Z`,
     status: order.status || null,
+    items: wooOrderItems(order.line_items),
   };
+}
+
+// "2x SUPER HUMAN Ethiopian Black Seed Oil, 1x Cayenne Pepper": lo que compro,
+// para que en postventa el bot de el modo de uso sin preguntar el producto y
+// no confunda "Super Human" (el que ya compro) con un pedido nuevo. Medido
+// 2026-11-05: 4 de 5 clientes en postventa preguntaron como tomarlo y el bot
+// les pidio el nombre; al darlo, les presento el producto como venta nueva.
+function wooOrderItems(lineItems) {
+  if (!Array.isArray(lineItems)) return null;
+  const items = lineItems
+    .map((li) => {
+      const nombre = String(li?.name || "").split(/\s[–—-]\s|\s\(/)[0].trim().slice(0, 70);
+      return nombre ? `${Number(li.quantity) || 1}x ${nombre}` : null;
+    })
+    .filter(Boolean);
+  return items.length ? items.join(", ") : null;
 }
 
 async function shopifyGraphql(config, query, variables) {
@@ -721,10 +738,11 @@ function recentOrderVars(order, now = Date.now()) {
   const at = Date.parse(order?.processedAt || "");
   const hours = (now - at) / 3600000;
   if (!order?.name || !Number.isFinite(hours) || hours < 0 || hours > RECENT_ORDER_HOURS) {
-    return { recent_order_name: null, recent_order_at: null, recent_order_hours: null };
+    return { recent_order_name: null, recent_order_at: null, recent_order_hours: null, recent_order_items: null };
   }
   return {
     recent_order_name: order.name,
+    recent_order_items: order.items || null,
     recent_order_at: new Date(at).toISOString(),
     recent_order_hours: Math.round(hours * 10) / 10,
   };
@@ -1116,4 +1134,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders, wooRecentOrder, recentOrderVars, RECENT_ORDER_HOURS };
+globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders, wooRecentOrder, wooOrderItems, recentOrderVars, RECENT_ORDER_HOURS };
