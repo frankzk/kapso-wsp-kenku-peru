@@ -641,6 +641,19 @@ function wooCustomerFromOrders(orders) {
       name: `#${last.number || last.id}`,
       processedAt: last.date_created_gmt ? `${String(last.date_created_gmt).slice(0, 19)}Z` : null,
     },
+    recentOrder: wooRecentOrder(sorted),
+  };
+}
+
+// Pedido vigente mas reciente (sin cancelados ni devueltos), para el modo
+// postventa: ver recentOrderVars.
+function wooRecentOrder(sortedOrders) {
+  const order = sortedOrders.find((o) => !["cancelled", "refunded", "failed"].includes(o.status));
+  if (!order?.date_created_gmt) return null;
+  return {
+    name: `#${order.number || order.id}`,
+    processedAt: `${String(order.date_created_gmt).slice(0, 19)}Z`,
+    status: order.status || null,
   };
 }
 
@@ -691,6 +704,29 @@ function buildFlowVars(match, addressSummary, adReferral, phone, contact = {}, a
     promo_variant: asignada.promo || promoVariant(phone),
     // "consulta" | "link" | "otro" — como llego el lead (ver classifyEntry).
     entry_type: adReferral?.entryType || "otro",
+    ...recentOrderVars(match?.recentOrder),
+  };
+}
+
+// Compra reciente -> modo postventa. Medido 2026-11-03: en 72 h, 37 clientes que
+// acababan de comprar recibieron 129 mensajes de venta (14 con el 10% de
+// descuento), 27 en las 2 h siguientes a su compra. Pasa asi: el cliente responde
+// "ok" a la confirmacion, la conversacion ya estaba cerrada y se abre otra; el bot
+// lo trataba como lead nuevo y arrancaba la presentacion y los seguimientos. Con
+// estas variables el agente responde en modo postventa y check-coverage
+// (fu-terminal) no arranca los seguimientos.
+const RECENT_ORDER_HOURS = 72;
+
+function recentOrderVars(order, now = Date.now()) {
+  const at = Date.parse(order?.processedAt || "");
+  const hours = (now - at) / 3600000;
+  if (!order?.name || !Number.isFinite(hours) || hours < 0 || hours > RECENT_ORDER_HOURS) {
+    return { recent_order_name: null, recent_order_at: null, recent_order_hours: null };
+  }
+  return {
+    recent_order_name: order.name,
+    recent_order_at: new Date(at).toISOString(),
+    recent_order_hours: Math.round(hours * 10) / 10,
   };
 }
 
@@ -1080,4 +1116,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders };
+globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders, wooRecentOrder, recentOrderVars, RECENT_ORDER_HOURS };
