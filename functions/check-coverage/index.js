@@ -435,6 +435,10 @@ async function routeFollowup(payload, env) {
       if (edges.includes("respondio") && await hasLiveUnansweredInbound(payload, env)) {
         return json({ next_edge: "respondio", reason: "live_unanswered_inbound" });
       }
+      // Cliente que compro en las ultimas 72 h (customer-lookup deja
+      // recent_order_*): se le contesta lo que pregunte, pero sin la escalera de
+      // seguimientos de venta ni el 10% de descuento.
+      if (compraReciente(vars)) return json({ next_edge: "terminar", reason: "compra_reciente" });
       return json({ next_edge: "seguir" });
     }
 
@@ -451,6 +455,16 @@ async function routeFollowup(payload, env) {
   } catch (error) {
     return json({ next_edge: "respondio", error: error instanceof Error ? error.message : String(error) });
   }
+}
+
+const COMPRA_RECIENTE_HORAS = 72;
+
+function compraReciente(vars, now = Date.now()) {
+  if (!vars.recent_order_name) return false;
+  const at = Date.parse(String(vars.recent_order_at || ""));
+  if (!Number.isFinite(at)) return false;
+  const horas = (now - at) / 3600000;
+  return horas >= 0 && horas <= COMPRA_RECIENTE_HORAS;
 }
 
 async function hasNewerFollowupGeneration(payload, vars, env) {
@@ -1433,6 +1447,7 @@ async function watchdogAdmin(payload, env) {
 }
 
 globalThis.__kenkuCheckCoverage = {
+  compraReciente,
   brazoSeguimiento,
   hasLiveUnansweredInbound,
   esCierreTrivial,
