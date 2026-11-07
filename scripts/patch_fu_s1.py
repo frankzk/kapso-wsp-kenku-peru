@@ -8,11 +8,11 @@ Uso:
   python3 scripts/patch_fu_s1.py ENTRADA.json --revertir --out SALIDA.json
 
 ENTRADA es el GET del workflow ({"data": {"definition": ..., "lock_version": N}}),
-una salida de este mismo script ({"workflow": {...}}) o una definicion suelta
+una salida de este mismo script ({"flow": {...}}) o una definicion suelta
 ({"nodes": [...], "edges": [...]}).
 
 Escribe SALIDA con el cuerpo listo para el PATCH:
-  {"workflow": {"definition": {...}, "lock_version": N}}
+  {"flow": {"definition": {...}, "lock_version": N}}  (forma que acepta PATCH /workflows/{id})
 (sin lock_version si la entrada no lo trae). Antes del PATCH, volver a hacer
 GET: el lock_version tiene que ser el VIGENTE, no el de este archivo.
 
@@ -80,8 +80,8 @@ def falla(msg):
 def cargar(path):
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
-    # GET ({"data": ...}), salida de este script ({"workflow": ...}) o suelta.
-    data = (raw.get("data") or raw.get("workflow") or raw) if isinstance(raw, dict) else None
+    # GET ({"data": ...}), salida de este script ({"flow": ...}) o suelta.
+    data = (raw.get("data") or raw.get("flow") or raw.get("workflow") or raw) if isinstance(raw, dict) else None
     if not isinstance(data, dict):
         falla("la entrada no es un objeto JSON")
     definition = data.get("definition", data)
@@ -202,9 +202,9 @@ def main():
     verificar_aristas(definition)
     n_refs = verificar_function_ids(definition)
 
-    cuerpo = {"workflow": {"definition": definition}}
+    cuerpo = {"flow": {"definition": definition}}
     if lock_version is not None:
-        cuerpo["workflow"]["lock_version"] = lock_version
+        cuerpo["flow"]["lock_version"] = lock_version
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(cuerpo, f, ensure_ascii=False, indent=2)
         f.write("\n")
