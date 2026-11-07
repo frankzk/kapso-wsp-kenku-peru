@@ -601,3 +601,15 @@ para todos; si cae, se vuelve a F. Guardarrail: solo ve caidas de ~2,4 pp o mas.
 
 **OJO al desplegar el workflow desde otra rama:** la salida `saltar` de `fu-g4`
 se agrego por API; un `kapso push` con un definition viejo la borraria.
+
+**Cambios que caen dentro de la ventana de F/R (anotados para la lectura).**
+Aplican a los dos brazos por igual, asi que la comparacion F vs R sigue valida;
+lo que se mueve es la base absoluta de las dos.
+- 2026-11-07 ~13:00 (Lima), funciones: direccion guardada limpia en el Msg 8
+  (customer-lookup), el s2 ya no dice "pagas al recibir" a quien espera el
+  voucher (send-followup-envio), tres toques al boton del anuncio no se
+  silencian como loop (loop-guard), send-payment con candado de reenvio y total
+  opcional, check-coverage con `comprar_despues` terminal y la salida
+  `saltar_voucher` (sin efecto hasta que el flujo tenga esa salida).
+- Pendiente de aprobacion: prompt de higiene + salida `saltar_voucher` en
+  fu-g3/fu-g6 + save-order-state. Anotar aca la hora en que se aplique.
