@@ -33,6 +33,13 @@ async function handleRequest(request, env = globalThis) {
   const payload = enrichPayload(await readJson(request));
   const config = getConfig(env);
 
+  // Herramienta agendar_retoma (misma funcion, otro esquema): aplazo con fecha.
+  // Campo con nombre propio: notify_team acepta campos extra y un "fecha" suelto
+  // en un aviso comun no debe desviarlo hacia aca.
+  if (cleanValue(payload.fecha_retoma)) {
+    return handleRetoma(config, payload, env);
+  }
+
   // 1) Aviso al dashboard (handoff). Independiente de Telegram: corre aunque
   //    falte la config de Telegram. Solo dispara si hay `reason` (handoff real).
   await postStoreHandoff(config, payload);
@@ -127,6 +134,133 @@ function deriveConversationId(payload) {
     }
   }
   return "";
+}
+
+// --- Retoma agendada ("comprar despues") -------------------------------------
+//
+// El cliente aplaza la compra a una fecha CONCRETA ("el 15 me pagan"). Pasada la
+// ventana de 24 h el bot ya no puede escribirle, asi que la retoma la hace una
+// persona ese dia desde Kapta. Esta rama:
+//   1) valida la fecha (AAAA-MM-DD, de 2 a 90 dias desde hoy en Lima). "Mañana"
+//      o una fecha pasada NO es aplazo: ok=false y el lead sigue con sus
+//      seguimientos (eso paso el 2026-11-07 con "mañana te confirmo");
+//   2) avisa por Telegram;
+//   3) si RETOMA_A_KAPTA=on, manda el evento kenku.retoma.agendada al dashboard
+//      (misma URL y firma que el handoff). Apagado hasta que Kapta lo procese;
+//   4) devuelve `vars` (stage + comprar_despues_*): check-coverage solo corta los
+//      seguimientos con una comprar_despues_fecha valida.
+const RETOMA_MIN_DIAS = 2;
+const RETOMA_MAX_DIAS = 90;
+const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+function hoyLima(now = Date.now()) {
+  return new Date(now - 5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function diasEntre(desdeIso, hastaIso) {
+  return Math.round((Date.parse(`${hastaIso}T00:00:00Z`) - Date.parse(`${desdeIso}T00:00:00Z`)) / 86400000);
+}
+
+function validarFechaRetoma(valor, now = Date.now()) {
+  const fecha = cleanValue(valor);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(`${fecha}T00:00:00Z`))
+    || new Date(`${fecha}T00:00:00Z`).toISOString().slice(0, 10) !== fecha) {
+    return { ok: false, motivo: "formato" };
+  }
+  const dias = diasEntre(hoyLima(now), fecha);
+  if (dias < RETOMA_MIN_DIAS) return { ok: false, motivo: "muy_pronto", dias };
+  if (dias > RETOMA_MAX_DIAS) return { ok: false, motivo: "muy_lejos", dias };
+  return { ok: true, fecha, dias };
+}
+
+function fechaLegible(fecha) {
+  const d = new Date(`${fecha}T12:00:00Z`);
+  return `${DIAS_SEMANA[d.getUTCDay()]} ${fecha.slice(8, 10)}/${fecha.slice(5, 7)}`;
+}
+
+async function handleRetoma(config, payload, env, now = Date.now()) {
+  const v = validarFechaRetoma(payload.fecha_retoma, now);
+  if (!v.ok) {
+    return json({
+      ok: false,
+      reason: "fecha_invalida",
+      motivo: v.motivo,
+      message: v.motivo === "formato"
+        ? "fecha_retoma debe ser AAAA-MM-DD (calculala con get_current_datetime). Si el cliente no dio una fecha o hito concreto, NO es aplazo con fecha: deja el stage activo con followup_hint y complete_task."
+        : `No es aplazo con fecha (${v.motivo === "muy_pronto" ? "faltan menos de 2 dias" : "es a mas de 90 dias"}): deja el stage activo con followup_hint y complete_task; los seguimientos siguen.`,
+    });
+  }
+  const retoma = {
+    fecha: v.fecha,
+    producto: cleanValue(payload.producto || payload.product),
+    zona: cleanValue(payload.zona || payload.destination),
+    nota: cleanValue(payload.nota || payload.note),
+    cliente: cleanValue(payload.customerName),
+    telefono: String(payload.phone || "").replace(/[^\d]/g, ""),
+    conversation_id: deriveConversationId(payload),
+  };
+
+  let telegram = "sin_config";
+  if (config.token && config.chatIds.length) {
+    const text = [
+      `📅 <b>COMPRAR DESPUÉS — retomar el ${escapeHtml(fechaLegible(retoma.fecha))}</b>`,
+      ...[["Cliente", retoma.cliente], ["Telefono", retoma.telefono || payload.phone], ["Producto", retoma.producto], ["Zona", retoma.zona], ["Nota", retoma.nota]]
+        .filter(([, val]) => cleanValue(val))
+        .map(([k, val]) => `<b>${k}:</b> ${escapeHtml(cleanValue(val))}`),
+    ].join("\n");
+    const results = [];
+    for (const chatId of config.chatIds) results.push(await sendToChat(config.token, chatId, text));
+    telegram = results[0]?.ok ? "enviado" : "error";
+  }
+
+  let kapta = "apagado";
+  if (retomaAKapta(env) && config.storeWebhookUrl) {
+    kapta = await postStoreEvent(config, {
+      event: "kenku.retoma.agendada",
+      phone_number: retoma.telefono,
+      conversation_id: retoma.conversation_id,
+      fecha: retoma.fecha,
+      producto: retoma.producto,
+      zona: retoma.zona,
+      nota: retoma.nota,
+      customer_name: retoma.cliente,
+    }) ? "enviado" : "error";
+  }
+
+  return json({
+    ok: true,
+    retoma,
+    telegram,
+    kapta,
+    vars: {
+      stage: "comprar_despues",
+      comprar_despues_fecha: retoma.fecha,
+      comprar_despues_producto: retoma.producto || null,
+      comprar_despues_nota: retoma.nota || null,
+    },
+    message: `Retoma agendada para el ${fechaLegible(retoma.fecha)}: una asesora le escribe ese dia. Ya quedo guardado stage=comprar_despues; NO lo vuelvas a guardar. Despidete en UNA linea sin prometer que le escribiras y llama complete_task.`,
+  });
+}
+
+function retomaAKapta(env = globalThis) {
+  const v = env.RETOMA_A_KAPTA || env.rETOMAAKAPTA || globalThis.RETOMA_A_KAPTA || globalThis.rETOMAAKAPTA || "";
+  return String(v).trim().toLowerCase() === "on";
+}
+
+async function postStoreEvent(config, event) {
+  const body = JSON.stringify(event);
+  const headers = { "Content-Type": "application/json" };
+  if (config.storeWebhookSecret) {
+    headers["X-Webhook-Secret"] = config.storeWebhookSecret;
+    const sig = await hmacHex(config.storeWebhookSecret, body);
+    if (sig) headers["X-Kapso-Signature"] = sig;
+  }
+  try {
+    const res = await fetch(config.storeWebhookUrl, { method: "POST", headers, body });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // --- Telegram ---------------------------------------------------------------
@@ -319,4 +453,8 @@ globalThis.__kenkuNotifyTeam = {
   handleRequest,
   handler,
   postStoreHandoff,
+  handleRetoma,
+  validarFechaRetoma,
+  fechaLegible,
+  hoyLima,
 };

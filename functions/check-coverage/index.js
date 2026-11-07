@@ -392,11 +392,21 @@ const FOLLOWUP_TERMINAL_MARKERS = [
   "reclamo",
   "molesto",
   "cancel",
-  // Aplazo con fecha ("el 15 me pagan"): el prompt avisa al equipo por
-  // notify_team y una asesora retoma ese dia. Seguir con 7 toques en 23 h
-  // quemaba el lead antes de la fecha (71436f0d, 0168c78e).
-  "comprar_despues",
 ];
+
+// Aplazo con fecha ("el 15 me pagan"): agendar_retoma valida la fecha, avisa al
+// equipo y una asesora retoma ese dia desde Kapta; seguir con 7 toques en 23 h
+// quemaba el lead antes de la fecha (71436f0d, 0168c78e). Pero el stage solo
+// corta los seguimientos si viene con una comprar_despues_fecha valida y que no
+// paso: el 2026-11-07 el modelo marco comprar_despues con "mañana te confirmo"
+// y "le confirmo", y esos leads se quedaban sin seguimientos ni aviso.
+function retomaAgendada(vars, now = Date.now()) {
+  if (!String(vars.stage || "").toLowerCase().includes("comprar_despues")) return false;
+  const fecha = String(vars.comprar_despues_fecha || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(`${fecha}T00:00:00Z`))) return false;
+  const hoy = new Date(now - 5 * 3600 * 1000).toISOString().slice(0, 10);
+  return fecha >= hoy;
+}
 
 async function routeFollowup(payload, env) {
   try {
@@ -436,6 +446,7 @@ async function routeFollowup(payload, env) {
       const stage = String(vars.stage || "").toLowerCase();
       const isTerminal = FOLLOWUP_TERMINAL_MARKERS.some((marker) => stage.includes(marker));
       if (isTerminal) return json({ next_edge: "terminar" });
+      if (retomaAgendada(vars)) return json({ next_edge: "terminar", reason: "retoma_agendada" });
       if (edges.includes("respondio") && await hasLiveUnansweredInbound(payload, env)) {
         return json({ next_edge: "respondio", reason: "live_unanswered_inbound" });
       }
@@ -1460,6 +1471,7 @@ async function watchdogAdmin(payload, env) {
 
 globalThis.__kenkuCheckCoverage = {
   compraReciente,
+  retomaAgendada,
   brazoSeguimiento,
   hasLiveUnansweredInbound,
   esCierreTrivial,

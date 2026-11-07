@@ -31,8 +31,19 @@ caso("fu-g4 (F/R) no cambia con esperando_voucher", async () => {
   assert.strictEqual(await edge(["enviar", "esperar", "saltar"], "esperando_voucher", telR), "saltar");
 });
 
-caso("comprar_despues corta la cadena (fu-terminal)", async () => {
-  assert.strictEqual(await edge(["respondio", "seguir", "terminar"], "comprar_despues"), "terminar");
+const edgeV = async (edges, vars) => JSON.parse(await (await routeFollowup({
+  available_edges: edges,
+  whatsapp_context: { conversation: { phone_number: "51957540566" } },
+  execution_context: { vars, system: {} },
+}, {})).text()).next_edge;
+const fechaEn = (dias) => new Date(Date.now() - 5 * 3600 * 1000 + dias * 86400000).toISOString().slice(0, 10);
+caso("comprar_despues con fecha valida corta la cadena (fu-terminal)", async () => {
+  assert.strictEqual(await edgeV(["seguir", "terminar"], { stage: "comprar_despues", comprar_despues_fecha: fechaEn(5) }), "terminar");
+});
+caso("comprar_despues SIN fecha, con fecha pasada o mal escrita: los seguimientos siguen", async () => {
+  for (const f of [undefined, "", "mañana", fechaEn(-1), "15/11"]) {
+    assert.strictEqual(await edgeV(["seguir", "terminar"], { stage: "comprar_despues", comprar_despues_fecha: f }), "seguir", String(f));
+  }
 });
 
 (async () => {
