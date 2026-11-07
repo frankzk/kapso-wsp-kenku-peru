@@ -33,21 +33,70 @@ function cuandoDespacha(now = new Date()) {
   return "mañana";
 }
 
-function shalomMessage(now = new Date()) {
+const ADELANTO_SHALOM = 30;
+
+// El pedido que se esta pagando, si el agente lo manda: el cliente veia el Yape
+// sin saber cuanto iba a pagar en total ni cuanto le quedaba al recoger
+// (5acefd4b, f00f6596: pago mandado a los 40 s de "Uchiza", sin cantidad). El
+// resumen lo escribe el LLM, asi que se limpia de cualquier ristra de digitos
+// larga: esta funcion existe para que el modelo nunca meta un numero de cuenta
+// en el mensaje de pago.
+function pedidoDe(input) {
+  const total = Number(String(input?.total ?? "").replace(/[^0-9.]/g, ""));
+  if (!Number.isFinite(total) || total <= ADELANTO_SHALOM || total > 10000) return null;
+  const resumen = String(input?.resumen ?? input?.summary ?? "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\d[\d\s.\-]{3,}\d/g, (m) => (m.replace(/\D/g, "").length >= 5 ? "" : m))
+    .replace(/[*_~`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return { total: Math.round(total * 100) / 100, resumen: resumen || null };
+}
+
+function soles(n) {
+  return `S/ ${Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+
+function shalomMessage(now = new Date(), pedido = null) {
+  const lineaPedido = pedido
+    ? `${pedido.resumen ? `Tu pedido: *${pedido.resumen}* — ` : "Tu pedido: "}total *${soles(pedido.total)}*.\n`
+    : "";
+  const lineaSaldo = pedido
+    ? `Ese adelanto *se descuenta de tu total*: al recoger pagas solo *${soles(pedido.total - ADELANTO_SHALOM)}* 😊\n`
+    : "Ese adelanto *se descuenta de tu total* (no es un costo extra) — el saldo lo pagas al recoger 😊\n";
   return "¡Listo! Lo enviamos a esa agencia Shalom 🙌\n"
+    + lineaPedido
     + `Para *separarte el pedido* y despacharlo ${cuandoDespacha(now)} (ese día te compartimos el ticket con tu *código de seguimiento*), va un adelanto de *S/30* por Yape o transferencia:\n`
     + lineasPago()
-    + "Ese adelanto *se descuenta de tu total* (no es un costo extra) — el saldo lo pagas al recoger 😊\n"
+    + lineaSaldo
     + "También necesito el *DNI del titular* que recogerá.\n"
     + "Envíame el voucher o captura y lo dejo encaminado ✅";
 }
 
-function olvaMessage() {
+function olvaMessage(pedido = null) {
   return "Perfecto 😊\n"
     + "Por Olva Courier el pago es anticipado completo.\n"
+    + (pedido ? `${pedido.resumen ? `Tu pedido: *${pedido.resumen}* — ` : ""}total a pagar: *${soles(pedido.total)}*.\n` : "")
     + "Puedes realizarlo por Yape o transferencia:\n"
     + lineasPago()
     + "Cuando lo realices, envíame el voucher o captura para continuar con la confirmación ✅";
+}
+
+// El bot mandaba el bloque de pago dos veces en la misma conversacion
+// (bdef0ca0): el cliente recibia dos Yape seguidos. Una vez enviado, otra
+// llamada con el mismo courier no reenvia salvo reenviar=true (el cliente dice
+// que no le llego o que no encuentra la cuenta). Best effort: sin KV no bloquea.
+const REENVIO_TTL_S = 6 * 3600;
+
+async function yaEnviado(kv, key) {
+  if (!kv || !key) return null;
+  try { return await kv.get(key); } catch { return null; }
+}
+
+async function marcarEnviado(kv, key) {
+  if (!kv || !key) return;
+  try { await kv.put(key, new Date().toISOString(), { expirationTtl: REENVIO_TTL_S }); } catch { /* best effort */ }
 }
 
 async function handler(request, env = globalThis) {
@@ -91,7 +140,22 @@ async function handleRequest(request, env = globalThis) {
 
     const courier = String(input.courier || input.metodo || "").toLowerCase();
     const isOlva = courier.includes("olva");
-    const text = isOlva ? olvaMessage() : shalomMessage();
+    const pedido = pedidoDe(input);
+    const text = isOlva ? olvaMessage(pedido) : shalomMessage(new Date(), pedido);
+
+    const kv = env.KV || globalThis.KV;
+    const conversationId = conv.id || payload.execution_context?.context?.conversation_id || "";
+    const lockKey = conversationId ? `payment_sent:${conversationId}:${isOlva ? "olva" : "shalom"}` : null;
+    const reenviar = input.reenviar === true || input.reenviar === "true" || input.resend === true;
+    const previo = reenviar ? null : await yaEnviado(kv, lockKey);
+    if (previo) {
+      return json({
+        ok: false,
+        reason: "ya_enviado",
+        sentAt: previo,
+        message: "Las instrucciones de pago YA se le enviaron en esta conversacion: NO las reenvies. Si pregunta por la cuenta, dile que esta en el mensaje de arriba 👆. Solo si dice que no le llego o no la encuentra, vuelve a llamar send_payment con reenviar=true.",
+      });
+    }
 
     if (!apiKey || !phoneNumberId || !(to || bsuid)) {
       // Fallback: si no hay contexto para enviar, devolvemos el texto EXACTO para
@@ -127,11 +191,14 @@ async function handleRequest(request, env = globalThis) {
       });
     }
 
+    await marcarEnviado(kv, lockKey);
     return json({
       ok: true,
       sent: true,
       courier: isOlva ? "olva" : "shalom",
-      message: "Instrucciones de pago enviadas al cliente con la cuenta principal. NO escribas ningun numero de cuenta vos mismo ni repitas el mensaje. Si pide otra cuenta, NO improvises: notify_team + handoff_to_human para que una persona le mande la alternativa. Guarda stage=esperando_voucher y llama complete_task.",
+      conTotal: Boolean(pedido),
+      message: (pedido ? "" : "OJO: no mandaste total, asi que el cliente no vio cuanto paga ni su saldo; la proxima vez pasa total y resumen. ")
+        + "Instrucciones de pago enviadas al cliente con la cuenta principal. NO escribas ningun numero de cuenta vos mismo ni repitas el mensaje. Si pide otra cuenta, NO improvises: notify_team + handoff_to_human para que una persona le mande la alternativa. Guarda stage=esperando_voucher y llama complete_task.",
     });
   } catch (error) {
     return json({
@@ -161,4 +228,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json; charset=utf-8" } });
 }
 
-globalThis.__kenkuSendPayment = { handler, handleRequest, shalomMessage, olvaMessage, cuandoDespacha, BCP_CUENTA, BCP_CCI };
+globalThis.__kenkuSendPayment = { handler, handleRequest, shalomMessage, olvaMessage, cuandoDespacha, pedidoDe, BCP_CUENTA, BCP_CCI };

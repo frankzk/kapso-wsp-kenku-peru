@@ -450,10 +450,34 @@ function pickBestMatch(candidates, { phone, email, debug }) {
   return scored[0]?.customer || null;
 }
 
+// La direccion guardada se le muestra tal cual al cliente en el Msg 8 ("¿Te lo
+// enviamos a [direccion], como la vez pasada?"). Pegar los campos sin filtrar
+// daba "-, 980187619, -, Puente Piedra" (4b0c8b7e), "CARHUAZ / Carhuaz /
+// Carhuaz" (0799ade2) o "Por el mercado, Por el mercado, Chumbivilcas"
+// (d1d45fc3): 9 de 76 Msg 8 revisados el 2026-11-05. Se limpia cada trozo (sin
+// guiones sueltos, celulares ni repetidos) y, si de la calle/referencia no queda
+// nada con letras, no hay direccion que confirmar: null, y el bot la pide normal.
 function buildAddressSummary(address) {
   if (!address) return null;
-  const parts = [address.address1, address.address2, address.city, address.province].map((v) => String(v || "").trim()).filter(Boolean);
-  return parts.length ? parts.join(", ") : null;
+  const vistos = new Set();
+  const limpiar = (valor) => String(valor || "")
+    .split(/\s*[,/|]\s*/)
+    .map((t) => t.replace(/\s+/g, " ").trim().replace(/^[\s\-–—.#]+|[\s\-–—.]+$/g, ""))
+    .filter((t) => {
+      if (!t) return false;
+      if (/9\d{8}/.test(t.replace(/[\s-]/g, ""))) return false; // un celular metido en la direccion
+      // Sin letras solo sobrevive un numero de puerta ("2450", "123A"); "-",
+      // "." o una ristra de digitos no son direccion.
+      if (!/[a-záéíóúñü]/i.test(t) && !/^\d{1,5}[a-z]?$/i.test(t)) return false;
+      const clave = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+      if (vistos.has(clave)) return false;
+      vistos.add(clave);
+      return true;
+    });
+  const calle = [...limpiar(address.address1), ...limpiar(address.address2)];
+  if (!calle.some((t) => t.replace(/[^a-záéíóúñü]/gi, "").length >= 3)) return null;
+  const zona = [...limpiar(address.city), ...limpiar(address.province)];
+  return [...calle, ...zona].join(", ");
 }
 
 function getConfig(env = globalThis) {
@@ -606,7 +630,11 @@ async function wooSearchOrders(woo, term, ms) {
 function wooCustomerFromOrders(orders) {
   const sorted = [...orders].sort((a, b) => String(b.date_created_gmt || "").localeCompare(String(a.date_created_gmt || "")));
   const last = sorted[0];
-  const billing = last.billing || {};
+  // Nombre y direccion: del pedido vigente mas reciente que tenga direccion. Un
+  // pedido cancelado suele ser el que tenia la direccion mal (por eso se cayo).
+  const conDireccion = sorted.find((o) => !["cancelled", "refunded", "failed"].includes(o.status)
+    && buildAddressSummary({ address1: o.billing?.address_1, address2: o.billing?.address_2 }));
+  const billing = (conDireccion || last).billing || {};
   const firstName = String(billing.first_name || "").trim() || null;
   const lastName = String(billing.last_name || "").trim() || null;
   const spent = sorted

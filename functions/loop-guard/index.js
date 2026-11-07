@@ -105,13 +105,16 @@ function detectLoopRisk(messages) {
   // Orden: mas reciente primero (no confiamos en el orden del API).
   const sorted = [...messages].sort((a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0));
   const inbound = [];
+  const inboundDeAnuncio = [];
   const outbound = [];
   for (const m of sorted) {
     const dir = m?.kapso?.direction;
     const text = normalizeText(m?.kapso?.content || m?.text?.body || "");
     if (!text) continue;
-    if (dir === "inbound") inbound.push(text);
-    else if (dir === "outbound") outbound.push(text);
+    if (dir === "inbound") {
+      inbound.push(text);
+      inboundDeAnuncio.push(Boolean(m?.referral));
+    } else if (dir === "outbound") outbound.push(text);
   }
 
   const reasons = [];
@@ -121,8 +124,14 @@ function detectLoopRisk(messages) {
     reasons.push("auto_respuesta");
   }
 
-  // 2) Tres entrantes consecutivos identicos (un humano no hace eso).
-  if (inbound.length >= 3 && inbound[0] === inbound[1] && inbound[1] === inbound[2]) {
+  // 2) Tres entrantes consecutivos identicos (un humano no hace eso)... salvo
+  // que venga de tocar el anuncio: el boton manda el mismo texto prellenado
+  // ("¡Hola! Quiero más información") cada vez, y la clienta que lo toca tres
+  // veces quedaba en silencio (e476f871: tres toques en 61 s mientras le
+  // llegaba la presentacion; c686a05f a las 4 h y 3 min). Un auto-responder
+  // nunca trae referral.
+  const toqueDeAnuncio = inboundDeAnuncio.slice(0, 3).some(Boolean);
+  if (inbound.length >= 3 && inbound[0] === inbound[1] && inbound[1] === inbound[2] && !toqueDeAnuncio) {
     reasons.push("inbound_repetido");
   }
 

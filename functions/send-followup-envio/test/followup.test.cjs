@@ -101,6 +101,20 @@ const HINT = "quedaste viendo el Black Seed Oil";
     assert.strictEqual(F.armarTexto("", null, null), `Cuando gustes lo retomamos 🙌 ${F.FRASE_GENERICA}`);
     assert.ok(!F.armarTexto("solo faltan tus datos de envio.", null, null).includes(".."));
   });
+  await caso("esperando voucher sin zona: nunca 'pagas al recibir' (5acefd4b)", async () => {
+    const hint = "quedamos en que enviabas el voucher del adelanto de S/30 por Shalom";
+    const t = F.armarTexto(hint, null, null, "esperando_voucher");
+    assert.strictEqual(t, `Cuando gustes lo retomamos: ${hint} 😊`);
+    assert.ok(!/al recibir/.test(t));
+    assert.ok(!/al recibir/.test(F.armarTexto(hint, { district: "Lince" }, { modo: "contraentrega" }, "esperando_voucher")));
+  });
+  await caso("esperando voucher con agencia confirmada: la frase del adelanto sigue", async () => {
+    const t = F.armarTexto("quedamos en el voucher", { district: "Juliaca" }, { modo: "agencia_adelanto", courier: "Shalom", adelanto: 30 }, "esperando_voucher");
+    assert.ok(/separas con \*S\/ 30\*/.test(t), t);
+  });
+  await caso("otros stages: sin cambios", async () => {
+    assert.strictEqual(F.armarTexto("x", null, null, "producto_mostrado"), F.armarTexto("x", null, null));
+  });
   await caso("lead por username (BSUID): va en recipient, no en to", async () => {
     const { enviados } = red({ cobertura: COD });
     await F.handleRequest(req({ ...ZONA }, { business_scoped_user_id: "PE.123", phone_number_id: "951608524703564" }), env);

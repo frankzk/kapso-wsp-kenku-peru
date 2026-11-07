@@ -54,7 +54,7 @@ async function handleRequest(request, env = globalThis) {
   const ctx = contexto(payload, env);
   const zona = zonaDe(ctx.vars);
   const cobertura = zona && ctx.apiKey ? await consultarCobertura(zona, ctx.vars, ctx.apiKey) : null;
-  const texto = armarTexto(ctx.vars.followup_hint, zona, cobertura);
+  const texto = armarTexto(ctx.vars.followup_hint, zona, cobertura, ctx.vars.stage);
   const diag = { zona: zona ? `${zona.region} / ${zona.province} / ${zona.district}` : null, modo: cobertura?.modo || "generica" };
 
   // Para revisar el texto con datos reales sin mandarle nada al cliente.
@@ -92,9 +92,16 @@ function leerCobertura(res) {
     : { modo: "agencia_sin_adelanto", courier: String(res.courier || "") };
 }
 
-function armarTexto(hint, zona, cobertura) {
+function armarTexto(hint, zona, cobertura, stage) {
   const pista = String(hint ?? "").trim().replace(/[\s.,;:—-]+$/, "");
   const inicio = pista ? `Cuando gustes lo retomamos: ${pista}.` : "Cuando gustes lo retomamos 🙌";
+  // Quien espera el voucher ya esta en la ruta de agencia y le pidieron un
+  // adelanto: "pagas recien al recibir" le contradice lo que se le acaba de
+  // decir (5acefd4b). Solo se habla de pago si la cobertura confirma la agencia
+  // con adelanto; si no, solo la pista (que ya recuerda el voucher).
+  if (String(stage ?? "").includes("esperando_voucher") && cobertura?.modo !== "agencia_adelanto") {
+    return pista ? `Cuando gustes lo retomamos: ${pista} 😊` : inicio;
+  }
   if (!cobertura) return `${inicio} ${FRASE_GENERICA}`;
   const lugar = `*${zona.district}*`;
   if (cobertura.modo === "contraentrega") return `${inicio} A ${lugar} te lo llevamos a tu puerta y *pagas recién al recibir* 😊`;
