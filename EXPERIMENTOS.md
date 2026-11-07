@@ -605,13 +605,13 @@ se agrego por API; un `kapso push` con un definition viejo la borraria.
 **Cambios que caen dentro de la ventana de F/R (anotados para la lectura).**
 Aplican a los dos brazos por igual, asi que la comparacion F vs R sigue valida;
 lo que se mueve es la base absoluta de las dos.
-- 2026-11-07 ~13:00 (Lima), funciones: direccion guardada limpia en el Msg 8
+- 2026-11-06 ~21:20 (Lima), funciones: direccion guardada limpia en el Msg 8
   (customer-lookup), el s2 ya no dice "pagas al recibir" a quien espera el
   voucher (send-followup-envio), tres toques al boton del anuncio no se
   silencian como loop (loop-guard), send-payment con candado de reenvio y total
   opcional, check-coverage con `comprar_despues` terminal y la salida
   `saltar_voucher` (sin efecto hasta que el flujo tenga esa salida).
-- 2026-11-06 ~23:25 (Lima), workflow lock 56689: prompt de higiene (postventa
+- 2026-11-06 ~21:25 (Lima), workflow lock 56689: prompt de higiene (postventa
   con producto comprado, aplazo con fecha -> `comprar_despues` + aviso a
   asesora, precio en el saludo, re-clic del anuncio sin repetir la
   presentacion, agencia con total antes del pago y un solo send_payment, datos
