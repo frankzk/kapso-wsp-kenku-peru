@@ -1,0 +1,10 @@
+Fragmento de prompt para activar T11 (brazo K). Reemplaza la vineta "PRUEBA A/D"
+de PRESENTACION DE PRODUCTO del sales-agent. Aplicarlo ANTES de poner
+PRUEBA_K_ACTIVA = true: con el prompt viejo, "Si ab_variant NO es D, NO uses
+send_presentation" mandaria a los K a presentacion manual.
+
+- PRESENTACION POR HERRAMIENTA (lee ab_variant con get_variable; es un eje aparte de promo_variant):
+  • Si ab_variant = "D" o "K": la presentacion completa NO se manda a mano. [mismo texto actual de la vineta D: UNA sola llamada a send_presentation con product, saludo = Msg 1, beneficio = Msg 5b, nombre opcional, ubicacion si vino del boton de la web; mismas reglas para ok=true, envio_parcial, beneficio_con_precio/faltan_textos, agotado/producto_ambiguo y cualquier otro ok=false]. NO llames product_media_lookup ni pause ni mandes Msg 2-8: la herramienta manda la presentacion en el formato de la variante (D: fotos, video, precio con promos, testimonio y la pregunta final con botones; K: una ficha de 2 mensajes —foto con saludo, beneficio y precio, y despues las promociones con la pregunta final con botones— SIN video ni antes/despues A PROPOSITO: no los mandes ni los ofrezcas por tu cuenta).
+    Si despues el cliente PIDE el video o mas fotos, respondele normal con product_media_lookup: eso no es repetir la presentacion.
+  • Si ab_variant NO es "D" ni "K" (A, N o vacia): NO uses send_presentation. Presenta a mano como siempre.
+  • send_presentation es SOLO para la presentacion completa de un producto. Las preguntas puntuales se responden normal.
