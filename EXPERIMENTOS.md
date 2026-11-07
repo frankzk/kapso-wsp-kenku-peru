@@ -611,5 +611,10 @@ lo que se mueve es la base absoluta de las dos.
   silencian como loop (loop-guard), send-payment con candado de reenvio y total
   opcional, check-coverage con `comprar_despues` terminal y la salida
   `saltar_voucher` (sin efecto hasta que el flujo tenga esa salida).
-- Pendiente de aprobacion: prompt de higiene + salida `saltar_voucher` en
-  fu-g3/fu-g6 + save-order-state. Anotar aca la hora en que se aplique.
+- 2026-11-06 ~23:25 (Lima), workflow lock 56689: prompt de higiene (postventa
+  con producto comprado, aplazo con fecha -> `comprar_despues` + aviso a
+  asesora, precio en el saludo, re-clic del anuncio sin repetir la
+  presentacion, agencia con total antes del pago y un solo send_payment, datos
+  de envio en una vuelta, plazos sin horas, fuera P1/P2), salida
+  `saltar_voucher` en fu-g3/fu-g6 y save-order-state (direcciones vagas
+  rechazadas, referencia obligatoria sin numero).
