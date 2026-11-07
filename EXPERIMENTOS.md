@@ -618,3 +618,37 @@ lo que se mueve es la base absoluta de las dos.
   de envio en una vuelta, plazos sin horas, fuera P1/P2), salida
   `saltar_voucher` en fu-g3/fu-g6 y save-order-state (direcciones vagas
   rechazadas, referencia obligatoria sin numero).
+
+## 6. Pruebas T11 (brazo K) y T7 (s1 con botones) · **PREPARADAS, DORMIDAS, SIN DESPLEGAR** (2026-11-07)
+
+Ficha completa de cada una: `PRUEBAS_AB_MIREVA.md`. El codigo esta en la rama
+`claude/bot-kenku-woocommerce-completo` (commits 2ad5d56, 34a385e y b880102) y
+**no esta en Kapso**: customer-lookup, send-presentation, create-shopify-order y
+campaign-report de esa rama ya NO son iguales a los desplegados. Con los
+interruptores apagados no cambian nada para el cliente (D se verifico byte a
+byte en 29 escenarios), pero agregan escrituras en KV (`abx_tel`, canal en
+`abx_lead`).
+
+**T11 — brazo K.** Leads de anuncio con telefono, 50/50 D/K con sal `ficha:`
+(ortogonal a `present:` y `fu4:`, celdas ~25% verificadas). Primaria: conversion
+a 7 dias por telefono, bot + asesora, K contra la D de anuncio. Lectura a 4
+semanas desde el primer dia completo; ganador solo con z corregida >= 1,96 y
+lift >= 2,3 pp; z <= -1,96 en cualquier semana apaga K.
+
+**T7 — s1 con botones.** Funcion nueva `send-followup-s1`, sorteo T/S con sal
+`fu1:`, casos ubicacion/cantidad, texto de siempre en todo lo demas. Lectura a
+6 semanas; z > -1 -> botones al 100% como pieza fija; z <= -1 -> texto.
+
+**Activacion (despues de leer F/R el 15-nov), en este orden:**
+1. GET del workflow y de las funciones vivas; confirmar que nada cambio fuera
+   de lo de esta rama.
+2. T11: desplegar customer-lookup, send-presentation, create-shopify-order y
+   campaign-report con `PRUEBA_K_ACTIVA = false`; aplicar el fragmento de prompt
+   "PRESENTACION POR HERRAMIENTA" (K se trata igual que D); probar K en el
+   sandbox 597907523413541 en Android e iPhone; recien ahi `PRUEBA_K_ACTIVA =
+   true` en customer-lookup Y en create-shopify-order.
+3. T7: crear la funcion en Kapso, secreto `KAPSO_API_KEY`, probar en el
+   sandbox, `scripts/patch_fu_s1.py --function-id <id>` con el lock vigente,
+   PATCH, GET para verificar function_id; recien ahi `PRUEBA_T_ACTIVA = true`.
+4. Anotar aca fecha y hora de cada activacion y el lock del workflow.
+5. Semana 1: contar el volumen real por brazo y recalcular la duracion.
