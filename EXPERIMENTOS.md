@@ -618,7 +618,7 @@ lo que se mueve es la base absoluta de las dos.
   de envio en una vuelta, plazos sin horas, fuera P1/P2), salida
   `saltar_voucher` en fu-g3/fu-g6 y save-order-state (direcciones vagas
   rechazadas, referencia obligatoria sin numero).
-- 2026-11-07 ~10:40 (Lima): la herramienta send_payment del agente acepta
+- 2026-11-07 ~10:56 (Lima): la herramienta send_payment del agente acepta
   total, resumen y reenviar (antes solo courier: 0 de 16 pagos con total).
   check-coverage: comprar_despues solo corta los seguimientos con una
   comprar_despues_fecha valida (4 de 11 se habian marcado sin fecha).
