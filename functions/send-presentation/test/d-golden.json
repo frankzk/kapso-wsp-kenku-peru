@@ -1,0 +1,2730 @@
+{
+ "anuncio_media_completa": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_con_ancla": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad (antes *S/ 200*) con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_media_minima": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "beneficio",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 11800,
+   "duracionTotalMs": 13500,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/p.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_sin_media": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "beneficio",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 8850,
+   "duracionTotalMs": 10550,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_sin_testimonio": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 18450,
+   "duracionTotalMs": 20150,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_known_address": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "¿Te lo enviamos a Av. Arequipa 123, Lince, como la vez pasada? 😊"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Si, la misma"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Cambiar direccion"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_zona_cod": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task. La zona ya vino en el mensaje (Lima / Lima / Ate; contraentrega) y la pregunta final ya pidio la promo: guarda region, provincia y distrito con save_order_state. NO preguntes Lima/provincia ni el distrito."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦 y *garantía de 30 días* 🛡️ 😊.\n\n🏠 A *Ate* te lo llevamos a tu puerta y *pagas al recibir*.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "¿Qué promoción prefieres? 😊"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "1 unidad (S/ 149)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "3x2 (S/ 298)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_3",
+         "title": "5x3 (S/ 447)"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_zona_shalom": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task. La zona ya vino en el mensaje (La Libertad / Sánchez Carrión / Huamachuco; agencia Shalom, adelanto S/30) y la pregunta final ya pidio la promo: guarda region, provincia y distrito con save_order_state. NO preguntes Lima/provincia ni el distrito."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦 y *garantía de 30 días* 🛡️ 😊.\n\n📦 A *Huamachuco* lo enviamos por agencia *Shalom*: separas tu pedido con un adelanto de *S/ 30* (se descuenta del total) y el saldo lo pagas al recoger.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "¿Qué promoción prefieres? 😊"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "1 unidad (S/ 149)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "3x2 (S/ 298)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_3",
+         "title": "5x3 (S/ 447)"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_zona_caida": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task. La zona ya vino en el mensaje (La Libertad / Sánchez Carrión / Huamachuco; cobertura no confirmada) y la pregunta final ya pidio la promo: guarda region, provincia y distrito con save_order_state. NO preguntes Lima/provincia ni el distrito."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "¿Qué promoción prefieres para tu envío a *Huamachuco*? 😊"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "1 unidad (S/ 149)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "3x2 (S/ 298)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_3",
+         "title": "5x3 (S/ 447)"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_bsuid": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c2"
+  ]
+ },
+ "anuncio_falla_video": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [
+    "video"
+   ],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa_sin_media:c1"
+  ]
+ },
+ "anuncio_falla_precio": {
+  "respuesta": {
+   "ok": false,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "reason": "envio_parcial",
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio"
+   ],
+   "omitidos": [],
+   "fallo": {
+    "paso": "precio",
+    "error": "400 {\"error\":{\"code\":131000}}"
+   },
+   "pendientes": [
+    {
+     "paso": "precio",
+     "tipo": "texto",
+     "texto": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    },
+    {
+     "paso": "testimonio",
+     "tipo": "image",
+     "url": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    },
+    {
+     "paso": "pregunta_final",
+     "tipo": "botones",
+     "bodyText": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?",
+     "botones": [
+      "Lima",
+      "Provincia"
+     ]
+    }
+   ],
+   "duracionMs": 15500,
+   "duracionTotalMs": 17200,
+   "message": "Se enviaron saludo, foto_principal, foto_antes_despues, video, beneficio y fallo \"precio\". Manda a mano SOLO lo que falta (campo pendientes), en ese orden, y sigue normal. No repitas lo que ya se envio."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:parcial:c1"
+  ]
+ },
+ "anuncio_falla_saludo": {
+  "respuesta": {
+   "ok": false,
+   "reason": "envio_fallido",
+   "fallo": {
+    "paso": "saludo",
+    "error": "400 {\"error\":{\"code\":131000}}"
+   },
+   "message": "No se envio nada. Presenta a mano como siempre (PRESENTACION DE PRODUCTO)."
+  },
+  "segundoPlano": null,
+  "enviados": [],
+  "pausas": [],
+  "kvPuts": [
+   "abx_present:2026-11-17:fallo_inicial:c1"
+  ]
+ },
+ "anuncio_falla_botones": {
+  "respuesta": {
+   "ok": false,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "reason": "envio_parcial",
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio"
+   ],
+   "omitidos": [],
+   "fallo": {
+    "paso": "pregunta_final",
+    "error": "400 {\"error\":{\"code\":131000}}"
+   },
+   "pendientes": [
+    {
+     "paso": "pregunta_final",
+     "tipo": "botones",
+     "bodyText": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?",
+     "botones": [
+      "Lima",
+      "Provincia"
+     ]
+    }
+   ],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Se enviaron saludo, foto_principal, foto_antes_despues, video, beneficio, precio, testimonio y fallo \"pregunta_final\". Manda a mano SOLO lo que falta (campo pendientes), en ese orden, y sigue normal. No repitas lo que ya se envio."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:parcial:c1"
+  ]
+ },
+ "anuncio_meta_lenta": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "beneficio",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [
+    "video",
+    "testimonio"
+   ],
+   "duracionMs": 21000,
+   "duracionTotalMs": 25000,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   1000
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa_sin_media:c1"
+  ]
+ },
+ "anuncio_catalogo_lento": {
+  "respuesta": {
+   "ok": false,
+   "sent": false,
+   "reason": "sin_tiempo",
+   "message": "No se envio nada (el catalogo tardo demasiado). Presenta a mano como siempre (PRESENTACION DE PRODUCTO)."
+  },
+  "segundoPlano": null,
+  "enviados": [],
+  "pausas": [],
+  "kvPuts": [
+   "abx_present:2026-11-17:sin_tiempo:c1"
+  ]
+ },
+ "anuncio_wait_until": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": true,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": false,
+   "pasos": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "message": "Presentacion en curso: el saludo ya salio y el resto (fotos, video, beneficio, precio, testimonio y la pregunta final con botones) se esta enviando solo en los proximos segundos. NO mandes nada mas en este turno ni repitas nada de eso. Guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": {
+   "ok": true,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400
+  },
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_par": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "Zapatillas Ortopédicas – Comodidad",
+    "precio": 134.1
+   },
+   "compacta": false,
+   "enviados": [
+    "saludo",
+    "foto_principal",
+    "foto_antes_despues",
+    "video",
+    "beneficio",
+    "precio",
+    "testimonio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 21400,
+   "duracionTotalMs": 23100,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "Black Seed Oil"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "Refuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 134.10* por par con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 par: *S/ 134.10*\n• 3x2: Lleva 3 pares por *S/ 268.20* (pagas solo 2)\n• 5x3: Lleva 5 pares por *S/ 402.30* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/t.jpg",
+     "caption": "Lo que dicen nuestros clientes 💬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   1250,
+   2000,
+   1250,
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "anuncio_agotado": {
+  "respuesta": {
+   "ok": false,
+   "sent": false,
+   "reason": "agotado",
+   "message": "El producto esta agotado: aplica las reglas de STOCK del prompt. NO lo presentes."
+  },
+  "segundoPlano": null,
+  "enviados": [],
+  "pausas": [],
+  "kvPuts": []
+ },
+ "anuncio_ambiguo": {
+  "respuesta": {
+   "ok": false,
+   "sent": false,
+   "reason": "producto_ambiguo",
+   "message": "La busqueda no es inequivoca. Resuelve el producto con shopify_product_lookup y presenta a mano."
+  },
+  "segundoPlano": null,
+  "enviados": [],
+  "pausas": [],
+  "kvPuts": []
+ },
+ "anuncio_precio_variable": {
+  "respuesta": {
+   "ok": false,
+   "sent": false,
+   "reason": "precio_variable",
+   "message": "El precio cambia segun la variante. Presenta a mano como siempre (PRESENTACION DE PRODUCTO)."
+  },
+  "segundoPlano": null,
+  "enviados": [],
+  "pausas": [],
+  "kvPuts": []
+ },
+ "organico_media_completa": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "foto_con_saludo",
+    "foto_antes_despues",
+    "video",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 12550,
+   "duracionTotalMs": 14250,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Lo que dicen nuestros clientes 💬\n\nPor cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     },
+     "header": {
+      "type": "image",
+      "image": {
+       "link": "https://cdn/t.jpg"
+      }
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   2000,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "organico_media_minima": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "foto_con_saludo",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 5900,
+   "duracionTotalMs": 7600,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/p.jpg",
+     "caption": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "organico_sin_media": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "saludo_beneficio",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 5900,
+   "duracionTotalMs": 7600,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "organico_known_address": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "foto_con_saludo",
+    "foto_antes_despues",
+    "video",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 12550,
+   "duracionTotalMs": 14250,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Lo que dicen nuestros clientes 💬\n\n¿Te lo enviamos a Av. Arequipa 123, Lince, como la vez pasada? 😊"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Si, la misma"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Cambiar direccion"
+        }
+       }
+      ]
+     },
+     "header": {
+      "type": "image",
+      "image": {
+       "link": "https://cdn/t.jpg"
+      }
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   2000,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "organico_zona_shalom": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "foto_con_saludo",
+    "foto_antes_despues",
+    "video",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 12550,
+   "duracionTotalMs": 14250,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task. La zona ya vino en el mensaje (La Libertad / Sánchez Carrión / Huamachuco; agencia Shalom, adelanto S/30) y la pregunta final ya pidio la promo: guarda region, provincia y distrito con save_order_state. NO preguntes Lima/provincia ni el distrito."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦 y *garantía de 30 días* 🛡️ 😊.\n\n📦 A *Huamachuco* lo enviamos por agencia *Shalom*: separas tu pedido con un adelanto de *S/ 30* (se descuenta del total) y el saldo lo pagas al recoger.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Lo que dicen nuestros clientes 💬\n\n¿Qué promoción prefieres? 😊"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "1 unidad (S/ 149)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "3x2 (S/ 298)"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_3",
+         "title": "5x3 (S/ 447)"
+        }
+       }
+      ]
+     },
+     "header": {
+      "type": "image",
+      "image": {
+       "link": "https://cdn/t.jpg"
+      }
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   2000,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "organico_falla_cabecera": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "foto_con_saludo",
+    "foto_antes_despues",
+    "video",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 14250,
+   "duracionTotalMs": 15950,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "to": "51965391481",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   2000,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c1"
+  ]
+ },
+ "organico_falla_foto": {
+  "respuesta": {
+   "ok": false,
+   "reason": "envio_fallido",
+   "fallo": {
+    "paso": "foto_con_saludo",
+    "error": "400 {\"error\":{\"code\":131000}}"
+   },
+   "message": "No se envio nada. Presenta a mano como siempre (PRESENTACION DE PRODUCTO)."
+  },
+  "segundoPlano": null,
+  "enviados": [],
+  "pausas": [],
+  "kvPuts": [
+   "abx_present:2026-11-17:fallo_inicial:c1"
+  ]
+ },
+ "organico_bsuid": {
+  "respuesta": {
+   "ok": true,
+   "sent": true,
+   "enCurso": false,
+   "producto": {
+    "handle": "black-seed-oil",
+    "titulo": "SUPER HUMAN Ethiopian Black Seed Oil – Aceite de Semilla Negra Prensado en Frío",
+    "precio": 149
+   },
+   "compacta": true,
+   "enviados": [
+    "foto_con_saludo",
+    "foto_antes_despues",
+    "video",
+    "precio",
+    "pregunta_final"
+   ],
+   "omitidos": [],
+   "duracionMs": 12550,
+   "duracionTotalMs": 14250,
+   "message": "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso. Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
+  },
+  "segundoPlano": null,
+  "enviados": [
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/principal.jpg",
+     "caption": "¡Hola! Soy *Akemi* de Kenku 😊\n\nRefuerza tus defensas y tu energía desde adentro, de forma natural 🌿"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "image",
+    "image": {
+     "link": "https://cdn/ad.jpg"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "video",
+    "video": {
+     "link": "https://cdn/v.mp4",
+     "caption": "Mira este video corto del *Black Seed Oil* 🎬"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "text",
+    "text": {
+     "body": "*Black Seed Oil* queda en *S/ 149* por unidad con *envío gratis* 📦, en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.\n\n🔥 Promociones disponibles:\n• 1 unidad: *S/ 149*\n• 3x2: Lleva 3 unidades por *S/ 298* (pagas solo 2)\n• 5x3: Lleva 5 unidades por *S/ 447* (pagas solo 3)"
+    }
+   },
+   {
+    "messaging_product": "whatsapp",
+    "recipient": "PE.948592654941065",
+    "type": "interactive",
+    "interactive": {
+     "type": "button",
+     "body": {
+      "text": "Lo que dicen nuestros clientes 💬\n\nPor cierto 😊, ¿te encuentras en *Lima* o en *provincia*?"
+     },
+     "action": {
+      "buttons": [
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_1",
+         "title": "Lima"
+        }
+       },
+       {
+        "type": "reply",
+        "reply": {
+         "id": "btn_2",
+         "title": "Provincia"
+        }
+       }
+      ]
+     },
+     "header": {
+      "type": "image",
+      "image": {
+       "link": "https://cdn/t.jpg"
+      }
+     }
+    }
+   }
+  ],
+  "pausas": [
+   1250,
+   1250,
+   2000,
+   1250
+  ],
+  "kvPuts": [
+   "abx_present:2026-11-17:completa:c2"
+  ]
+ }
+}

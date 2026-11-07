@@ -1707,26 +1707,47 @@ function fnv1a(text) {
 // ya mandaba a todos a A: desde el 15-sep los leads se registraban como A y la
 // mitad de sus pedidos como C, asi que el reporte mostraba la conversion de A
 // partida a la mitad.
-function abVariant(phone) {
+// COPIA del interruptor de la prueba T11 de customer-lookup: cambiar los dos
+// (el test ab.test.cjs compara los valores).
+const PRUEBA_K_ACTIVA = false;
+
+function abVariant(phone, { anuncio = false, activa = PRUEBA_K_ACTIVA } = {}) {
   const digits = String(phone || "").replace(/\D/g, "");
   // Prueba A/D cerrada el 2026-10-25: D gano (27-sep a 24-oct sin los dias con
   // cortes: A 12,49% vs D 13,16%, z +1,12, y D es ~25% mas barato). D al 100%,
   // incluidos los leads sin telefono (send-presentation ya envia por BSUID).
   // Reparto que se uso: if (!digits) return "N"; return mix32(fnv1a(`present:${digits}`)) % 2 === 0 ? "A" : "D";
-  void digits;
-  return "D";
+  // Prueba T11 (D/K): solo leads de anuncio con telefono, ver customer-lookup.
+  if (!activa || !anuncio || !digits) return "D";
+  return brazoFicha(digits);
+}
+
+// COPIA EXACTA de customer-lookup/brazoFicha (sal "ficha:" + mix32).
+function brazoFicha(phone) {
+  let digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length === 9) digits = `51${digits}`;
+  if (!digits) return "D";
+  return mix32(fnv1a(`ficha:${digits}`)) % 2 === 0 ? "D" : "K";
+}
+
+// Lead de anuncio segun las vars del flujo: el mismo criterio que
+// send-presentation/conversacionPaga (cualquier ad_referral_* con valor).
+function anuncioDeVars(vars) {
+  return ["ad_referral_ad_id", "ad_referral_headline", "ad_referral_product_handle", "ad_referral_source_url"]
+    .some((k) => String(vars?.[k] ?? "").trim());
 }
 
 // La variante que se le ASIGNO al lead al entrar (customer-lookup la deja en las
 // vars del flujo). Tiene prioridad sobre recalcularla: un lead que entro sin
 // telefono (N, control) da su celular al cerrar, y recalcular con ese numero lo
 // mandaria a A o a D sin haber recibido nunca ese tratamiento.
-const VARIANTES_AB = new Set(["A", "D", "N"]);
+const VARIANTES_AB = new Set(["A", "D", "K", "N"]);
 const VARIANTES_PROMO = new Set(["P1", "P2"]);
 
 function varianteAsignada(payload, phone) {
+  const vars = payload?.execution_context?.vars || payload?.vars || {};
   const v = String(payload?.execution_context?.vars?.ab_variant || payload?.vars?.ab_variant || "").trim().toUpperCase();
-  return VARIANTES_AB.has(v) ? v : abVariant(phone);
+  return VARIANTES_AB.has(v) ? v : abVariant(phone, { anuncio: anuncioDeVars(vars) });
 }
 
 function promoAsignada(payload, phone) {
@@ -2100,6 +2121,8 @@ globalThis.__kenkuCreateShopifyOrder = {
   findWooDuplicateOrder,
   wooItemsSignature,
   abVariant,
+  brazoFicha,
+  PRUEBA_K_ACTIVA,
   promoVariant,
   varianteAsignada,
   buildOrderInput,

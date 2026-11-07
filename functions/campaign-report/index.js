@@ -104,13 +104,16 @@ async function handleRequest(request, env = globalThis) {
         revenuePerLead: ab?.revenuePerLead ? { A: ab.revenuePerLead.A, D: ab.revenuePerLead.D } : null,
         presentacionesPorFuncion: ab?.presentacionesPorFuncion || null,
       },
+      pruebaK: resumenPruebaK(ab),
       note: "D = presentacion enviada por send-presentation (una llamada al modelo en vez de ~18),"
         + " desde 2026-09-26; A = control. Los leads sin telefono (N) no cuentan en ninguna."
         + " A = control (cierra pidiendo ubicacion tras el precio)."
         + " C = a los leads que entran con 'Tengo una consulta' les cierra invitando su duda"
         + " en vez de pedirles logistica; al resto los trata igual que A, por eso mirar"
         + " liftCvsA_soloConsulta y no el global."
-        + " B = retirada el 2026-08-25 (precio + cantidad juntos, 22% peor que el control).",
+        + " B = retirada el 2026-08-25 (precio + cantidad juntos, 22% peor que el control)."
+        + " K = prueba T11 (ficha compacta de 2 mensajes; solo leads de anuncio con telefono):"
+        + " se compara en pruebaK contra la D DE ANUNCIO, nunca contra la D entera.",
     }, 200);
   }
 
@@ -1041,9 +1044,20 @@ async function fetchAbTest(env, range, config = getConfig(env)) {
     // conversationId. Claves del formato viejo (sin esos segmentos) siguen
     // contando en el total y caen en "otro".
     const blank = () => ({ leads: 0, orders: 0 });
-    const tally = { A: blank(), B: blank(), C: blank(), D: blank() };
-    const revenueOf = { A: 0, B: 0, C: 0, D: 0 };   // variante -> ingreso de sus pedidos
+    // K = brazo de la prueba T11 (ficha compacta, desde customer-lookup PRUEBA_K_ACTIVA).
+    const tally = { A: blank(), B: blank(), C: blank(), D: blank(), K: blank() };
+    const revenueOf = { A: 0, B: 0, C: 0, D: 0, K: 0 };   // variante -> ingreso de sus pedidos
     const byEntry = {};                       // variante -> entry_type -> {leads, orders}
+    // variante -> canal ("anuncio" | "organico" | "?" en claves anteriores a T11)
+    // -> {leads, orders, ordersAsesora, revenue}. La K solo se reparte en anuncio:
+    // su control es la D DE ANUNCIO, no la D entera (la organica compra ~2x).
+    const byCanal = {};
+    const canalOfConv = new Map();            // conversationId -> canal
+    const bumpCanal = (variant, canal, field, n = 1) => {
+      byCanal[variant] = byCanal[variant] || {};
+      byCanal[variant][canal] = byCanal[variant][canal] || { leads: 0, orders: 0, ordersAsesora: 0, revenue: 0 };
+      byCanal[variant][canal][field] += n;
+    };
     const entryOfConv = new Map();            // conversationId -> entry_type
     const leadKeyOfConv = new Map();          // conversationId -> nombre de la clave abx_lead (su valor trae `at`)
     // Segundo eje, independiente del A/C: prueba del empuje al 3x2.
@@ -1069,15 +1083,19 @@ async function fetchAbTest(env, range, config = getConfig(env)) {
         const [, day, variant] = parts;
         if (!day || !tally[variant]) continue;
         if (day < range.since || day > range.until) continue;
-        // 5 segmentos = con entry_type; 6 = ademas con el eje de promo; 4 = viejo.
+        // 5 segmentos = con entry_type; 6 = ademas con el eje de promo; 7 = ademas
+        // con el canal (desde T11); 4 = viejo.
         const entryType = parts.length >= 5 ? parts[3] : "otro";
         const promo = parts.length >= 6 ? parts[4] : "?";
+        const canal = parts.length >= 7 ? parts[5] : "?";
         const convId = parts[parts.length - 1];
         entryOfConv.set(convId, entryType);
+        canalOfConv.set(convId, canal);
         if (!leadKeyOfConv.has(convId)) leadKeyOfConv.set(convId, entry.name);
         promoOfConv.set(convId, promo);
         tally[variant].leads += 1;
         bump(variant, entryType, "leads");
+        bumpCanal(variant, canal, "leads");
         bumpPromo(promo, "leads", 1);
       }
       if (list.list_complete || !list.cursor) break;
@@ -1114,6 +1132,9 @@ async function fetchAbTest(env, range, config = getConfig(env)) {
           // si el valor no se puede leer, el pedido igual cuenta para conversion
         }
         if (total != null) revenueOf[variant] += total;
+        const canalPedido = (convId && canalOfConv.get(convId)) || "?";
+        bumpCanal(variant, canalPedido, "orders");
+        if (total != null) bumpCanal(variant, canalPedido, "revenue", total);
         bumpPromo(promo || "?", "orders", 1);
         if (total != null) bumpPromo(promo || "?", "revenue", total);
         if (units != null) bumpPromo(promo || "?", "units", units);
@@ -1131,11 +1152,17 @@ async function fetchAbTest(env, range, config = getConfig(env)) {
       tally[variant].ordersAsesora = v.orders;
       revenueOf[variant] += v.revenue;
     }
+    for (const p of asesora.detalle) {
+      if (!tally[p.variant]) continue;
+      bumpCanal(p.variant, p.canal || "?", "ordersAsesora");
+      bumpCanal(p.variant, p.canal || "?", "revenue", p.total || 0);
+    }
     const rate = (v) => (v.leads > 0 ? v.orders / v.leads : null);
     const withRate = (v) => {
       const ordersTotal = v.orders + (v.ordersAsesora || 0);
       return { ...v, ordersAsesora: v.ordersAsesora || 0, ordersTotal, rate: rate(v), rateTotal: v.leads > 0 ? ordersTotal / v.leads : null };
     };
+    const presentaciones = await contarPresentacionesPorVariante(kv, range);
     const breakdown = {};
     for (const [variant, entries] of Object.entries(byEntry)) {
       breakdown[variant] = {};
@@ -1149,8 +1176,16 @@ async function fetchAbTest(env, range, config = getConfig(env)) {
       // Prueba A/D (send-presentation, desde 2026-09-26). La N (leads sin
       // telefono) queda fuera a proposito: ver abVariant en customer-lookup.
       D: withRate(tally.D),
+      // Prueba T11 (ficha compacta). Comparar contra byCanal.D.anuncio, no contra D.
+      K: withRate(tally.K),
+      byCanal: Object.fromEntries(Object.entries(byCanal).map(([variant, canales]) => [variant,
+        Object.fromEntries(Object.entries(canales).map(([canal, v]) => [canal, {
+          ...withRate(v), revenuePerLead: v.leads ? round2(v.revenue / v.leads) : null,
+        }]))])),
+      telefonos: await contarTelefonos(kv, range),
       revenuePerLead: Object.fromEntries(Object.entries(tally).map(([k, v]) => [k, v.leads ? round2(revenueOf[k] / v.leads) : null])),
-      presentacionesPorFuncion: await contarPresentaciones(kv, range),
+      presentacionesPorFuncion: presentaciones.total,
+      presentacionesPorVariante: presentaciones.porVariante,
       pedidosAsesora: asesora.detalle,
       pedidosAsesoraNota: asesora.nota,
       // Desglose por como entro el lead: la variante C solo cambia el cierre de
@@ -1651,7 +1686,7 @@ async function pedidosDeAsesora(config, kv, range, leadKeyOfConv = new Map()) {
         porVariante[lead.variant] = porVariante[lead.variant] || { orders: 0, revenue: 0 };
         porVariante[lead.variant].orders += 1;
         if (Number.isFinite(total)) porVariante[lead.variant].revenue += total;
-        detalle.push({ name: c.o.name, day: dia, variant: lead.variant, total: round2(total) });
+        detalle.push({ name: c.o.name, day: dia, variant: lead.variant, ...(lead.canal ? { canal: lead.canal } : {}), total: round2(total) });
       }
     }
     return { porVariante, detalle, nota: notas.length ? notas.join("; ") : null };
@@ -1705,16 +1740,55 @@ async function horaDelLead(kv, leadKeyOfConv, conversationId) {
 // Adopcion de send-presentation: cuantas presentaciones de la variante D
 // salieron por la funcion (completa o parcial). Sin esto no se distingue "D no
 // convierte distinto" de "el agente casi nunca uso la herramienta".
-async function contarPresentaciones(kv, range) {
-  const out = { completa: 0, completa_sin_media: 0, parcial: 0, fallo_inicial: 0, sin_tiempo: 0 };
+//
+// Devuelve el total (como siempre) y `porVariante` separando D y K: la clave de
+// K lleva la variante despues del resultado (abx_present:<dia>:<resultado>:K:<conv>);
+// la de D no lleva nada (4 segmentos) y cuenta como D. Es el chequeo de adopcion de T11.
+async function contarPresentacionesPorVariante(kv, range) {
+  const nuevo = () => ({ completa: 0, completa_sin_media: 0, parcial: 0, fallo_inicial: 0, sin_tiempo: 0 });
+  const out = nuevo();
+  const porV = { D: nuevo(), K: nuevo() };
   try {
     let cursor;
     for (let page = 0; page < 20; page += 1) {
       const list = await kv.list({ prefix: "abx_present:", cursor, limit: 1000 });
       for (const entry of list.keys || []) {
-        const [, day, resultado] = String(entry.name || "").split(":");
+        const parts = String(entry.name || "").split(":");
+        const [, day, resultado] = parts;
         if (!day || day < range.since || day > range.until) continue;
-        if (resultado in out) out[resultado] += 1;
+        if (!(resultado in out)) continue;
+        out[resultado] += 1;
+        const variante = parts.length >= 5 ? parts[3] : "D";
+        if (porV[variante]) porV[variante][resultado] += 1;
+      }
+      if (list.list_complete || !list.cursor) break;
+      cursor = list.cursor;
+    }
+  } catch {
+    // best effort
+  }
+  return { total: out, porVariante: porV };
+}
+
+// Telefonos UNICOS por variante y canal en el rango (clave abx_tel:<dia>:<variante>:<canal>:<9 digitos>
+// que escribe customer-lookup desde la prueba T11). La lectura de T11 es por
+// telefono: un cliente que abre dos conversaciones cuenta una vez. Si un mismo
+// telefono aparece en dos celdas, cuenta en la PRIMERA en que entro (KV lista
+// en orden lexicografico, o sea por dia).
+async function contarTelefonos(kv, range) {
+  const out = {};
+  const vistos = new Set();
+  try {
+    let cursor;
+    for (let page = 0; page < 50; page += 1) {
+      const list = await kv.list({ prefix: "abx_tel:", cursor, limit: 1000 });
+      for (const entry of list.keys || []) {
+        const [, day, variant, canal, nueve] = String(entry.name || "").split(":");
+        if (!day || !nueve || day < range.since || day > range.until) continue;
+        if (vistos.has(nueve)) continue;
+        vistos.add(nueve);
+        out[variant] = out[variant] || {};
+        out[variant][canal] = (out[variant][canal] || 0) + 1;
       }
       if (list.list_complete || !list.cursor) break;
       cursor = list.cursor;
@@ -1723,6 +1797,34 @@ async function contarPresentaciones(kv, range) {
     // best effort
   }
   return out;
+}
+
+// Prueba T11 (D vs K, ficha compacta de 2 mensajes). La K solo se reparte entre
+// leads de ANUNCIO con telefono, asi que el control es la D de anuncio: comparar
+// contra la D entera mezclaria los organicos (que compran ~2x) y daria un K
+// artificialmente peor. Lo que decide es `total` (bot + asesora) con zCorregida;
+// la lectura definitiva es por telefono a 7 dias (script offline, recalculando
+// el brazo con brazoFicha de customer-lookup). `telefonos` sirve para vigilar el
+// volumen y el 50/50; `presentaciones` es la adopcion (K tiene que salir por la
+// funcion desde el dia 1). null si no hay ni un lead K en el rango.
+function resumenPruebaK(ab) {
+  const D = ab?.byCanal?.D?.anuncio;
+  const K = ab?.byCanal?.K?.anuncio;
+  if (!K?.leads) return null;
+  return {
+    D_anuncio: D || null,
+    K_anuncio: K,
+    liftKvsD: (D?.rate && K.rate != null) ? round2(K.rate / D.rate - 1) : null,
+    ...(zDosProporciones(D, K) || {}),
+    liftKvsD_total: (D?.rateTotal && K.rateTotal != null) ? round2(K.rateTotal / D.rateTotal - 1) : null,
+    total: zDosProporciones(
+      D ? { leads: D.leads, orders: D.ordersTotal } : null,
+      { leads: K.leads, orders: K.ordersTotal },
+    ),
+    revenuePerLead: { D: D?.revenuePerLead ?? null, K: K.revenuePerLead },
+    telefonos: { D: ab?.telefonos?.D?.anuncio || 0, K: ab?.telefonos?.K?.anuncio || 0 },
+    presentaciones: ab?.presentacionesPorVariante || null,
+  };
 }
 
 // z de dos proporciones, y la misma dividida por 1,51: las tasas diarias de este
@@ -1740,4 +1842,4 @@ function zDosProporciones(a, b) {
   return { z: round2(z), zCorregida: round2(z / 1.51) };
 }
 
-globalThis.__kenkuCampaignReport = { buildReport, buildConversion, buildTelegramSummary, fetchOrderAggregates, fetchBotOrders, fetchMetaInsights, fetchConversationStats, handleRequest, handler, resolveRange, normalizeWooOrder, shopifyPart, getConfig };
+globalThis.__kenkuCampaignReport = { buildReport, buildConversion, buildTelegramSummary, fetchOrderAggregates, fetchBotOrders, fetchMetaInsights, fetchConversationStats, handleRequest, handler, resolveRange, normalizeWooOrder, shopifyPart, getConfig, resumenPruebaK };

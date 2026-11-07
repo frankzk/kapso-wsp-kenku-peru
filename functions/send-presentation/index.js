@@ -15,8 +15,16 @@
 // a mano como siempre. Nunca adivina.
 //
 // Es la variante "D" del A/B (ver customer-lookup / abVariant). Si el lead no
-// es "D" la funcion se niega por codigo, asi la separacion del experimento no
-// depende de que el modelo lea bien una variable.
+// es "D" (ni "K", abajo) la funcion se niega por codigo, asi la separacion del
+// experimento no depende de que el modelo lea bien una variable.
+//
+// PRUEBA T11 (brazo "K", ficha compacta de 2 mensajes; PRUEBAS_AB_MIREVA.md):
+// a un lead K que viene de anuncio se le manda el MISMO contenido que a D en 2
+// mensajes: (1) la foto principal con saludo + beneficio + precio en el pie, y
+// (2) los botones con el testimonio de cabecera, la escalera de promos y la
+// misma pregunta final. Sin antes/despues ni video. El agente llama igual que en
+// D (una vez); el formato lo decide esta funcion leyendo ab_variant. Un K sin
+// anuncio recibe la compacta de siempre, igual que D.
 
 // Fuentes de verdad: se INVOCAN las mismas funciones que usa el agente en vez
 // de reimplementarlas, para que el precio y las fotos sean exactamente los
@@ -27,7 +35,13 @@ const MEDIA_LOOKUP_FN = "d4e6365e-4736-4e92-872a-259adb6634f2";
 const CHECK_COVERAGE_FN = "05a6107d-6488-4bb3-8088-9f2fce140b5e";
 const KAPSO = "https://api.kapso.ai";
 
-const VARIANTE_TRATAMIENTO = "D";
+// D = presentacion por esta funcion (al 100% desde el 2026-10-25). K = la ficha
+// compacta de la prueba T11 (customer-lookup la asigna solo si PRUEBA_K_ACTIVA).
+const VARIANTES_TRATAMIENTO = new Set(["D", "K"]);
+const VARIANTE_FICHA = "K";
+
+// Limites de Meta: pie de imagen y cuerpo de botones, 1.024 caracteres.
+const MAX_CAPTION = 1024;
 
 // Igual que quote-order (FREE_SHIPPING_THRESHOLD, comparacion estricta).
 const FREE_SHIPPING_THRESHOLD = 40;
@@ -92,7 +106,8 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
   // --- Guardas: todo lo que no sea el caso limpio vuelve al camino manual ---
 
   const variante = String(ctx.vars.ab_variant || "").trim().toUpperCase();
-  if (variante !== VARIANTE_TRATAMIENTO) {
+  ctx.variante = variante;
+  if (!VARIANTES_TRATAMIENTO.has(variante)) {
     return rechazo("variante_control",
       "Este cliente es de la variante de control: NO uses esta herramienta. Presenta a mano como siempre (PRESENTACION DE PRODUCTO).");
   }
@@ -140,7 +155,10 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
   // Conversacion que Meta cobra (no vino de un anuncio): la misma presentacion
   // en menos mensajes. Ver conversacionPaga.
   const compacta = conversacionPaga(ctx.vars);
+  // La ficha K solo existe para leads de anuncio; sin anuncio, compacta de siempre.
+  const ficha = variante === VARIANTE_FICHA && !compacta;
   const pasos = armarSecuencia({
+    variante,
     compacta,
     saludo,
     beneficio,
@@ -157,7 +175,8 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
   // Si los lookups ya se comieron el tiempo, no se arranca: no hay que dejar
   // una presentacion a medias ni arriesgar el corte de los 30 s. Como todavia no
   // salio nada, el agente puede presentar a mano sin duplicar.
-  const criticos = pasos.filter((p) => p.tipo === "text" || p.tipo === "buttons").length;
+  // `critico` marca la foto de la ficha K: lleva el precio, no es material opcional.
+  const criticos = pasos.filter((p) => p.tipo === "text" || p.tipo === "buttons" || p.critico).length;
   if (limite - deps.ahora() < criticos * LATENCIA_ENVIO_MS * 1.5) {
     await registrar(env, ctx, "sin_tiempo");
     return rechazo("sin_tiempo", "No se envio nada (el catalogo tardo demasiado). Presenta a mano como siempre (PRESENTACION DE PRODUCTO).");
@@ -178,7 +197,7 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
 
   // --- Fase 2, en segundo plano: el resto, con tope de tiempo. ---
 
-  const resto = enviarResto(pasos, ctx, env, primero.ms, limite);
+  const resto = enviarResto(pasos, ctx, env, primero.ms, limite, primero.respaldo ? [pasos[0].paso] : []);
   const producto_ = { handle: lookup.product.handle, titulo, precio: precio.precio };
 
   if (execCtx && typeof execCtx.waitUntil === "function") {
@@ -190,8 +209,14 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
       producto: producto_,
       compacta,
       pasos: pasos.map((p) => p.paso),
-      message: "Presentacion en curso: el saludo ya salio y el resto (fotos, video, beneficio, precio, testimonio"
-        + " y la pregunta final con botones) se esta enviando solo en los proximos segundos. NO mandes nada mas"
+      ...(ficha ? { variante } : {}),
+      message: (ficha
+        ? "Presentacion en curso: la ficha (foto con saludo, beneficio y precio) ya salio y las promociones con la"
+          + " pregunta final con botones se estan enviando solo en los proximos segundos. Esta variante NO lleva video"
+          + " ni foto de antes/despues a proposito: no los mandes."
+        : "Presentacion en curso: el saludo ya salio y el resto (fotos, video, beneficio, precio, testimonio"
+          + " y la pregunta final con botones) se esta enviando solo en los proximos segundos.")
+        + " NO mandes nada mas"
         + " en este turno ni repitas nada de eso. Guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task."
         + notaZona(zona, cobertura),
       zona: zona || undefined,
@@ -207,10 +232,13 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
     enCurso: false,
     producto: producto_,
     compacta,
+    ...(ficha ? { variante } : {}),
     ...r,
     duracionTotalMs: deps.ahora() - inicio,
     message: r.ok
-      ? "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso."
+      ? (ficha ? "Presentacion enviada completa en 2 mensajes (ficha con foto y precio + promociones con la pregunta"
+        + " final con botones); esta variante NO lleva video ni antes/despues a proposito. NO repitas nada de eso."
+        : "Presentacion enviada completa, incluida la pregunta final con botones. NO repitas nada de eso.")
         + " Ahora guarda stage=\"producto_mostrado\" + followup_hint y llama complete_task." + notaZona(zona, cobertura)
       : `Se enviaron ${r.enviados.join(", ")} y fallo "${r.fallo.paso}". Manda a mano SOLO lo que falta (campo pendientes), en ese orden, y sigue normal. No repitas lo que ya se envio.`,
   });
@@ -220,10 +248,13 @@ async function handleRequest(request, env = globalThis, execCtx = null) {
 // material ya era opcional: "omite sin avisar"); un texto o los botones que
 // fallan CORTAN, porque sin precio o sin pregunta final la presentacion no
 // sirve y algo esta roto de fondo.
-async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
+async function enviarResto(pasos, ctx, env, latenciaSaludo, limite, respaldos = []) {
   const inicio = deps.ahora();
   const enviados = [pasos[0].paso];
   const omitidos = [];
+  // Pasos de la ficha K que salieron como texto porque Meta rechazo la foto o los
+  // botones (ver `respaldo`). D nunca los tiene.
+  const conRespaldo = () => (respaldos.length ? { respaldoTexto: respaldos } : {});
   // La latencia se estima con la OBSERVADA (arranca con la del saludo), no con
   // una constante: si Meta viene lenta hoy, las pausas tienen que achicarse
   // desde el primer mensaje y no recien cuando ya no queda tiempo.
@@ -253,6 +284,7 @@ async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
 
     const res = await enviar(paso, ctx);
     if (Number.isFinite(res.ms)) latencias.push(res.ms);
+    if (res.respaldo) respaldos.push(paso.paso);
     if (res.ok) { enviados.push(paso.paso); continue; }
     if (paso.tipo === "image" || paso.tipo === "video") { omitidos.push(paso.paso); continue; }
 
@@ -262,13 +294,14 @@ async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
       reason: "envio_parcial",
       enviados,
       omitidos,
+      ...conRespaldo(),
       fallo: { paso: paso.paso, error: res.error },
       pendientes: pasos.slice(i).map(describir),
       duracionMs: deps.ahora() - inicio,
     };
   }
   await registrar(env, ctx, omitidos.length ? "completa_sin_media" : "completa");
-  return { ok: true, enviados, omitidos, duracionMs: deps.ahora() - inicio };
+  return { ok: true, enviados, omitidos, ...conRespaldo(), duracionMs: deps.ahora() - inicio };
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +311,7 @@ async function enviarResto(pasos, ctx, env, latenciaSaludo, limite) {
 // material; los de texto van siempre.
 // ---------------------------------------------------------------------------
 
-function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, precio, antes, unidad, knownAddress, zona = null, cobertura = null }) {
+function armarSecuencia({ variante = "D", compacta = false, saludo, beneficio, nombre, media, precio, antes, unidad, knownAddress, zona = null, cobertura = null }) {
   const porRol = (rol) => media.find((m) => m && m.role === rol && (m.url || m.mediaUrl));
   const url = (m) => m.url || m.mediaUrl;
   const pasos = [];
@@ -289,6 +322,10 @@ function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, pr
     : knownAddress
     ? { texto: `¿Te lo enviamos a ${knownAddress}, como la vez pasada? 😊`, botones: ["Si, la misma", "Cambiar direccion"] }
     : { texto: "Por cierto 😊, ¿te encuentras en *Lima* o en *provincia*?", botones: ["Lima", "Provincia"] };
+
+  if (variante === VARIANTE_FICHA && !compacta) {
+    return secuenciaFicha({ saludo, beneficio, nombre, precio, antes, unidad, zona, cobertura, pregunta, principal, testimonio, url });
+  }
 
   if (compacta) {
     // El MISMO contenido, sin sacar nada, en menos mensajes: saludo y beneficio
@@ -336,6 +373,47 @@ function armarSecuencia({ compacta = false, saludo, beneficio, nombre, media, pr
   return pasos;
 }
 
+// Brazo K de la prueba T11: el contenido de D, en el mismo orden, en 2 mensajes.
+//   1. foto principal; pie = saludo + beneficio + la primera linea del precio
+//      (precio, envio gratis, pago al recibir, garantia). Sin la escalera: en un
+//      pie largo WhatsApp la esconderia tras "Leer mas" (riesgo de la ficha).
+//   2. botones; cabecera = testimonio (si hay), cuerpo = la escalera de promos,
+//      la linea de envio de la zona (si vino del boton de la web) y la MISMA
+//      pregunta final que D, con los mismos botones.
+// Sin antes/despues ni video. Respaldos: sin foto principal, el pie va como
+// texto; si Meta rechaza la foto, se reintenta como texto; si rechaza la
+// cabecera, botones sin ella (igual que la compacta); y si rechaza los botones,
+// la pregunta sale como texto. Nunca se queda sin precio ni sin pregunta.
+function secuenciaFicha({ saludo, beneficio, nombre, precio, antes, unidad, zona, cobertura, pregunta, principal, testimonio, url }) {
+  const { cabeza, envio, escalera } = partesPrecio({ nombre, precio, antes, unidad, zona, cobertura });
+  const pie = pieFicha(saludo, beneficio, cabeza);
+  const pasos = [principal
+    ? { paso: "ficha", tipo: "image", critico: true, body: { link: url(principal), caption: pie }, respaldo: { tipo: "text", body: { body: pie } } }
+    : { paso: "ficha", tipo: "text", body: { body: pie } }];
+
+  const cuerpo = [escalera, ...(envio ? [envio] : []), pregunta.texto].join("\n\n");
+  const sinCabecera = botones(cuerpo, pregunta.botones);
+  const respaldo = { tipo: "text", body: { body: cuerpo } };
+  pasos.push(testimonio
+    ? { paso: "pregunta_final", tipo: "buttons", body: { ...sinCabecera, header: { type: "image", image: { link: url(testimonio) } } }, sinCabecera, respaldo }
+    : { paso: "pregunta_final", tipo: "buttons", body: sinCabecera, respaldo });
+  return pasos;
+}
+
+// Pie de la foto de la ficha, dentro de los 1.024 de Meta. Con los topes del
+// prompt (saludo <=350, beneficio <=400) siempre entra; si el modelo se pasa, se
+// recorta el saludo/beneficio y NUNCA la linea del precio. Se mide en unidades
+// UTF-16 (.length), que es >= a los caracteres que cuenta Meta: queda del lado seguro.
+function pieFicha(saludo, beneficio, cabeza) {
+  const intro = `${saludo}\n\n${beneficio}`;
+  const completo = `${intro}\n\n${cabeza}`;
+  if (completo.length <= MAX_CAPTION) return completo;
+  const lugar = MAX_CAPTION - cabeza.length - 2 - 1; // "\n\n" + "…"
+  const letras = Array.from(intro);
+  while (letras.length && letras.join("").length > lugar) letras.pop();
+  return `${letras.join("").trimEnd()}…\n\n${cabeza}`;
+}
+
 // Desde el 2026-10-01 Meta cobra cada mensaje de servicio (US$0,03). Las
 // conversaciones que vienen de un anuncio (click-to-WhatsApp) estan en la
 // ventana gratuita de 72 h y no pagan; esas siguen con la secuencia de siempre.
@@ -350,6 +428,13 @@ function conversacionPaga(vars) {
 // Msg 6 del prompt. El ladder es el mismo que calcula quote-order: 3 unidades
 // pagan 2, 5 pagan 3 (ver countFreeUnits).
 function lineaPrecio({ nombre, precio, antes, unidad, zona = null, cobertura = null }) {
+  const { cabeza, envio, escalera } = partesPrecio({ nombre, precio, antes, unidad, zona, cobertura });
+  return [cabeza, ...(envio ? ["", envio] : []), "", escalera].join("\n");
+}
+
+// Las tres piezas del mensaje del precio por separado: D las junta en un texto
+// (lineaPrecio) y la ficha K las reparte entre el pie de la foto y los botones.
+function partesPrecio({ nombre, precio, antes, unidad, zona = null, cobertura = null }) {
   let cabeza = `*${nombre}* queda en *${soles(precio)}* por ${unidad.sing}`;
   if (antes && antes > precio) cabeza += ` (antes *${soles(antes)}*)`;
   if (precio > FREE_SHIPPING_THRESHOLD) cabeza += " con *envío gratis* 📦";
@@ -359,15 +444,13 @@ function lineaPrecio({ nombre, precio, antes, unidad, zona = null, cobertura = n
   const envio = zona && cobertura ? lineaEnvio(zona, cobertura) : "";
   if (envio) cabeza += " y *garantía de 30 días* 🛡️ 😊.";
   else cabeza += ", en la mayoría de zonas *pagas al recibir* y con *garantía de 30 días* 🛡️ 😊.";
-  return [
-    cabeza,
-    ...(envio ? ["", envio] : []),
-    "",
+  const escalera = [
     "🔥 Promociones disponibles:",
     `• 1 ${unidad.sing}: *${soles(precio)}*`,
     `• 3x2: Lleva 3 ${unidad.plur} por *${soles(precio * 2)}* (pagas solo 2)`,
     `• 5x3: Lleva 5 ${unidad.plur} por *${soles(precio * 3)}* (pagas solo 3)`,
   ].join("\n");
+  return { cabeza, envio, escalera };
 }
 
 // "Soy de La Libertad / Sánchez Carrión / Huamachuco." (texto del boton de la
@@ -507,10 +590,17 @@ function describir(p) {
 // ---------------------------------------------------------------------------
 
 async function enviar(paso, ctx) {
-  const res = await enviarUno(paso, ctx);
-  if (res.ok || !paso.sinCabecera) return res;
-  const reintento = await enviarUno({ ...paso, body: paso.sinCabecera }, ctx);
-  return { ...reintento, ms: (res.ms || 0) + (reintento.ms || 0), sinCabecera: reintento.ok };
+  let res = await enviarUno(paso, ctx);
+  if (!res.ok && paso.sinCabecera) {
+    const reintento = await enviarUno({ ...paso, body: paso.sinCabecera }, ctx);
+    res = { ...reintento, ms: (res.ms || 0) + (reintento.ms || 0), sinCabecera: reintento.ok };
+  }
+  // Solo la ficha K trae `respaldo`: el mismo texto como mensaje de texto simple.
+  if (!res.ok && paso.respaldo) {
+    const comoTexto = await enviarUno({ ...paso, ...paso.respaldo }, ctx);
+    res = { ...comoTexto, ms: (res.ms || 0) + (comoTexto.ms || 0), respaldo: comoTexto.ok };
+  }
+  return res;
 }
 
 async function enviarUno(paso, ctx) {
@@ -578,12 +668,17 @@ async function invocar(functionId, input, apiKey) {
 // Registro de adopcion: cuantas presentaciones de la variante D salieron por la
 // funcion. Sin esto no se puede separar "D no convierte distinto" de "el agente
 // casi nunca uso la herramienta".
+//
+// La K lleva la variante DESPUES del resultado (abx_present:<dia>:<resultado>:K:<conv>):
+// campaign-report lee dia y resultado por posicion, asi el conteo total no se
+// rompe, y la clave de D queda exactamente como antes.
 async function registrar(env, ctx, resultado) {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv || !ctx.conversationId) return;
     const day = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    await kv.put(`abx_present:${day}:${resultado}:${ctx.conversationId}`, "1", { expirationTtl: 90 * 24 * 3600 });
+    const variante = ctx.variante === VARIANTE_FICHA ? `${VARIANTE_FICHA}:` : "";
+    await kv.put(`abx_present:${day}:${resultado}:${variante}${ctx.conversationId}`, "1", { expirationTtl: 90 * 24 * 3600 });
   } catch {
     // best effort
   }
@@ -702,5 +797,5 @@ function json(body, status = 200) {
 }
 
 globalThis.__kenkuSendPresentation = {
-  handler, handleRequest, armarSecuencia, conversacionPaga, parseUbicacion, leerCobertura, preguntaPromo, lineaPrecio, precioUnico, unidadDe, nombreCorto, sanitize, deps,
+  handler, handleRequest, armarSecuencia, conversacionPaga, parseUbicacion, leerCobertura, preguntaPromo, lineaPrecio, partesPrecio, pieFicha, precioUnico, unidadDe, nombreCorto, sanitize, deps,
 };

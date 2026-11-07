@@ -276,7 +276,10 @@ async function handleRequest(request, env = globalThis) {
     // La variante que ya tiene la conversacion manda sobre recalcularla: el agente
     // vuelve a llamar customer_lookup a mitad de charla, a veces con un celular que
     // el cliente recien dio, y recalcular lo cambiaria de brazo en pleno experimento.
-    const asignada = { ab: varianteDelLead(payload, phone), promo: promoDelLead(payload, phone) };
+    // La prueba T11 (D/K) solo reparte leads de ANUNCIO, asi que la variante se
+    // fija despues de leer el referral.
+    const promo = promoDelLead(payload, phone);
+    const asignar = (adReferral) => ({ ab: varianteDelLead(payload, phone, { anuncio: esLeadDeAnuncio(adReferral) }), promo });
 
     if (!phone && !email && !input.debugQuery) {
       // Sin telefono no podemos buscar al cliente en Shopify, PERO si el lead
@@ -284,6 +287,7 @@ async function handleRequest(request, env = globalThis) {
       // retornaba aqui y el anuncio se perdia, dejando al bot sin saber el
       // producto (pedia link/captura en vez de reconocerlo).
       const adReferral = await fetchAdReferral(env, payload);
+      const asignada = asignar(adReferral);
       await alertUnmappedAd(env, adReferral, input.phone || "");
       return json({
         ok: true,
@@ -313,7 +317,9 @@ async function handleRequest(request, env = globalThis) {
     ]);
     // El tipo de entrada sale del mismo fetch del referral, asi que el registro
     // A/B va DESPUES y no en paralelo: sin eso no se puede guardar en la clave.
-    await logAbLead(env, conversationId, asignada.ab, adReferral?.entryType || "otro", asignada.promo, phone);
+    const asignada = asignar(adReferral);
+    await logAbLead(env, conversationId, asignada.ab, adReferral?.entryType || "otro", asignada.promo, phone,
+      esLeadDeAnuncio(adReferral) ? "anuncio" : "organico");
     await alertUnmappedAd(env, adReferral, phone);
     if (!search.candidates.length && search.allFailed) {
       // En modo WooCommerce van igual las vars (como cliente nuevo): sin ellas el bot
@@ -828,12 +834,18 @@ function fnv1a(text) {
 //
 // create-shopify-order tiene una COPIA de esta funcion: tienen que ser
 // identicas (hay un test que lo verifica).
-const VARIANTES_AB = new Set(["A", "D", "N"]);
+//
+// "K" = brazo de la prueba T11 (ficha compacta de 2 mensajes, ver abVariant).
+// Esta en el set para que un lead que entro como K siga en K si el agente lo
+// vuelve a buscar, y que siga en K aunque se apague la prueba a mitad de charla.
+const VARIANTES_AB = new Set(["A", "D", "K", "N"]);
 const VARIANTES_PROMO = new Set(["P1", "P2"]);
+// Las que dejan telefono -> variante para cruzar las ventas de asesora (logAbLead).
+const VARIANTES_CON_TELEFONO = new Set(["A", "D", "K"]);
 
-function varianteDelLead(payload, phone) {
+function varianteDelLead(payload, phone, opciones = {}) {
   const v = String(payload?.execution_context?.vars?.ab_variant || payload?.vars?.ab_variant || "").trim().toUpperCase();
-  return VARIANTES_AB.has(v) ? v : abVariant(phone);
+  return VARIANTES_AB.has(v) ? v : abVariant(phone, opciones);
 }
 
 function promoDelLead(payload, phone) {
@@ -841,15 +853,48 @@ function promoDelLead(payload, phone) {
   return VARIANTES_PROMO.has(v) ? v : promoVariant(phone);
 }
 
-function abVariant(phone) {
+// PRUEBA T11 — D vs K ("ficha compacta de 2 mensajes", PRUEBAS_AB_MIREVA.md).
+// DORMIDA mientras esto sea false: todos siguen en D. Con true, los leads de
+// ANUNCIO con telefono se reparten 50/50 D/K por telefono; sin anuncio o sin
+// telefono -> D (sin anuncio no hay contraste: K recibiria la misma compacta).
+// create-shopify-order tiene una COPIA de este interruptor: cambiar los dos.
+// Plan: inscripcion 17-nov a 14-dic (4 semanas), lectura 21-dic. Al cerrar,
+// volver a false (o dejar el brazo ganador) y anotarlo en EXPERIMENTOS.md.
+const PRUEBA_K_ACTIVA = false;
+
+function abVariant(phone, { anuncio = false, activa = PRUEBA_K_ACTIVA } = {}) {
   const digits = String(phone || "").replace(/\D/g, "");
   // Prueba A/D cerrada el 2026-10-25: D gano (27-sep a 24-oct sin los dias con
   // cortes: A 12,49% vs D 13,16%, z +1,12, y D es ~25% mas barato). D al 100%,
   // incluidos los leads sin telefono (send-presentation ya envia por BSUID).
   // Reparto que se uso: if (!digits) return "N"; return mix32(fnv1a(`present:${digits}`)) % 2 === 0 ? "A" : "D";
-  void digits;
-  return "D";
   // Prueba A/C (terminada): return fnv1a(digits) % 2 === 0 ? "A" : "C";
+  if (!activa || !anuncio || !digits) return "D";
+  return brazoFicha(digits);
+}
+
+// El brazo T11 que le toca a un telefono, SOLO por el telefono (sin mirar el
+// anuncio ni el interruptor): es lo que recalcula la lectura offline, y en los
+// leads sin anuncio da el piso de ruido gratis (D y K reciben lo mismo).
+// Sal propia "ficha:" + mix32: ortogonal a "present:" (A/D), "promo:" (P1/P2) y
+// "fu4:" (seguimientos F/R de check-coverage); sin mix32 el bit bajo de FNV-1a
+// seria el mismo con cualquier sal (ver promoVariant). El celular se lleva a la
+// forma 51XXXXXXXXX: "+51 965 391 481", "965391481" y "51965391481" caen igual
+// (create-shopify-order lo recalcula con el celular que el cliente escribe).
+function brazoFicha(phone) {
+  let digits = String(phone || "").replace(/\D/g, "");
+  if (digits.length === 9) digits = `51${digits}`;
+  if (!digits) return "D";
+  return mix32(fnv1a(`ficha:${digits}`)) % 2 === 0 ? "D" : "K";
+}
+
+// Mismo criterio que send-presentation/conversacionPaga: el lead viene de un
+// anuncio si llega CUALQUIERA de las ad_referral_* que esa funcion mira. Si no
+// coincidieran, un K "sin anuncio" para una recibiria la ficha en la otra.
+function esLeadDeAnuncio(adReferral) {
+  if (!adReferral) return false;
+  return [adReferral.adId, adReferral.headline, adReferral.sourceUrl, resolveAdProductHandle(adReferral)?.handle]
+    .some((v) => String(v ?? "").trim());
 }
 
 // SEGUNDO EJE, independiente del A/C: prueba del empuje al 3x2.
@@ -934,7 +979,7 @@ function limaDayNow() {
   return new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function logAbLead(env, conversationId, variant, entryType = "otro", promo = "P1", phone = "") {
+async function logAbLead(env, conversationId, variant, entryType = "otro", promo = "P1", phone = "", canal = "") {
   try {
     const kv = env.KV || globalThis.KV;
     if (!kv || !conversationId || !variant) return;
@@ -944,27 +989,38 @@ async function logAbLead(env, conversationId, variant, entryType = "otro", promo
     // El tipo de entrada va 4to a proposito: el reporte lee dia y variante por
     // posicion (partes 1 y 2) y los segmentos extra no lo afectan.
     const day = limaDayNow();
-    // El eje de promo va 5to; el conversationId queda SIEMPRE ultimo para que el
-    // reporte lo lea por posicion negativa y los segmentos extra no lo rompan.
-    const key = `abx_lead:${day}:${variant}:${entryType}:${promo}:${conversationId}`;
+    // El eje de promo va 5to y el canal ("anuncio" | "organico", desde la prueba
+    // T11) 6to: la K solo se reparte en anuncio, asi que el control de K es la D
+    // DE ANUNCIO y el reporte tiene que poder separarla. El conversationId queda
+    // SIEMPRE ultimo para que el reporte lo lea por posicion negativa.
+    const key = `abx_lead:${day}:${variant}:${entryType}:${promo}:${canal ? `${canal}:` : ""}${conversationId}`;
     if (await kv.get(key)) return;
-    await kv.put(key, JSON.stringify({ variant, entryType, promo, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+    await kv.put(key, JSON.stringify({ variant, entryType, promo, ...(canal ? { canal } : {}), at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
     // Telefono -> variante, para atribuir los pedidos que NO crea el bot. Cuando
     // una asesora toma la conversacion y cierra la venta desde el dashboard, el
     // pedido no pasa por create-shopify-order y el reporte no lo veia: el primer
     // pedido de la variante D (#KP136948, 26-sep) fue asi. Con esta clave el
     // reporte busca el telefono del pedido y sabe de que variante era el lead.
-    // Solo A y D: la N no cuenta en el experimento. Ultimos 9 digitos, igual que
-    // en el reporte (celular peruano sin el 51).
+    // Solo A, D y K: la N no cuenta en el experimento. Ultimos 9 digitos, igual
+    // que en el reporte (celular peruano sin el 51).
     const nueve = String(phone || "").replace(/\D/g, "").slice(-9);
-    if ((variant === "A" || variant === "D") && nueve.length === 9) {
+    if (VARIANTES_CON_TELEFONO.has(variant) && nueve.length === 9) {
       // `at` = primer contacto: si la clave ya existe con hora y la misma
       // variante, se conserva (un pedido de asesora cuenta desde el PRIMER
       // contacto, no desde la ultima vez que escribio).
       const previa = JSON.parse((await kv.get(`abx_phone:${nueve}`)) || "null");
       if (!(previa?.at && previa.variant === variant)) {
-        await kv.put(`abx_phone:${nueve}`, JSON.stringify({ variant, promo, day, conversationId, at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+        await kv.put(`abx_phone:${nueve}`, JSON.stringify({ variant, promo, day, conversationId, ...(canal ? { canal } : {}), at: new Date().toISOString() }), { expirationTtl: 90 * 24 * 3600 });
+      } else if (canal === "anuncio" && previa.canal !== "anuncio") {
+        // Ya era lead (organico) de la misma variante y ahora vuelve por anuncio:
+        // se marca el canal sin mover el primer contacto.
+        await kv.put(`abx_phone:${nueve}`, JSON.stringify({ ...previa, canal }), { expirationTtl: 90 * 24 * 3600 });
       }
+      // Una marca por lead nuevo (no solo por primer contacto) con todo en el
+      // NOMBRE: el reporte cuenta telefonos UNICOS por variante y canal listando,
+      // sin un kv.get por telefono. Si solo se escribiera en el primer contacto,
+      // un conocido que vuelve contaria en K (cambia de variante) y no en D.
+      if (canal) await kv.put(`abx_tel:${day}:${variant}:${canal}:${nueve}`, "1", { expirationTtl: 90 * 24 * 3600 });
     }
   } catch {
     // best effort
@@ -1162,4 +1218,4 @@ function json(body) {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
 }
 
-globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders, wooRecentOrder, wooOrderItems, recentOrderVars, RECENT_ORDER_HOURS };
+globalThis.__kenkuCustomerLookup = { resolveAdProductHandle, AD_PRODUCT_MAP, handler, handleRequest, pickBestMatch, buildAddressSummary, normalizePhone, abVariant, brazoFicha, esLeadDeAnuncio, buildFlowVars, PRUEBA_K_ACTIVA, promoVariant, varianteDelLead, logAbLead, getStoreBackend, wooCustomerFromOrders, wooRecentOrder, wooOrderItems, recentOrderVars, RECENT_ORDER_HOURS };
