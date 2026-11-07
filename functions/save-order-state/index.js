@@ -98,6 +98,36 @@ function isPlaceholder(value) {
   return raw.replace(/[^a-z0-9]/g, "").length < 3;
 }
 
+// "casa", "aqui", "mi domicilio": no dicen donde. Paso el 2026-11 con
+// save_order_state({direccion:"casa"}) -> ok (b7bf6ae7). Se compara la frase
+// entera, asi "Casa verde frente al parque" sigue valiendo.
+const VAGUE_ADDRESSES = new Set([
+  "casa", "mi casa", "en casa", "en mi casa", "a mi casa", "aqui", "aca", "por aqui", "por aca",
+  "domicilio", "mi domicilio", "a domicilio", "mi direccion", "la direccion", "direccion",
+  "la misma", "el mismo", "lo mismo", "misma", "igual", "la de siempre", "ubicacion", "mi ubicacion",
+  "trabajo", "mi trabajo", "oficina", "mi oficina",
+]);
+
+function isVagueAddress(value) {
+  const compact = stripAccents(clean(value)).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return VAGUE_ADDRESSES.has(compact);
+}
+
+// Una direccion sin numero de puerta, manzana/lote o km y sin una seña ("frente
+// a", "al costado de") no la encuentra el motorizado: #KP200248 "Jr. Mamá Ocllo,
+// Juliaca". No se rechaza (el cliente ya la dio), pero la referencia pasa a ser
+// obligatoria para crear el pedido.
+// "Shalom Juliaca" / "Olva ...": en agencia la "direccion" es la oficina de destino.
+const ADDRESS_LOCATOR_RE = /\d|\b(mz|mza|manzana|lt|lote|km|kilometro|shalom|olva|agencia)\b/i;
+const REFERENCE_WORDS_RE = /\b(frente|costado|cerca|espalda|esquina|altura|lado|pasando|cruce|ref|referencia|junto|entre|detras|delante|al fondo|porton|puerta|edificio|condominio)\b/i;
+
+function needsReference(state) {
+  const address = stripAccents(clean(state.address));
+  if (!address) return false;
+  if (clean(state.reference)) return false;
+  return !ADDRESS_LOCATOR_RE.test(address) && !REFERENCE_WORDS_RE.test(address);
+}
+
 function isPeruMobile(value) {
   const digits = String(value == null ? "" : value).replace(/\D/g, "").replace(/^51/, "");
   return digits.length === 9 && digits.startsWith("9");
@@ -161,6 +191,8 @@ function buildState(previous, input) {
   if (addrRaw !== undefined) {
     if (isPlaceholder(addrRaw)) {
       rejected.push({ field: "address", value: clean(addrRaw), reason: "no es una direccion entregable" });
+    } else if (isVagueAddress(addrRaw)) {
+      rejected.push({ field: "address", value: clean(addrRaw), reason: "no dice donde: hace falta calle y numero o una referencia" });
     } else {
       state.address = clean(addrRaw);
     }
@@ -258,6 +290,7 @@ async function handleRequest(request, env = globalThis) {
     }
 
     const missing = REQUIRED.filter((f) => state[f] === undefined || state[f] === null || state[f] === "");
+    if (needsReference(state)) missing.push("reference");
 
     if (kv && key) {
       try {
@@ -275,7 +308,10 @@ async function handleRequest(request, env = globalThis) {
         + ". Pediselos de nuevo al cliente; no los inventes ni pongas relleno.");
     }
     parts.push(missing.length
-      ? `Todavia falta para poder crear el pedido: ${missing.join(", ")}. Pedi SOLO lo que falta, de a un dato por turno y sin repetir lo que ya tenes.`
+      ? `Todavia falta para poder crear el pedido: ${missing.join(", ")}. Pedi TODO lo que falta en UN solo mensaje (si falta mas de un dato, juntalos en la misma pregunta) y sin repetir lo que ya tenes.`
+        + (missing.includes("reference") && state.address
+          ? ` La direccion "${state.address}" no tiene numero ni manzana/lote: pedi una referencia para que el motorizado la encuentre (ej. "frente a...", "al costado de...").`
+          : "")
       : "Estado completo: ya tenes todo para mostrar el resumen y pedir la confirmacion.");
 
     return json({
@@ -318,4 +354,4 @@ function safeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-globalThis.__kenkuSaveOrderState = { buildState, chatPhone, isPlaceholder, isPeruMobile, normalizePhone, normalizePromo, pickPhoneLoose, toVars, handleRequest, handler };
+globalThis.__kenkuSaveOrderState = { buildState, chatPhone, isPlaceholder, isVagueAddress, needsReference, isPeruMobile, normalizePhone, normalizePromo, pickPhoneLoose, toVars, handleRequest, handler };

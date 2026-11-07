@@ -392,6 +392,10 @@ const FOLLOWUP_TERMINAL_MARKERS = [
   "reclamo",
   "molesto",
   "cancel",
+  // Aplazo con fecha ("el 15 me pagan"): el prompt avisa al equipo por
+  // notify_team y una asesora retoma ese dia. Seguir con 7 toques en 23 h
+  // quemaba el lead antes de la fecha (71436f0d, 0168c78e).
+  "comprar_despues",
 ];
 
 async function routeFollowup(payload, env) {
@@ -443,6 +447,14 @@ async function routeFollowup(payload, env) {
     }
 
     if (edges.includes("esperar")) {
+      // Quien espera el voucher de agencia ya eligio, ya le dijeron el adelanto
+      // y solo falta que pague: el s3 ("¿Te armo el pedido?" con promos) y el s6
+      // (10% "si cierras hoy", pagas al recibir) le contradicen eso (5acefd4b).
+      // Solo fu-g3 y fu-g6 tienen la salida "saltar_voucher" (a la espera
+      // siguiente, sin mandar nada). Va antes del horario: saltar no envia.
+      if (edges.includes("saltar_voucher") && String(vars.stage || "").toLowerCase().includes("esperando_voucher")) {
+        return json({ next_edge: "saltar_voucher", reason: "esperando_voucher" });
+      }
       // Prueba A/B de seguimientos (2026-10-25): solo el gate que tiene la
       // salida "saltar" (fu-g4) la usa, y solo para el brazo R.
       if (edges.includes("saltar") && brazoSeguimiento(phoneDelPayload(payload)) === "R") {
