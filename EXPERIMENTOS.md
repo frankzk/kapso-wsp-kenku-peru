@@ -627,7 +627,7 @@ lo que se mueve es la base absoluta de las dos.
   comprar_despues_fecha) y prompt con la lista de lo que NO es aplazo
   ("mañana", "te confirmo", "te escribo"...) y "le aviso al repartidor" cuando
   el cliente da su horario. El envio a Kapta sigue apagado (RETOMA_A_KAPTA).
-- 2026-11-08 ~02:15 (Lima), workflow lock 58063: tras crear un pedido a
+- 2026-11-08 ~13:15 (Lima), workflow lock 58063: tras crear un pedido a
   domicilio, la confirmacion sale por pedir_ubicacion (funcion nueva
   2a376432-fbab-4387-9e96-0bca81182d56): un solo mensaje con el codigo y el
   boton nativo de WhatsApp para compartir la ubicacion. Si el cliente la manda,
