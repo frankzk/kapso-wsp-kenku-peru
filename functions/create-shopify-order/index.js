@@ -33,6 +33,12 @@ async function handleRequest(request, env = globalThis) {
     enrichConversationContext(input, payload);
     enrichCustomerFromContext(input, payload);
 
+    // Herramienta guardar_ubicacion (misma funcion, otro esquema): el cliente
+    // compartio su ubicacion despues del pedido. No crea nada.
+    if (input.guardar_ubicacion_pedido !== undefined && input.guardar_ubicacion_pedido !== null) {
+      return await handleGuardarUbicacion(input, env, payload);
+    }
+
     if (input.coverage?.shippingMode === "agencia" || input.coverage?.shipping_mode === "agencia" || input.requiresLogisticsValidation || input.requires_logistics_validation) {
       return json({
         ok: false,
@@ -2056,6 +2062,129 @@ function normalizePhone(value) {
   if (digits.startsWith("51") && digits.length === 11) return `+${digits}`;
   if (digits.length === 9) return `+51${digits}`;
   return `+${digits}`;
+}
+
+// --- Ubicacion compartida despues del pedido --------------------------------
+//
+// Tras confirmar el pedido el bot le pide al cliente su ubicacion con el boton
+// nativo de WhatsApp (pedir-ubicacion). Cuando la comparte, esta rama:
+//   1) lee del chat el ULTIMO mensaje de tipo location (las coordenadas nunca
+//      pasan por el modelo: las lee la funcion);
+//   2) busca el pedido vigente del mismo celular en las ultimas 72 h (o el que
+//      nombre el agente);
+//   3) escribe `_cod_ubicacion` {lat, lng, fuente, confirmado} en el pedido de
+//      WooCommerce + una nota con el enlace de Google Maps. Es la misma clave
+//      del formulario de COD Core: Kapta la toma como el punto del pedido.
+const UBICACION_META_KEY = "_cod_ubicacion";
+const UBICACION_VENTANA_MS = 72 * 3600 * 1000;
+
+function enPeru(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -18.6 && lat <= 0.1 && lng >= -81.5 && lng <= -68.5;
+}
+
+async function ultimaUbicacionDelChat(env, input, payload, now = Date.now()) {
+  const apiKey = env.KAPSO_API_KEY || env.kAPSOAPIKEY || globalThis.KAPSO_API_KEY || globalThis.kAPSOAPIKEY;
+  const conversationId = input.conversationId || input.conversation_id;
+  const phoneNumberId = input.phoneNumberId || input.phone_number_id || payload?.whatsapp_context?.conversation?.phone_number_id;
+  if (!apiKey || !conversationId || !phoneNumberId) return { error: "sin_contexto" };
+  const url = `https://api.kapso.ai/meta/whatsapp/v24.0/${encodeURIComponent(phoneNumberId)}/messages?conversation_id=${encodeURIComponent(conversationId)}&direction=inbound&limit=50`;
+  let data;
+  try {
+    const res = await fetch(url, { headers: { "X-API-Key": apiKey } });
+    if (!res.ok) return { error: `kapso_${res.status}` };
+    data = await res.json();
+  } catch (error) {
+    return { error: safeError(error) };
+  }
+  const ubicaciones = (Array.isArray(data?.data) ? data.data : [])
+    .filter((m) => m?.type === "location" && m.location)
+    .map((m) => ({
+      lat: Number(m.location.latitude),
+      lng: Number(m.location.longitude),
+      ts: Number(m.timestamp) * 1000,
+      id: m.id,
+      nombre: m.location.name || null,
+      direccion: m.location.address || null,
+    }))
+    .filter((u) => enPeru(u.lat, u.lng) && u.ts >= now - UBICACION_VENTANA_MS)
+    .sort((a, b) => b.ts - a.ts);
+  return ubicaciones[0] ? { ubicacion: ubicaciones[0] } : { error: "sin_ubicacion" };
+}
+
+async function pedidoVigenteDelCelular(woo, phone, numero, now = Date.now()) {
+  const national = phoneDigits(phone).slice(-9);
+  if (national.length !== 9) return { error: "sin_celular" };
+  const query = new URLSearchParams({
+    search: national,
+    after: new Date(now - UBICACION_VENTANA_MS).toISOString().slice(0, 19),
+    dates_are_gmt: "true",
+    status: "any",
+    per_page: "20",
+    orderby: "date",
+    order: "desc",
+    _fields: "id,number,status,date_created_gmt,billing,shipping_lines",
+  });
+  let orders;
+  try {
+    orders = await wooApi(woo, `/orders?${query}`);
+  } catch (error) {
+    return { error: safeError(error) };
+  }
+  const buscado = String(numero || "").replace(/^#/, "").trim().toUpperCase();
+  const vigentes = (Array.isArray(orders) ? orders : [])
+    .filter((o) => !WOO_DUPLICATE_SKIP_STATUSES.has(o.status) && samePhoneDigits(o.billing?.phone, phone));
+  const elegido = (buscado && vigentes.find((o) => String(o.number).toUpperCase() === buscado)) || vigentes[0];
+  return elegido ? { order: elegido } : { error: "sin_pedido" };
+}
+
+async function handleGuardarUbicacion(input, env, payload, now = Date.now()) {
+  const phone = input.phone || input.customer?.phone || payload?.execution_context?.context?.phone_number || payload?.whatsapp_context?.conversation?.phone_number || "";
+  const dryRun = Boolean(input.dryRun || input.dry_run);
+  const u = await ultimaUbicacionDelChat(env, input, payload, now);
+  if (!u.ubicacion) {
+    return json({
+      ok: false,
+      reason: u.error,
+      message: u.error === "sin_ubicacion"
+        ? "No hay una ubicacion compartida en este chat en las ultimas 72 h (o cae fuera del Peru). Si el cliente escribio su direccion en texto, guardala con save_order_state; no inventes coordenadas."
+        : "No pude leer la ubicacion del chat. Agradecele y dile que se la pasamos al equipo; NO derives por esto.",
+    });
+  }
+  let woo;
+  try {
+    woo = await getWooConfig(env);
+  } catch (error) {
+    return json({ ok: false, reason: "sin_tienda", error: safeError(error), message: "No pude guardar la ubicacion en el pedido. Agradecele igual; NO derives por esto." });
+  }
+  const p = await pedidoVigenteDelCelular(woo, phone, input.guardar_ubicacion_pedido, now);
+  if (!p.order) {
+    return json({
+      ok: false,
+      reason: p.error,
+      message: p.error === "sin_pedido"
+        ? "No encontre un pedido vigente de este celular en las ultimas 72 h. Si esta armando un pedido nuevo, sigue el flujo normal (la ubicacion no reemplaza la direccion en texto)."
+        : "No pude buscar el pedido. Agradecele igual; NO derives por esto.",
+    });
+  }
+  const { lat, lng } = u.ubicacion;
+  const mapa = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  const valor = { lat, lng, fuente: "whatsapp", confirmado: true, compartida_at: new Date(u.ubicacion.ts).toISOString(), wamid: u.ubicacion.id };
+  if (dryRun) return json({ ok: true, dryRun: true, order: `#${p.order.number}`, ubicacion: valor, mapa });
+  try {
+    await wooApi(woo, `/orders/${p.order.id}`, { method: "PUT", body: { meta_data: [{ key: UBICACION_META_KEY, value: JSON.stringify(valor) }] } });
+    await wooApi(woo, `/orders/${p.order.id}/notes`, {
+      method: "POST",
+      body: { note: `Ubicacion compartida por WhatsApp (bot): ${mapa}${u.ubicacion.direccion ? ` — ${u.ubicacion.direccion}` : ""}`, customer_note: false },
+    }).catch(() => null);
+  } catch (error) {
+    return json({ ok: false, reason: "woo_error", error: safeError(error), message: "No pude guardar la ubicacion en el pedido. Agradecele igual y avisa con notify_team (note con el codigo del pedido y que compartio su ubicacion)." });
+  }
+  return json({
+    ok: true,
+    order: `#${p.order.number}`,
+    mapa,
+    message: `Ubicacion guardada en el pedido #${p.order.number}. Agradecele en UNA linea (ej. "¡Gracias! 📍 Ya se la pasamos al repartidor para que llegue directo 🛵") y complete_task. No le pidas nada mas.`,
+  });
 }
 
 function phoneDigits(value) {
