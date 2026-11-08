@@ -622,6 +622,11 @@ lo que se mueve es la base absoluta de las dos.
   total, resumen y reenviar (antes solo courier: 0 de 16 pagos con total).
   check-coverage: comprar_despues solo corta los seguimientos con una
   comprar_despues_fecha valida (4 de 11 se habian marcado sin fecha).
+- 2026-11-08 ~01:23 (Lima), workflow lock 57732: herramienta agendar_retoma
+  (apunta a notify-team; valida la fecha, avisa por Telegram y guarda
+  comprar_despues_fecha) y prompt con la lista de lo que NO es aplazo
+  ("mañana", "te confirmo", "te escribo"...) y "le aviso al repartidor" cuando
+  el cliente da su horario. El envio a Kapta sigue apagado (RETOMA_A_KAPTA).
 
 ## 6. Pruebas T11 (brazo K) y T7 (s1 con botones) · **PREPARADAS, DORMIDAS, SIN DESPLEGAR** (2026-11-07)
 
